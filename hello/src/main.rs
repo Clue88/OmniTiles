@@ -1,5 +1,5 @@
-#![no_std]
 #![no_main]
+#![no_std]
 
 use cortex_m::delay::Delay;
 use cortex_m_rt::entry;
@@ -13,21 +13,40 @@ fn main() -> ! {
     let dp = pac::Peripherals::take().unwrap();
     let cp = cortex_m::Peripherals::take().unwrap();
 
-    // RCC / clocks
+    // Clocks
     let rcc = dp.RCC.constrain();
     let clocks = rcc.cfgr.freeze();
 
-    // PB7 = LD2 (blue)
+    // GPIOB (LD1=PB0, LD2=PB7, LD3=PB14)
     let gpiob = dp.GPIOB.split();
-    let mut led = gpiob.pb7.into_push_pull_output();
+    let mut ld1 = gpiob.pb0.into_push_pull_output(); // green
+    let mut ld2 = gpiob.pb7.into_push_pull_output(); // blue
+    let mut ld3 = gpiob.pb14.into_push_pull_output(); // red
 
-    // SysTick delay from cortex-m, needs core clock in Hz (u32)
+    ld1.set_low();
+    ld2.set_low();
+    ld3.set_low();
+
     let mut delay = Delay::new(cp.SYST, clocks.sysclk().raw());
 
     loop {
-        led.set_high();
+        // LD1 (green)
+        ld1.set_high();
         delay.delay_ms(300_u32);
-        led.set_low();
+        ld1.set_low();
+        delay.delay_ms(100_u32);
+
+        // LD2 (blue)
+        ld2.set_high();
         delay.delay_ms(300_u32);
+        ld2.set_low();
+        delay.delay_ms(100_u32);
+
+        // LD3 (red)
+        ld3.set_high();
+        delay.delay_ms(300_u32);
+        ld3.set_low();
+
+        delay.delay_ms(400_u32);
     }
 }
