@@ -1,0 +1,28 @@
+[package]
+name = "hello"
+version = "0.1.0"
+authors = ["Christopher Liu <liuchris@seas.upenn.edu>"]
+edition = "2021"
+
+[dependencies]
+cortex-m = "0.7"
+cortex-m-rt = "0.7"
+panic-halt = "0.2.0"
+
+
+[dependencies.stm32f7xx-hal]
+version = "0.8.0"
+features = ["stm32f767", "rt"]
+
+
+
+# Set the default for dependencies.
+[profile.dev.package."*"]
+opt-level = "s"
+
+[profile.release]
+codegen-units = 1
+incremental = false
+debug = true
+lto = true
+opt-level = "s"
