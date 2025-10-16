@@ -6,8 +6,9 @@ edition = "2021"
 
 [dependencies]
 cortex-m = "0.7"
-cortex-m-rt = "0.7"
+cortex-m-rt = { version = "0.7", features = ["device"] }
 panic-halt = "0.2.0"
+nb = "1"
 
 
 [dependencies.stm32f7xx-hal]

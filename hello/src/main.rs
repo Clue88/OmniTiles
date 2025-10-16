@@ -5,7 +5,12 @@ use cortex_m::delay::Delay;
 use cortex_m_rt::entry;
 use panic_halt as _;
 
-use hal::{pac, prelude::*};
+use hal::{
+    pac,
+    prelude::*,
+    serial::{Config, Serial},
+};
+use nb::block;
 use stm32f7xx_hal as hal;
 
 #[entry]
@@ -17,36 +22,52 @@ fn main() -> ! {
     let rcc = dp.RCC.constrain();
     let clocks = rcc.cfgr.freeze();
 
-    // GPIOB (LD1=PB0, LD2=PB7, LD3=PB14)
+    // GPIOB
     let gpiob = dp.GPIOB.split();
-    let mut ld1 = gpiob.pb0.into_push_pull_output(); // green
-    let mut ld2 = gpiob.pb7.into_push_pull_output(); // blue
-    let mut ld3 = gpiob.pb14.into_push_pull_output(); // red
+    let mut led = gpiob.pb7.into_push_pull_output(); // PB7 -> LD2
+    led.set_low();
 
-    ld1.set_low();
-    ld2.set_low();
-    ld3.set_low();
+    // GPIOC (PC13 = B1 USER, see user manual)
+    let gpioc = dp.GPIOC.split();
+    let button = gpioc.pc13.into_floating_input();
 
+    // GPIOD (PD8 = TX and PD9 = RX for USART3 via ST-LINK, see user manual)
+    let gpiod = dp.GPIOD.split();
+    let tx = gpiod.pd8.into_alternate::<7>(); // AF7 = USART3_TX
+    let rx = gpiod.pd9.into_alternate::<7>(); // AF7 = USART3_RX
+
+    // Configure USART with 115200 baud rate, everything else default
+    let cfg = Config {
+        baud_rate: 115_200.bps(),
+        ..Default::default()
+    };
+    let mut serial = Serial::new(dp.USART3, (tx, rx), &clocks, cfg);
+
+    // Initialize SysTick delay for heartbeat
     let mut delay = Delay::new(cp.SYST, clocks.sysclk().raw());
 
+    // Counter
+    let mut counter: u8 = 0;
+    let mut last_button_state = button.is_high();
+
     loop {
-        // LD1 (green)
-        ld1.set_high();
-        delay.delay_ms(300_u32);
-        ld1.set_low();
-        delay.delay_ms(100_u32);
+        // Increment counter and blink on button press
+        let current_state = button.is_high();
+        if !current_state && last_button_state {
+            counter = counter.wrapping_add(1);
 
-        // LD2 (blue)
-        ld2.set_high();
-        delay.delay_ms(300_u32);
-        ld2.set_low();
-        delay.delay_ms(100_u32);
+            let digit = b'0' + (counter % 10);
+            block!(serial.write(digit)).ok();
+            for b in b" OmniTiles!\r\n" {
+                block!(serial.write(*b)).ok();
+            }
 
-        // LD3 (red)
-        ld3.set_high();
-        delay.delay_ms(300_u32);
-        ld3.set_low();
+            led.set_high();
+            delay.delay_ms(100_u32);
+            led.set_low();
+        }
 
-        delay.delay_ms(400_u32);
+        last_button_state = current_state;
+        delay.delay_ms(20_u32);
     }
 }
