@@ -9,6 +9,7 @@ cortex-m = "0.7"
 cortex-m-rt = { version = "0.7", features = ["device"] }
 panic-halt = "0.2.0"
 nb = "1"
+itoa = "1.0.15"
 
 
 [dependencies.stm32f7xx-hal]

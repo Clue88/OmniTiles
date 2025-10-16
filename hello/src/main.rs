@@ -56,8 +56,12 @@ fn main() -> ! {
         if !current_state && last_button_state {
             counter = counter.wrapping_add(1);
 
-            let digit = b'0' + (counter % 10);
-            block!(serial.write(digit)).ok();
+            let mut buf = itoa::Buffer::new();
+            let s = buf.format(counter);
+            for &b in s.as_bytes() {
+                block!(serial.write(b)).ok();
+            }
+            block!(serial.write(b' ')).ok();
             for b in b" OmniTiles!\r\n" {
                 block!(serial.write(*b)).ok();
             }
