@@ -14,6 +14,9 @@ use hal::{
 use nb::block;
 use stm32f7xx_hal as hal;
 
+mod powerstep;
+use powerstep::get_status;
+
 #[entry]
 fn main() -> ! {
     let dp = pac::Peripherals::take().unwrap();
@@ -70,10 +73,10 @@ fn main() -> ! {
     let mut delay = Delay::new(cp.SYST, clocks.sysclk().raw());
 
     loop {
-        // Get powerSTEP01 status on button press
+        // Get powerstep status on button press
         let current_state = button.is_high();
         if !current_state && last_button_state {
-            let status = powerstep_get_status(&mut spi, &mut cs, &mut tx);
+            let status = get_status(&mut spi, &mut cs);
 
             print_str(&mut tx, "PS01 STATUS: ");
             print_u16_hex(&mut tx, status);
@@ -112,40 +115,4 @@ fn print_u16_hex<U: Instance>(tx: &mut Tx<U>, value: u16) {
     for b in bytes {
         let _ = block!(tx.write(b));
     }
-}
-
-/// Send the contents of `data` over SPI and read incoming data back into the buffer
-fn spi_xfer_in_place<I, P>(spi: &mut hal::spi::Spi<I, P, hal::spi::Enabled<u8>>, data: &mut [u8])
-where
-    I: hal::spi::Instance,
-    P: hal::spi::Pins<I>,
-{
-    for b in data.iter_mut() {
-        let _ = nb::block!(spi.send(*b));
-        match nb::block!(spi.read()) {
-            Ok(rx) => *b = rx,
-            Err(_) => { /* leave byte unchanged on error */ }
-        }
-    }
-}
-
-/// Send the GetStatus command to powerSTEP01 and return status register value
-fn powerstep_get_status<I, P, U>(
-    spi: &mut hal::spi::Spi<I, P, hal::spi::Enabled<u8>>,
-    cs: &mut hal::gpio::gpiod::PD14<hal::gpio::Output<hal::gpio::PushPull>>,
-    _tx: &mut Tx<U>,
-) -> u16
-where
-    I: hal::spi::Instance,
-    U: Instance,
-    P: hal::spi::Pins<I>,
-{
-    // 0xD0 is the GetStatus command, and the register value is placed in the following 2 bytes
-    let mut buf = [0xD0, 0x00, 0x00];
-
-    cs.set_low();
-    spi_xfer_in_place(spi, &mut buf);
-    cs.set_high();
-
-    ((buf[1] as u16) << 8) | (buf[2] as u16)
 }
