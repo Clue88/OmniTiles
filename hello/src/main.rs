@@ -52,9 +52,9 @@ fn main() -> ! {
     let sck = gpioa.pa5.into_alternate::<5>();
     let miso = gpioa.pa6.into_alternate::<5>();
     let mosi = gpioa.pa7.into_alternate::<5>();
-    let mut cs = gpioa.pa4.into_push_pull_output();
-
+    let mut cs = gpiod.pd14.into_push_pull_output();
     cs.set_high();
+
     const SPI_MODE: Mode = Mode {
         polarity: Polarity::IdleLow,
         phase: Phase::CaptureOnFirstTransition,
@@ -70,21 +70,15 @@ fn main() -> ! {
     let mut delay = Delay::new(cp.SYST, clocks.sysclk().raw());
 
     loop {
-        // Send loopback test on button press
+        // Get powerSTEP01 status on button press
         let current_state = button.is_high();
         if !current_state && last_button_state {
-            let mut buf = [0xDE, 0xAD, 0xBE, 0xEF];
-            cs.set_low();
-            let _ = spi.transfer(&mut buf);
-            cs.set_high();
+            let status = powerstep_get_status(&mut spi, &mut cs, &mut tx);
 
-            if buf == [0xDE, 0xAD, 0xBE, 0xEF] {
-                print_str(&mut tx, "SPI Connected: ");
-            } else {
-                print_str(&mut tx, "SPI Disconnected: ");
-            }
-            print_hex_array(&mut tx, &buf);
+            print_str(&mut tx, "PS01 STATUS: ");
+            print_u16_hex(&mut tx, status);
             print_str(&mut tx, "\r\n");
+            let _ = nb::block!(tx.flush());
 
             led.set_high();
             delay.delay_ms(100_u32);
@@ -103,16 +97,55 @@ fn print_str<U: Instance>(tx: &mut Tx<U>, s: &str) {
     }
 }
 
-/// Print bytes as hex, space-separated
-fn print_hex_array<U: Instance>(tx: &mut Tx<U>, data: &[u8]) {
+/// Print a 16-bit value as 0xHHHH
+fn print_u16_hex<U: Instance>(tx: &mut Tx<U>, value: u16) {
     const HEX: &[u8; 16] = b"0123456789ABCDEF";
-    for (i, &byte) in data.iter().enumerate() {
-        let hi = HEX[(byte >> 4) as usize];
-        let lo = HEX[(byte & 0xF) as usize];
-        let _ = block!(tx.write(hi));
-        let _ = block!(tx.write(lo));
-        if i + 1 < data.len() {
-            let _ = block!(tx.write(b' '));
+    let n = value;
+    let bytes = [
+        HEX[((n >> 12) & 0xF) as usize],
+        HEX[((n >> 8) & 0xF) as usize],
+        HEX[((n >> 4) & 0xF) as usize],
+        HEX[(n & 0xF) as usize],
+    ];
+    let _ = block!(tx.write(b'0'));
+    let _ = block!(tx.write(b'x'));
+    for b in bytes {
+        let _ = block!(tx.write(b));
+    }
+}
+
+/// Send the contents of `data` over SPI and read incoming data back into the buffer
+fn spi_xfer_in_place<I, P>(spi: &mut hal::spi::Spi<I, P, hal::spi::Enabled<u8>>, data: &mut [u8])
+where
+    I: hal::spi::Instance,
+    P: hal::spi::Pins<I>,
+{
+    for b in data.iter_mut() {
+        let _ = nb::block!(spi.send(*b));
+        match nb::block!(spi.read()) {
+            Ok(rx) => *b = rx,
+            Err(_) => { /* leave byte unchanged on error */ }
         }
     }
+}
+
+/// Send the GetStatus command to powerSTEP01 and return status register value
+fn powerstep_get_status<I, P, U>(
+    spi: &mut hal::spi::Spi<I, P, hal::spi::Enabled<u8>>,
+    cs: &mut hal::gpio::gpiod::PD14<hal::gpio::Output<hal::gpio::PushPull>>,
+    _tx: &mut Tx<U>,
+) -> u16
+where
+    I: hal::spi::Instance,
+    U: Instance,
+    P: hal::spi::Pins<I>,
+{
+    // 0xD0 is the GetStatus command, and the register value is placed in the following 2 bytes
+    let mut buf = [0xD0, 0x00, 0x00];
+
+    cs.set_low();
+    spi_xfer_in_place(spi, &mut buf);
+    cs.set_high();
+
+    ((buf[1] as u16) << 8) | (buf[2] as u16)
 }
