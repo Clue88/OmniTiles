@@ -68,3 +68,37 @@ where
 
     ((buf[1] as u16) << 8) | (buf[2] as u16)
 }
+
+pub fn get_param<I, P, CS>(spi: &mut hal::spi::Spi<I, P, hal::spi::Enabled<u8>>, cs: &mut CS) -> u32
+where
+    I: hal::spi::Instance,
+    P: hal::spi::Pins<I>,
+    CS: CsPin,
+{
+    // TODO: Accept input register, currently 0x13 for OCD_TH
+    // 0b001 for GetParam and 0x13 for OCD_TH register
+    let mut buf = [0x33, 0x00];
+
+    cs.low();
+    spi_xfer_in_place(spi, &mut buf);
+    cs.high();
+
+    // ((buf[1] as u32) << 16) | ((buf[2] as u32) << 8) | (buf[3] as u32)
+    buf[0] as u32
+}
+
+pub fn set_param<I, P, CS>(spi: &mut hal::spi::Spi<I, P, hal::spi::Enabled<u8>>, cs: &mut CS)
+where
+    I: hal::spi::Instance,
+    P: hal::spi::Pins<I>,
+    CS: CsPin,
+{
+    // TODO: Accept input bytes, currently 0x010101 I think
+    // TODO: Accept input register, currently 0x03 for MARK
+    // 0b000 for SetParam and 0x03 for MARK register
+    let mut buf = [0x03, 0x01, 0x01, 0x01];
+
+    cs.low();
+    spi_xfer_in_place(spi, &mut buf);
+    cs.high();
+}

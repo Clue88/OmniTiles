@@ -15,7 +15,7 @@ use nb::block;
 use stm32f7xx_hal as hal;
 
 mod powerstep;
-use powerstep::get_status;
+use powerstep::{get_param, get_status, set_param};
 
 #[entry]
 fn main() -> ! {
@@ -79,7 +79,7 @@ fn main() -> ! {
             let status = get_status(&mut spi, &mut cs);
 
             print_str(&mut tx, "PS01 STATUS: ");
-            print_u16_hex(&mut tx, status);
+            print_hex(&mut tx, status as u32);
             print_str(&mut tx, "\r\n");
             let _ = nb::block!(tx.flush());
 
@@ -100,11 +100,15 @@ fn print_str<U: Instance>(tx: &mut Tx<U>, s: &str) {
     }
 }
 
-/// Print a 16-bit value as 0xHHHH
-fn print_u16_hex<U: Instance>(tx: &mut Tx<U>, value: u16) {
+/// Print a 32-bit value as 0xHHHH_HHHH
+fn print_hex<U: Instance>(tx: &mut Tx<U>, value: u32) {
     const HEX: &[u8; 16] = b"0123456789ABCDEF";
     let n = value;
     let bytes = [
+        HEX[((n >> 28) & 0xF) as usize],
+        HEX[((n >> 24) & 0xF) as usize],
+        HEX[((n >> 20) & 0xF) as usize],
+        HEX[((n >> 16) & 0xF) as usize],
         HEX[((n >> 12) & 0xF) as usize],
         HEX[((n >> 8) & 0xF) as usize],
         HEX[((n >> 4) & 0xF) as usize],
@@ -112,7 +116,10 @@ fn print_u16_hex<U: Instance>(tx: &mut Tx<U>, value: u16) {
     ];
     let _ = block!(tx.write(b'0'));
     let _ = block!(tx.write(b'x'));
-    for b in bytes {
-        let _ = block!(tx.write(b));
+    for (i, b) in bytes.iter().enumerate() {
+        if i == 4 {
+            let _ = block!(tx.write(b'_'));
+        }
+        let _ = block!(tx.write(*b));
     }
 }
