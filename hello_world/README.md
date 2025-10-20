@@ -1,4 +1,4 @@
-# Hello
+# HelloWorld
 
 ## Usage
 ```bash
