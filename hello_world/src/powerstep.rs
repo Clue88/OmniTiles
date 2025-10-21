@@ -28,77 +28,112 @@ impl CsPin for hal::gpio::gpiod::PD14<hal::gpio::Output<hal::gpio::PushPull>> {
     }
 }
 
-/// Perform a blocking full-duplex SPI transfer in-place.
-///
-/// Sends each byte of `data` and overwrites it with the simultaneously received byte.
-fn spi_xfer_in_place<I, P>(spi: &mut hal::spi::Spi<I, P, hal::spi::Enabled<u8>>, data: &mut [u8])
+/// Clock one byte (send `tx`) and return the received byte.
+#[inline]
+fn spi_send_recv_byte<I, P>(
+    spi: &mut stm32f7xx_hal::spi::Spi<I, P, stm32f7xx_hal::spi::Enabled<u8>>,
+    tx: u8,
+) -> u8
 where
-    I: hal::spi::Instance,
-    P: hal::spi::Pins<I>,
+    I: stm32f7xx_hal::spi::Instance,
+    P: stm32f7xx_hal::spi::Pins<I>,
 {
-    for b in data.iter_mut() {
-        let _ = nb::block!(spi.send(*b));
-        match nb::block!(spi.read()) {
-            Ok(rx) => *b = rx,
-            Err(_) => { /* leave byte unchanged on error */ }
-        }
-    }
+    let _ = nb::block!(spi.send(tx));
+    nb::block!(spi.read()).unwrap_or(0)
 }
 
-/// Issue the **GetStatus (0xD0)** command to the PowerSTEP01 and return the 16-bit `STATUS`
+/// Issue the GetStatus (0xD0) command to the PowerSTEP01 and return the 16-bit `STATUS`
 /// register value.
 ///
-/// # Returns
-/// A 16-bit status value (MSB first).
+/// The status is returned in the two bytes after the command (MSB first).
 pub fn get_status<I, P, CS>(
-    spi: &mut hal::spi::Spi<I, P, hal::spi::Enabled<u8>>,
+    spi: &mut stm32f7xx_hal::spi::Spi<I, P, stm32f7xx_hal::spi::Enabled<u8>>,
     cs: &mut CS,
 ) -> u16
 where
-    I: hal::spi::Instance,
-    P: hal::spi::Pins<I>,
-    CS: CsPin,
+    I: stm32f7xx_hal::spi::Instance,
+    P: stm32f7xx_hal::spi::Pins<I>,
+    CS: crate::powerstep::CsPin,
 {
-    // 0xD0 is the GetStatus command; the register value is placed in the following 2B
-    let mut buf = [0xD0, 0x00, 0x00];
-
     cs.low();
-    spi_xfer_in_place(spi, &mut buf);
+
+    // Send CMD; discard pipelined byte read during the command
+    let _rx0 = spi_send_recv_byte(spi, 0xD0);
+
+    // Clock out two NOPs to read status MSB and LSB
+    let msb = spi_send_recv_byte(spi, 0x00);
+    let lsb = spi_send_recv_byte(spi, 0x00);
+
     cs.high();
 
-    ((buf[1] as u16) << 8) | (buf[2] as u16)
+    ((msb as u16) << 8) | (lsb as u16)
 }
 
-pub fn get_param<I, P, CS>(spi: &mut hal::spi::Spi<I, P, hal::spi::Enabled<u8>>, cs: &mut CS) -> u32
+/// Read a parameter from PowerSTEP01.
+/// * `reg`: 5-bit register code (masked with 0x1F)
+/// * `len`: number of data bytes to read (1..=4), **MSB first** on the wire.
+/// Returns the value in the low bits of `u32`.
+pub fn get_param<I, P, CS>(
+    spi: &mut stm32f7xx_hal::spi::Spi<I, P, stm32f7xx_hal::spi::Enabled<u8>>,
+    cs: &mut CS,
+    reg: u8,
+    len: u8,
+) -> u32
 where
-    I: hal::spi::Instance,
-    P: hal::spi::Pins<I>,
-    CS: CsPin,
+    I: stm32f7xx_hal::spi::Instance,
+    P: stm32f7xx_hal::spi::Pins<I>,
+    CS: crate::powerstep::CsPin,
 {
-    // TODO: Accept input register, currently 0x13 for OCD_TH
-    // 0b001 for GetParam and 0x13 for OCD_TH register
-    let mut buf = [0x33, 0x00];
+    let n = len.clamp(1, 4);
+    let opcode = 0x20 | (reg & 0x1F); // GET_PARAM = 0b001xxxxx
 
     cs.low();
-    spi_xfer_in_place(spi, &mut buf);
+
+    // Send opcode; discard pipelined rx
+    let _ = spi_send_recv_byte(spi, opcode);
+
+    // Read `n` data bytes (MSB first), clocking NOPs
+    let mut value: u32 = 0;
+    for _ in 0..n {
+        let b = spi_send_recv_byte(spi, 0x00);
+        value = (value << 8) | (b as u32);
+    }
+
     cs.high();
-
-    // ((buf[1] as u32) << 16) | ((buf[2] as u32) << 8) | (buf[3] as u32)
-    buf[0] as u32
+    value
 }
 
-pub fn set_param<I, P, CS>(spi: &mut hal::spi::Spi<I, P, hal::spi::Enabled<u8>>, cs: &mut CS)
-where
-    I: hal::spi::Instance,
-    P: hal::spi::Pins<I>,
-    CS: CsPin,
+/// Write a parameter to PowerSTEP01.
+/// * `reg`: 5-bit register code (masked with 0x1F)
+/// * `value`: value to write (lower `len*8` bits used)
+/// * `len`: number of data bytes (1..=4), sent **MSB first**
+pub fn set_param<I, P, CS>(
+    spi: &mut stm32f7xx_hal::spi::Spi<I, P, stm32f7xx_hal::spi::Enabled<u8>>,
+    cs: &mut CS,
+    reg: u8,
+    value: u32,
+    len: u8,
+) where
+    I: stm32f7xx_hal::spi::Instance,
+    P: stm32f7xx_hal::spi::Pins<I>,
+    CS: crate::powerstep::CsPin,
 {
-    // TODO: Accept input bytes, currently 0x010101 I think
-    // TODO: Accept input register, currently 0x03 for MARK
-    // 0b000 for SetParam and 0x03 for MARK register
-    let mut buf = [0x03, 0x01, 0x01, 0x01];
+    let n = len.clamp(1, 4) as u32;
+    let opcode = reg & 0x1F; // SET_PARAM = 0b000xxxxx
 
     cs.low();
-    spi_xfer_in_place(spi, &mut buf);
+
+    // Send opcode; discard pipelined rx
+    let _ = spi_send_recv_byte(spi, opcode);
+
+    // Send value MSB-first
+    let total_bits = n * 8;
+    let mut shift = total_bits.saturating_sub(8);
+    for _ in 0..n {
+        let b = ((value >> shift) & 0xFF) as u8;
+        let _ = spi_send_recv_byte(spi, b);
+        shift = shift.saturating_sub(8);
+    }
+
     cs.high();
 }

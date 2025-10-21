@@ -55,7 +55,7 @@ fn main() -> ! {
     let sck = gpioa.pa5.into_alternate::<5>();
     let miso = gpioa.pa6.into_alternate::<5>();
     let mosi = gpioa.pa7.into_alternate::<5>();
-    let mut cs = gpiod.pd14.into_push_pull_output();
+    let mut cs = gpiod.pd14.into_push_pull_output(); // D10 -> PD14 (default CS)
     cs.set_high();
 
     const SPI_MODE: Mode = Mode {
@@ -72,17 +72,50 @@ fn main() -> ! {
     // Initialize SysTick delay for heartbeat
     let mut delay = Delay::new(cp.SYST, clocks.sysclk().raw());
 
+    // Hard-coded demo values
+    const REG_READ: u8 = 0x03;
+    const READ_LEN: u8 = 3;
+    const REG_WRITE: u8 = 0x03;
+    const WRITE_LEN: u8 = 3;
+    const WRITE_VAL: u32 = 0x000123;
+
     loop {
-        // Get powerstep status on button press
+        // On button press
         let current_state = button.is_high();
         if !current_state && last_button_state {
+            // Print status register
             let status = get_status(&mut spi, &mut cs);
-
             print_str(&mut tx, "PS01 STATUS: ");
             print_hex(&mut tx, status as u32);
             print_str(&mut tx, "\r\n");
+
+            // Read register
+            let val_before = get_param(&mut spi, &mut cs, REG_READ, READ_LEN);
+            print_str(&mut tx, "READ  reg 0x");
+            print_nibble_hex(&mut tx, REG_READ);
+            print_str(&mut tx, " = ");
+            print_hex(&mut tx, val_before);
+            print_str(&mut tx, "\r\n");
+
+            // Write to register
+            set_param(&mut spi, &mut cs, REG_WRITE, WRITE_VAL, WRITE_LEN);
+            print_str(&mut tx, "WRITE reg 0x");
+            print_nibble_hex(&mut tx, REG_WRITE);
+            print_str(&mut tx, " <= ");
+            print_hex(&mut tx, WRITE_VAL);
+            print_str(&mut tx, "\r\n");
+
+            // Read back written register
+            let val_after = get_param(&mut spi, &mut cs, REG_WRITE, WRITE_LEN);
+            print_str(&mut tx, "READ  reg 0x");
+            print_nibble_hex(&mut tx, REG_WRITE);
+            print_str(&mut tx, " = ");
+            print_hex(&mut tx, val_after);
+            print_str(&mut tx, "\r\n");
+
             let _ = nb::block!(tx.flush());
 
+            // Blink
             led.set_high();
             delay.delay_ms(100_u32);
             led.set_low();
@@ -122,4 +155,13 @@ fn print_hex<U: Instance>(tx: &mut Tx<U>, value: u32) {
         }
         let _ = block!(tx.write(*b));
     }
+}
+
+/// Print a single byte as two hex nibbles (no 0x prefix)
+fn print_nibble_hex<U: Instance>(tx: &mut Tx<U>, byte: u8) {
+    const HEX: &[u8; 16] = b"0123456789ABCDEF";
+    let hi = HEX[((byte >> 4) & 0xF) as usize];
+    let lo = HEX[(byte & 0xF) as usize];
+    let _ = block!(tx.write(hi));
+    let _ = block!(tx.write(lo));
 }
