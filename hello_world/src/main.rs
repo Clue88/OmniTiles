@@ -15,7 +15,7 @@ use nb::block;
 use stm32f7xx_hal as hal;
 
 mod powerstep;
-use crate::powerstep::{get_param, get_status, set_param};
+use crate::powerstep::{get_param, get_status, reset_device, set_param};
 
 #[entry]
 fn main() -> ! {
@@ -80,10 +80,21 @@ fn main() -> ! {
     loop {
         let current_state = button.is_high();
         if !current_state && last_button_state {
+            // Reset device
+            reset_device(&mut spi, &mut cs);
+
             // Get status
             let status = get_status(&mut spi, &mut cs);
             print_str(&mut tx, "PS01 STATUS: ");
             print_hex_u16(&mut tx, status);
+            print_str(&mut tx, "\r\n");
+
+            // Read param value
+            let read_val = get_param(&mut spi, &mut cs, REG_READ, READ_LEN);
+            print_str(&mut tx, "READ  reg ");
+            print_hex_u8(&mut tx, REG_READ);
+            print_str(&mut tx, "  = ");
+            print_hex_u32(&mut tx, read_val);
             print_str(&mut tx, "\r\n");
 
             // Write param value

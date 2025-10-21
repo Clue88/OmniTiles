@@ -41,6 +41,21 @@ where
     nb::block!(spi.read()).unwrap_or(0)
 }
 
+/// Send the ResetDevice command to PowerSTEP01. The ResetDevice command resets the device to power-up
+/// conditions.
+pub fn reset_device<I, P, CS>(spi: &mut hal::spi::Spi<I, P, hal::spi::Enabled<u8>>, cs: &mut CS)
+where
+    I: hal::spi::Instance,
+    P: hal::spi::Pins<I>,
+    CS: crate::powerstep::CsPin,
+{
+    let opcode = 0xC0;
+
+    cs.low();
+    let _ = spi_send_recv_byte(spi, opcode);
+    cs.high();
+}
+
 /// Send the GetStatus command to PowerSTEP01. The GetStatus command resets the STATUS register
 /// warning flags. The command forces the system to exit from any error state. The GetStatus command
 /// does not reset the HiZ flag.
