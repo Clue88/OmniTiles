@@ -70,6 +70,9 @@ fn main() -> ! {
 
     const STEP_MODE_REG: u8 = 0x16;
     const STEP_MODE_LEN: u8 = 1;
+    const ABS_POS_REG: u8 = 0x01;
+    const ABS_POS_LEN: u8 = 3;
+
     const REG_READ: u8 = 0x03;
     const READ_LEN: u8 = 3;
     const REG_WRITE: u8 = 0x03;
@@ -79,14 +82,20 @@ fn main() -> ! {
     // SysTick delay
     let mut delay = Delay::new(cp.SYST, clocks.sysclk().raw());
 
-    // Reset device
+    // Reset device and print initial state
     reset_device(&mut spi, &mut cs);
-    print_str(&mut tx, "PowerSTEP01 Initialized with STATUS ");
+    print_str(&mut tx, "PowerSTEP01 initialized with STATUS ");
     print_hex_u16(&mut tx, get_status(&mut spi, &mut cs));
     print_str(&mut tx, ", STEP_MODE ");
     print_hex_u8(
         &mut tx,
         get_param(&mut spi, &mut cs, STEP_MODE_REG, STEP_MODE_LEN) as u8,
+    );
+    print_str(&mut tx, "\r\n");
+    print_str(&mut tx, "ABS_POS: ");
+    print_hex_u32(
+        &mut tx,
+        get_param(&mut spi, &mut cs, ABS_POS_REG, ABS_POS_LEN),
     );
     print_str(&mut tx, "\r\n");
 
