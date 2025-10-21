@@ -54,6 +54,7 @@ where
     cs.low();
     let _ = spi_send_recv_byte(spi, opcode);
     cs.high();
+    cortex_m::asm::nop();
 }
 
 /// Send the GetStatus command to PowerSTEP01. The GetStatus command resets the STATUS register
