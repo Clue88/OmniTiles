@@ -69,7 +69,7 @@ fn main() -> ! {
     );
 
     const STEP_MODE_REG: u8 = 0x16;
-    const STEP_MODE_LEN: u8 = 2;
+    const STEP_MODE_LEN: u8 = 1;
     const REG_READ: u8 = 0x03;
     const READ_LEN: u8 = 3;
     const REG_WRITE: u8 = 0x03;
@@ -81,22 +81,18 @@ fn main() -> ! {
 
     // Reset device
     reset_device(&mut spi, &mut cs);
+    print_str(&mut tx, "PowerSTEP01 Initialized with STATUS ");
+    print_hex_u16(&mut tx, get_status(&mut spi, &mut cs));
+    print_str(&mut tx, ", STEP_MODE ");
+    print_hex_u8(
+        &mut tx,
+        get_param(&mut spi, &mut cs, STEP_MODE_REG, STEP_MODE_LEN) as u8,
+    );
+    print_str(&mut tx, "\r\n");
 
     loop {
         let current_state = button.is_high();
         if !current_state && last_button_state {
-            // Get status
-            let status = get_status(&mut spi, &mut cs);
-            print_str(&mut tx, "PS01 STATUS: ");
-            print_hex_u16(&mut tx, status);
-            print_str(&mut tx, "\r\n");
-
-            // Get step mode
-            let step_mode = get_param(&mut spi, &mut cs, STEP_MODE_REG, STEP_MODE_LEN);
-            print_str(&mut tx, "STEP_MODE: ");
-            print_hex_u8(&mut tx, step_mode as u8);
-            print_str(&mut tx, "\r\n");
-
             // Read param value
             let read_val = get_param(&mut spi, &mut cs, REG_READ, READ_LEN);
             print_str(&mut tx, "READ  reg ");

@@ -108,6 +108,7 @@ where
     let opcode = 0x20 | (reg & 0x1F); // GET_PARAM opcode (0b001xxxxx)
     let n = len.clamp(1, 4) as u32;
 
+    cortex_m::asm::nop();
     cs.low();
     let _ = spi_send_recv_byte(spi, opcode);
     cs.high();
