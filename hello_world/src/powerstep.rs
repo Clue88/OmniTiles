@@ -41,6 +41,39 @@ where
     nb::block!(spi.read()).unwrap_or(0)
 }
 
+/// Send the GetStatus command to PowerSTEP01. The GetStatus command resets the STATUS register
+/// warning flags. The command forces the system to exit from any error state. The GetStatus command
+/// does not reset the HiZ flag.
+///
+/// Returns the STATUS register value.
+pub fn get_status<I, P, CS>(
+    spi: &mut hal::spi::Spi<I, P, hal::spi::Enabled<u8>>,
+    cs: &mut CS,
+) -> u16
+where
+    I: hal::spi::Instance,
+    P: hal::spi::Pins<I>,
+    CS: crate::powerstep::CsPin,
+{
+    let opcode = 0xD0;
+
+    cs.low();
+    let _ = spi_send_recv_byte(spi, opcode);
+    cs.high();
+
+    cortex_m::asm::nop();
+    cs.low();
+    let b_hi = spi_send_recv_byte(spi, 0x00);
+    cs.high();
+
+    cortex_m::asm::nop();
+    cs.low();
+    let b_lo = spi_send_recv_byte(spi, 0x00);
+    cs.high();
+
+    ((b_hi as u16) << 8) | (b_lo as u16)
+}
+
 /// Read a parameter from PowerSTEP01.
 /// * `reg`: 5-bit register code (masked with 0x1F)
 /// * `len`: number of data bytes to read (1..=4)

@@ -15,7 +15,7 @@ use nb::block;
 use stm32f7xx_hal as hal;
 
 mod powerstep;
-use crate::powerstep::{get_param, set_param};
+use crate::powerstep::{get_param, get_status, set_param};
 
 #[entry]
 fn main() -> ! {
@@ -80,15 +80,26 @@ fn main() -> ! {
     loop {
         let current_state = button.is_high();
         if !current_state && last_button_state {
+            // Get status
+            let status = get_status(&mut spi, &mut cs);
+            print_str(&mut tx, "PS01 STATUS: ");
+            print_hex_u16(&mut tx, status);
+            print_str(&mut tx, "\r\n");
+
             // Write param value
             set_param(&mut spi, &mut cs, REG_WRITE, WRITE_VAL, WRITE_LEN);
+            print_str(&mut tx, "WRITE reg ");
+            print_hex_u8(&mut tx, REG_WRITE);
+            print_str(&mut tx, " <= ");
+            print_hex_u32(&mut tx, WRITE_VAL);
+            print_str(&mut tx, "\r\n");
 
             // Read param value
             let read_val = get_param(&mut spi, &mut cs, REG_READ, READ_LEN);
-            print_str(&mut tx, "READ  reg 0x");
-            print_hex_byte(&mut tx, REG_READ);
-            print_str(&mut tx, " = ");
-            print_hex(&mut tx, read_val);
+            print_str(&mut tx, "READ  reg ");
+            print_hex_u8(&mut tx, REG_READ);
+            print_str(&mut tx, "  = ");
+            print_hex_u32(&mut tx, read_val);
             print_str(&mut tx, "\r\n");
 
             let _ = nb::block!(tx.flush());
@@ -111,8 +122,36 @@ fn print_str<U: Instance>(tx: &mut Tx<U>, s: &str) {
     }
 }
 
+/// Print a byte as 0xHH
+fn print_hex_u8<U: Instance>(tx: &mut Tx<U>, byte: u8) {
+    const HEX: &[u8; 16] = b"0123456789ABCDEF";
+    let hi = HEX[((byte >> 4) & 0xF) as usize];
+    let lo = HEX[(byte & 0xF) as usize];
+    let _ = block!(tx.write(b'0'));
+    let _ = block!(tx.write(b'x'));
+    let _ = block!(tx.write(hi));
+    let _ = block!(tx.write(lo));
+}
+
+/// Print a 16-bit byte as 0xHHHH
+fn print_hex_u16<U: Instance>(tx: &mut Tx<U>, value: u16) {
+    const HEX: &[u8; 16] = b"0123456789ABCDEF";
+    let n = value;
+    let bytes = [
+        HEX[((n >> 12) & 0xF) as usize],
+        HEX[((n >> 8) & 0xF) as usize],
+        HEX[((n >> 4) & 0xF) as usize],
+        HEX[(n & 0xF) as usize],
+    ];
+    let _ = block!(tx.write(b'0'));
+    let _ = block!(tx.write(b'x'));
+    for b in bytes.iter() {
+        let _ = block!(tx.write(*b));
+    }
+}
+
 /// Print a 32-bit value as 0xHHHH_HHHH
-fn print_hex<U: Instance>(tx: &mut Tx<U>, value: u32) {
+fn print_hex_u32<U: Instance>(tx: &mut Tx<U>, value: u32) {
     const HEX: &[u8; 16] = b"0123456789ABCDEF";
     let n = value;
     let bytes = [
@@ -133,13 +172,4 @@ fn print_hex<U: Instance>(tx: &mut Tx<U>, value: u32) {
         }
         let _ = block!(tx.write(*b));
     }
-}
-
-/// Print a single byte as two hex nibbles
-fn print_hex_byte<U: Instance>(tx: &mut Tx<U>, byte: u8) {
-    const HEX: &[u8; 16] = b"0123456789ABCDEF";
-    let hi = HEX[((byte >> 4) & 0xF) as usize];
-    let lo = HEX[(byte & 0xF) as usize];
-    let _ = block!(tx.write(hi));
-    let _ = block!(tx.write(lo));
 }
