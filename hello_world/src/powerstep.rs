@@ -73,3 +73,37 @@ where
     }
     val
 }
+
+/// Write a parameter to PowerSTEP01.
+/// * `reg`: 5-bit register code (masked with 0x1F)
+/// * `value`: value to write (lower `len*8` bits used)
+/// * `len`: number of data bytes (1..=4)
+pub fn set_param<I, P, CS>(
+    spi: &mut hal::spi::Spi<I, P, hal::spi::Enabled<u8>>,
+    cs: &mut CS,
+    reg: u8,
+    val: u32,
+    len: u8,
+) where
+    I: hal::spi::Instance,
+    P: hal::spi::Pins<I>,
+    CS: crate::powerstep::CsPin,
+{
+    let opcode = reg & 0x1F; // SET_PARAM opcode (0b000xxxxx)
+    let n = len.clamp(1, 4) as u32;
+
+    cs.low();
+    let _ = spi_send_recv_byte(spi, opcode);
+    cs.high();
+
+    let total_bits = n * 8;
+    let mut shift = total_bits.saturating_sub(8);
+    for _ in 0..n {
+        cortex_m::asm::nop();
+        cs.low();
+        let b = ((val >> shift) & 0xFF) as u8;
+        let _ = spi_send_recv_byte(spi, b);
+        shift = shift.saturating_sub(8);
+        cs.high();
+    }
+}

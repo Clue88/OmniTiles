@@ -15,7 +15,7 @@ use nb::block;
 use stm32f7xx_hal as hal;
 
 mod powerstep;
-use crate::powerstep::get_param;
+use crate::powerstep::{get_param, set_param};
 
 #[entry]
 fn main() -> ! {
@@ -68,8 +68,11 @@ fn main() -> ! {
         &mut rcc.apb2,
     );
 
-    const REG_READ: u8 = 0x1A;
-    const READ_LEN: u8 = 2;
+    const REG_READ: u8 = 0x03;
+    const READ_LEN: u8 = 3;
+    const REG_WRITE: u8 = 0x03;
+    const WRITE_VAL: u32 = 0x123;
+    const WRITE_LEN: u8 = 3;
 
     // SysTick delay
     let mut delay = Delay::new(cp.SYST, clocks.sysclk().raw());
@@ -77,6 +80,9 @@ fn main() -> ! {
     loop {
         let current_state = button.is_high();
         if !current_state && last_button_state {
+            // Write param value
+            set_param(&mut spi, &mut cs, REG_WRITE, WRITE_VAL, WRITE_LEN);
+
             // Read param value
             let read_val = get_param(&mut spi, &mut cs, REG_READ, READ_LEN);
             print_str(&mut tx, "READ  reg 0x");
