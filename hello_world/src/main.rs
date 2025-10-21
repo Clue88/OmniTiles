@@ -15,7 +15,7 @@ use nb::block;
 use stm32f7xx_hal as hal;
 
 mod powerstep;
-use powerstep::{get_param, get_status, set_param};
+use crate::powerstep::get_param;
 
 #[entry]
 fn main() -> ! {
@@ -26,24 +26,23 @@ fn main() -> ! {
     let mut rcc = dp.RCC.constrain();
     let clocks = rcc.cfgr.freeze();
 
-    // GPIO pins
+    // GPIO
     let gpioa = dp.GPIOA.split();
     let gpiob = dp.GPIOB.split();
     let gpioc = dp.GPIOC.split();
     let gpiod = dp.GPIOD.split();
 
-    // LEDs
-    let mut led = gpiob.pb7.into_push_pull_output(); // PB7 -> LD2
+    // LED (PB7)
+    let mut led = gpiob.pb7.into_push_pull_output();
     led.set_low();
 
-    // USER button
+    // USER button (PC13)
     let button = gpioc.pc13.into_floating_input();
     let mut last_button_state = button.is_high();
 
-    // USART3 via ST-LINK
+    // USART3 via ST-LINK (PD8/PD9)
     let tx = gpiod.pd8.into_alternate::<7>();
     let rx = gpiod.pd9.into_alternate::<7>();
-
     let cfg = Config {
         baud_rate: 115_200.bps(),
         ..Default::default()
@@ -51,11 +50,11 @@ fn main() -> ! {
     let serial = Serial::new(dp.USART3, (tx, rx), &clocks, cfg);
     let (mut tx, _rx) = serial.split();
 
-    // SPI1
+    // SPI1 (PA5/PA6/PA7), CS = D10 -> PD14
     let sck = gpioa.pa5.into_alternate::<5>();
     let miso = gpioa.pa6.into_alternate::<5>();
     let mosi = gpioa.pa7.into_alternate::<5>();
-    let mut cs = gpiod.pd14.into_push_pull_output(); // D10 -> PD14 (default CS)
+    let mut cs = gpiod.pd14.into_push_pull_output();
     cs.set_high();
 
     const SPI_MODE: Mode = Mode {
@@ -64,53 +63,26 @@ fn main() -> ! {
     };
     let mut spi = Spi::new(dp.SPI1, (sck, miso, mosi)).enable::<u8>(
         SPI_MODE,
-        1.MHz(),
+        100.kHz(),
         &clocks,
         &mut rcc.apb2,
     );
 
-    // Initialize SysTick delay for heartbeat
+    const REG_READ: u8 = 0x1A;
+    const READ_LEN: u8 = 2;
+
+    // SysTick delay
     let mut delay = Delay::new(cp.SYST, clocks.sysclk().raw());
 
-    // Hard-coded demo values
-    const REG_READ: u8 = 0x03;
-    const READ_LEN: u8 = 3;
-    const REG_WRITE: u8 = 0x03;
-    const WRITE_LEN: u8 = 3;
-    const WRITE_VAL: u32 = 0x000123;
-
     loop {
-        // On button press
         let current_state = button.is_high();
         if !current_state && last_button_state {
-            // Print status register
-            let status = get_status(&mut spi, &mut cs);
-            print_str(&mut tx, "PS01 STATUS: ");
-            print_hex(&mut tx, status as u32);
-            print_str(&mut tx, "\r\n");
-
-            // Read register
-            let val_before = get_param(&mut spi, &mut cs, REG_READ, READ_LEN);
+            // Read param value
+            let read_val = get_param(&mut spi, &mut cs, REG_READ, READ_LEN);
             print_str(&mut tx, "READ  reg 0x");
-            print_nibble_hex(&mut tx, REG_READ);
+            print_hex_byte(&mut tx, REG_READ);
             print_str(&mut tx, " = ");
-            print_hex(&mut tx, val_before);
-            print_str(&mut tx, "\r\n");
-
-            // Write to register
-            set_param(&mut spi, &mut cs, REG_WRITE, WRITE_VAL, WRITE_LEN);
-            print_str(&mut tx, "WRITE reg 0x");
-            print_nibble_hex(&mut tx, REG_WRITE);
-            print_str(&mut tx, " <= ");
-            print_hex(&mut tx, WRITE_VAL);
-            print_str(&mut tx, "\r\n");
-
-            // Read back written register
-            let val_after = get_param(&mut spi, &mut cs, REG_WRITE, WRITE_LEN);
-            print_str(&mut tx, "READ  reg 0x");
-            print_nibble_hex(&mut tx, REG_WRITE);
-            print_str(&mut tx, " = ");
-            print_hex(&mut tx, val_after);
+            print_hex(&mut tx, read_val);
             print_str(&mut tx, "\r\n");
 
             let _ = nb::block!(tx.flush());
@@ -157,8 +129,8 @@ fn print_hex<U: Instance>(tx: &mut Tx<U>, value: u32) {
     }
 }
 
-/// Print a single byte as two hex nibbles (no 0x prefix)
-fn print_nibble_hex<U: Instance>(tx: &mut Tx<U>, byte: u8) {
+/// Print a single byte as two hex nibbles
+fn print_hex_byte<U: Instance>(tx: &mut Tx<U>, byte: u8) {
     const HEX: &[u8; 16] = b"0123456789ABCDEF";
     let hi = HEX[((byte >> 4) & 0xF) as usize];
     let lo = HEX[(byte & 0xF) as usize];
