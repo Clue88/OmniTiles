@@ -1,5 +1,6 @@
 #![no_main]
 #![no_std]
+#![allow(dead_code)]
 
 use cortex_m::delay::Delay;
 use cortex_m_rt::entry;
