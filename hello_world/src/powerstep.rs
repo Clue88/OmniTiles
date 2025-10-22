@@ -32,13 +32,22 @@ impl CsPin for hal::gpio::gpiod::PD14<hal::gpio::Output<hal::gpio::PushPull>> {
 ///
 /// Sends each byte of `data` and overwrites it with the simultaneously received byte.
 #[inline]
-fn spi_send_recv_byte<I, P>(spi: &mut hal::spi::Spi<I, P, hal::spi::Enabled<u8>>, tx: u8) -> u8
+fn spi_send_recv_byte<I, P, CS>(
+    spi: &mut hal::spi::Spi<I, P, hal::spi::Enabled<u8>>,
+    tx: u8,
+    cs: &mut CS,
+) -> u8
 where
     I: hal::spi::Instance,
     P: hal::spi::Pins<I>,
+    CS: crate::powerstep::CsPin,
 {
+    cs.low();
     let _ = nb::block!(spi.send(tx));
-    nb::block!(spi.read()).unwrap_or(0)
+    let received = nb::block!(spi.read()).unwrap_or(0);
+    cs.high();
+    cortex_m::asm::nop();
+    received
 }
 
 /// Send the ResetDevice command to PowerSTEP01. The ResetDevice command resets the device to
@@ -49,12 +58,7 @@ where
     P: hal::spi::Pins<I>,
     CS: crate::powerstep::CsPin,
 {
-    let opcode = 0xC0;
-
-    cs.low();
-    let _ = spi_send_recv_byte(spi, opcode);
-    cs.high();
-    cortex_m::asm::nop();
+    let _ = spi_send_recv_byte(spi, 0xC0, cs);
 }
 
 /// Send the GetStatus command to PowerSTEP01. The GetStatus command resets the STATUS register
@@ -71,22 +75,9 @@ where
     P: hal::spi::Pins<I>,
     CS: crate::powerstep::CsPin,
 {
-    let opcode = 0xD0;
-
-    cs.low();
-    let _ = spi_send_recv_byte(spi, opcode);
-    cs.high();
-
-    cortex_m::asm::nop();
-    cs.low();
-    let b_hi = spi_send_recv_byte(spi, 0x00);
-    cs.high();
-
-    cortex_m::asm::nop();
-    cs.low();
-    let b_lo = spi_send_recv_byte(spi, 0x00);
-    cs.high();
-
+    let _ = spi_send_recv_byte(spi, 0xD0, cs);
+    let b_hi = spi_send_recv_byte(spi, 0x00, cs);
+    let b_lo = spi_send_recv_byte(spi, 0x00, cs);
     ((b_hi as u16) << 8) | (b_lo as u16)
 }
 
@@ -108,18 +99,12 @@ where
     let opcode = 0x20 | (reg & 0x1F); // GET_PARAM opcode (0b001xxxxx)
     let n = len.clamp(1, 4) as u32;
 
-    cortex_m::asm::nop();
-    cs.low();
-    let _ = spi_send_recv_byte(spi, opcode);
-    cs.high();
+    let _ = spi_send_recv_byte(spi, opcode, cs);
 
     let mut val: u32 = 0;
     for _ in 0..n {
-        cortex_m::asm::nop();
-        cs.low();
-        let b = spi_send_recv_byte(spi, 0x00);
+        let b = spi_send_recv_byte(spi, 0x00, cs);
         val = (val << 8) | (b as u32);
-        cs.high();
     }
     val
 }
@@ -142,19 +127,13 @@ pub fn set_param<I, P, CS>(
     let opcode = reg & 0x1F; // SET_PARAM opcode (0b000xxxxx)
     let n = len.clamp(1, 4) as u32;
 
-    cortex_m::asm::nop();
-    cs.low();
-    let _ = spi_send_recv_byte(spi, opcode);
-    cs.high();
+    let _ = spi_send_recv_byte(spi, opcode, cs);
 
     let total_bits = n * 8;
     let mut shift = total_bits.saturating_sub(8);
     for _ in 0..n {
-        cortex_m::asm::nop();
-        cs.low();
         let b = ((val >> shift) & 0xFF) as u8;
-        let _ = spi_send_recv_byte(spi, b);
+        let _ = spi_send_recv_byte(spi, b, cs);
         shift = shift.saturating_sub(8);
-        cs.high();
     }
 }

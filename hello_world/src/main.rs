@@ -17,6 +17,37 @@ use stm32f7xx_hal as hal;
 mod powerstep;
 use crate::powerstep::*;
 
+// General Configuration
+const REG_ABS_POS: u8 = 0x01;
+const REG_EL_POS: u8 = 0x02;
+const REG_MARK: u8 = 0x03;
+const REG_SPEED: u8 = 0x04;
+const REG_ACC: u8 = 0x05;
+const REG_DEC: u8 = 0x06;
+const REG_MAX_SPEED: u8 = 0x07;
+const REG_MIN_SPEED: u8 = 0x08;
+const REG_ADC_OUT: u8 = 0x12;
+const REG_OCD_TH: u8 = 0x13;
+const REG_FS_SPD: u8 = 0x15;
+const REG_STEP_MODE: u8 = 0x16;
+const REG_ALARM_EN: u8 = 0x17;
+const REG_GATECFG1: u8 = 0x18;
+const REG_GATECFG2: u8 = 0x19;
+const REG_STATUS: u8 = 0x1B;
+const REG_CONFIG: u8 = 0x1A;
+
+// Voltage Mode Configuration
+const REG_KVAL_HOLD: u8 = 0x09;
+const REG_KVAL_RUN: u8 = 0x0A;
+const REG_KVAL_ACC: u8 = 0x0B;
+const REG_KVAL_DEC: u8 = 0x0C;
+const REG_INT_SPEED: u8 = 0x0D;
+const REG_ST_SLP: u8 = 0x0E;
+const REG_FN_SLP_ACC: u8 = 0x0F;
+const REG_FN_SLP_DEC: u8 = 0x10;
+const REG_K_THERM: u8 = 0x11;
+const REG_STALL_TH: u8 = 0x14;
+
 #[entry]
 fn main() -> ! {
     let dp = pac::Peripherals::take().unwrap();
@@ -68,16 +99,7 @@ fn main() -> ! {
         &mut rcc.apb2,
     );
 
-    const STEP_MODE_REG: u8 = 0x16;
-    const STEP_MODE_LEN: u8 = 1;
-    const ABS_POS_REG: u8 = 0x01;
-    const ABS_POS_LEN: u8 = 3;
-
-    const REG_READ: u8 = 0x03;
-    const READ_LEN: u8 = 3;
-    const REG_WRITE: u8 = 0x03;
     const WRITE_VAL: u32 = 0x123;
-    const WRITE_LEN: u8 = 3;
 
     // SysTick delay
     let mut delay = Delay::new(cp.SYST, clocks.sysclk().raw());
@@ -89,39 +111,36 @@ fn main() -> ! {
     print_str(&mut tx, ", STEP_MODE ");
     print_hex_u8(
         &mut tx,
-        get_param(&mut spi, &mut cs, STEP_MODE_REG, STEP_MODE_LEN) as u8,
+        get_param(&mut spi, &mut cs, REG_STEP_MODE, 1) as u8,
     );
     print_str(&mut tx, "\r\n");
     print_str(&mut tx, "ABS_POS: ");
-    print_hex_u32(
-        &mut tx,
-        get_param(&mut spi, &mut cs, ABS_POS_REG, ABS_POS_LEN),
-    );
+    print_hex_u32(&mut tx, get_param(&mut spi, &mut cs, REG_ABS_POS, 3));
     print_str(&mut tx, "\r\n");
 
     loop {
         let current_state = button.is_high();
         if !current_state && last_button_state {
             // Read param value
-            let read_val = get_param(&mut spi, &mut cs, REG_READ, READ_LEN);
+            let read_val = get_param(&mut spi, &mut cs, REG_MARK, 3);
             print_str(&mut tx, "READ  reg ");
-            print_hex_u8(&mut tx, REG_READ);
+            print_hex_u8(&mut tx, REG_MARK);
             print_str(&mut tx, "  = ");
             print_hex_u32(&mut tx, read_val);
             print_str(&mut tx, "\r\n");
 
             // Write param value
-            set_param(&mut spi, &mut cs, REG_WRITE, WRITE_VAL, WRITE_LEN);
+            set_param(&mut spi, &mut cs, REG_MARK, WRITE_VAL, 3);
             print_str(&mut tx, "WRITE reg ");
-            print_hex_u8(&mut tx, REG_WRITE);
+            print_hex_u8(&mut tx, REG_MARK);
             print_str(&mut tx, " <= ");
             print_hex_u32(&mut tx, WRITE_VAL);
             print_str(&mut tx, "\r\n");
 
             // Read param value
-            let read_val = get_param(&mut spi, &mut cs, REG_READ, READ_LEN);
+            let read_val = get_param(&mut spi, &mut cs, REG_MARK, 3);
             print_str(&mut tx, "READ  reg ");
-            print_hex_u8(&mut tx, REG_READ);
+            print_hex_u8(&mut tx, REG_MARK);
             print_str(&mut tx, "  = ");
             print_hex_u32(&mut tx, read_val);
             print_str(&mut tx, "\r\n");
