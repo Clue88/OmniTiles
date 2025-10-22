@@ -108,7 +108,15 @@ fn main() -> ! {
     // Reset device and print initial state
     reset_device(&mut spi, &mut cs);
 
-    // TODO: Configure PowerSTEP01 registers as needed
+    // Configure PowerSTEP01 registers as needed
+    set_param(&mut spi, &mut cs, REG_STEP_MODE, 0x07, 1);
+    set_param(&mut spi, &mut cs, REG_KVAL_HOLD, 0x20, 1);
+    set_param(&mut spi, &mut cs, REG_KVAL_RUN, 0x20, 1);
+    set_param(&mut spi, &mut cs, REG_KVAL_ACC, 0x20, 1);
+    set_param(&mut spi, &mut cs, REG_KVAL_DEC, 0x20, 1);
+    set_param(&mut spi, &mut cs, REG_ST_SLP, 0x00, 1);
+    set_param(&mut spi, &mut cs, REG_FN_SLP_ACC, 0x00, 1);
+    set_param(&mut spi, &mut cs, REG_FN_SLP_DEC, 0x00, 1);
 
     print_str(&mut tx, "PowerSTEP01 initialized with STATUS ");
     print_hex_u16(&mut tx, get_status(&mut spi, &mut cs));
@@ -122,7 +130,11 @@ fn main() -> ! {
     loop {
         let current_state = button.is_high();
         if !current_state && last_button_state {
-            run(&mut spi, &mut cs, true, 0x400);
+            print_str(&mut tx, "PS01 STATUS: ");
+            print_hex_u16(&mut tx, get_status(&mut spi, &mut cs) as u16);
+            print_str(&mut tx, "\r\n");
+
+            run(&mut spi, &mut cs, true, 0x4000);
 
             // Read param value
             let read_val = get_param(&mut spi, &mut cs, REG_MARK, 3);
