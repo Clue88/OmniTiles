@@ -41,8 +41,8 @@ where
     nb::block!(spi.read()).unwrap_or(0)
 }
 
-/// Send the ResetDevice command to PowerSTEP01. The ResetDevice command resets the device to power-up
-/// conditions.
+/// Send the ResetDevice command to PowerSTEP01. The ResetDevice command resets the device to
+/// power-up conditions.
 pub fn reset_device<I, P, CS>(spi: &mut hal::spi::Spi<I, P, hal::spi::Enabled<u8>>, cs: &mut CS)
 where
     I: hal::spi::Instance,
@@ -142,6 +142,7 @@ pub fn set_param<I, P, CS>(
     let opcode = reg & 0x1F; // SET_PARAM opcode (0b000xxxxx)
     let n = len.clamp(1, 4) as u32;
 
+    cortex_m::asm::nop();
     cs.low();
     let _ = spi_send_recv_byte(spi, opcode);
     cs.high();

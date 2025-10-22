@@ -15,7 +15,7 @@ use nb::block;
 use stm32f7xx_hal as hal;
 
 mod powerstep;
-use crate::powerstep::{get_param, get_status, reset_device, set_param};
+use crate::powerstep::*;
 
 #[entry]
 fn main() -> ! {
