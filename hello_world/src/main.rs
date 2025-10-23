@@ -95,70 +95,89 @@ fn main() -> ! {
     };
     let mut spi = Spi::new(dp.SPI1, (sck, miso, mosi)).enable::<u8>(
         SPI_MODE,
-        100.kHz(),
+        10.kHz(),
         &clocks,
         &mut rcc.apb2,
     );
-
-    const WRITE_VAL: u32 = 0x123;
 
     // SysTick delay
     let mut delay = Delay::new(cp.SYST, clocks.sysclk().raw());
 
     // Reset device and print initial state
     reset_device(&mut spi, &mut cs);
+    let _ = get_status(&mut spi, &mut cs); // Clear any existing errors
 
     // Configure PowerSTEP01 registers as needed
-    set_param(&mut spi, &mut cs, REG_STEP_MODE, 0x07, 1);
-    set_param(&mut spi, &mut cs, REG_KVAL_HOLD, 0x20, 1);
-    set_param(&mut spi, &mut cs, REG_KVAL_RUN, 0x20, 1);
-    set_param(&mut spi, &mut cs, REG_KVAL_ACC, 0x20, 1);
-    set_param(&mut spi, &mut cs, REG_KVAL_DEC, 0x20, 1);
-    set_param(&mut spi, &mut cs, REG_ST_SLP, 0x00, 1);
-    set_param(&mut spi, &mut cs, REG_FN_SLP_ACC, 0x00, 1);
-    set_param(&mut spi, &mut cs, REG_FN_SLP_DEC, 0x00, 1);
+    set_param(&mut spi, &mut cs, REG_STEP_MODE, 0x00, 1); // Full step
+    set_param(&mut spi, &mut cs, REG_KVAL_HOLD, 0x1D, 1);
+    set_param(&mut spi, &mut cs, REG_KVAL_RUN, 0x1D, 1);
+    set_param(&mut spi, &mut cs, REG_MARK, 0x64, 3); // 100 steps
+    set_param(&mut spi, &mut cs, REG_CONFIG, 0x2C10, 2); // SW_MODE = 1, EXT_CLK = 0, OC_SD = 0
 
     print_str(&mut tx, "PowerSTEP01 initialized with STATUS ");
     print_hex_u16(&mut tx, get_status(&mut spi, &mut cs));
-    print_str(&mut tx, ", STEP_MODE ");
+    print_str(&mut tx, "\r\n");
+    print_str(&mut tx, "  CONFIG: ");
+    print_hex_u16(&mut tx, get_param(&mut spi, &mut cs, REG_CONFIG, 2) as u16);
+    print_str(&mut tx, "\r\n");
+    print_str(&mut tx, "  STEP_MODE: ");
     print_hex_u8(
         &mut tx,
         get_param(&mut spi, &mut cs, REG_STEP_MODE, 1) as u8,
     );
     print_str(&mut tx, "\r\n");
+    print_str(&mut tx, "  MARK: ");
+    print_hex_u32(&mut tx, get_param(&mut spi, &mut cs, REG_MARK, 3));
+    print_str(&mut tx, "\r\n");
+    print_voltage_mode_config(&mut tx, &mut spi, &mut cs);
+
+    let _ = nb::block!(tx.flush());
+
+    let mut rohan = true;
 
     loop {
         let current_state = button.is_high();
         if !current_state && last_button_state {
-            print_str(&mut tx, "PS01 STATUS: ");
+            print_str(&mut tx, "PS01 STATUS 1: ");
             print_hex_u16(&mut tx, get_status(&mut spi, &mut cs) as u16);
             print_str(&mut tx, "\r\n");
 
-            run(&mut spi, &mut cs, true, 0x4000);
+            print_str(&mut tx, "Trying to go to mark/home\r\n");
+            if rohan {
+                go_mark(&mut spi, &mut cs);
+                rohan = false;
+            } else {
+                go_home(&mut spi, &mut cs);
+                rohan = true;
+            }
 
-            // Read param value
-            let read_val = get_param(&mut spi, &mut cs, REG_MARK, 3);
-            print_str(&mut tx, "READ  reg ");
-            print_hex_u8(&mut tx, REG_MARK);
-            print_str(&mut tx, "  = ");
-            print_hex_u32(&mut tx, read_val);
+            print_str(&mut tx, "PS01 STATUS 2: ");
+            print_hex_u16(&mut tx, get_status(&mut spi, &mut cs) as u16);
             print_str(&mut tx, "\r\n");
 
-            // Write param value
-            set_param(&mut spi, &mut cs, REG_MARK, WRITE_VAL, 3);
-            print_str(&mut tx, "WRITE reg ");
-            print_hex_u8(&mut tx, REG_MARK);
-            print_str(&mut tx, " <= ");
-            print_hex_u32(&mut tx, WRITE_VAL);
-            print_str(&mut tx, "\r\n");
+            // // Read param value
+            // let read_val = get_param(&mut spi, &mut cs, REG_MARK, 3);
+            // print_str(&mut tx, "READ  reg ");
+            // print_hex_u8(&mut tx, REG_MARK);
+            // print_str(&mut tx, "  = ");
+            // print_hex_u32(&mut tx, read_val);
+            // print_str(&mut tx, "\r\n");
 
-            // Read param value
-            let read_val = get_param(&mut spi, &mut cs, REG_MARK, 3);
-            print_str(&mut tx, "READ  reg ");
-            print_hex_u8(&mut tx, REG_MARK);
-            print_str(&mut tx, "  = ");
-            print_hex_u32(&mut tx, read_val);
-            print_str(&mut tx, "\r\n");
+            // // Write param value
+            // set_param(&mut spi, &mut cs, REG_MARK, WRITE_VAL, 3);
+            // print_str(&mut tx, "WRITE reg ");
+            // print_hex_u8(&mut tx, REG_MARK);
+            // print_str(&mut tx, " <= ");
+            // print_hex_u32(&mut tx, WRITE_VAL);
+            // print_str(&mut tx, "\r\n");
+
+            // // Read param value
+            // let read_val = get_param(&mut spi, &mut cs, REG_MARK, 3);
+            // print_str(&mut tx, "READ  reg ");
+            // print_hex_u8(&mut tx, REG_MARK);
+            // print_str(&mut tx, "  = ");
+            // print_hex_u32(&mut tx, read_val);
+            // print_str(&mut tx, "\r\n");
 
             let _ = nb::block!(tx.flush());
 
@@ -230,4 +249,42 @@ fn print_hex_u32<U: Instance>(tx: &mut Tx<U>, value: u32) {
         }
         let _ = block!(tx.write(*b));
     }
+}
+
+fn print_voltage_mode_config<U: Instance, I, P, CS>(
+    tx: &mut Tx<U>,
+    spi: &mut hal::spi::Spi<I, P, hal::spi::Enabled<u8>>,
+    cs: &mut CS,
+) where
+    I: hal::spi::Instance,
+    P: hal::spi::Pins<I>,
+    CS: crate::powerstep::CsPin,
+{
+    print_str(tx, "  KVAL_HOLD: ");
+    print_hex_u8(tx, get_param(spi, cs, REG_KVAL_HOLD, 1) as u8);
+    print_str(tx, "\r\n");
+    print_str(tx, "  KVAL_RUN: ");
+    print_hex_u8(tx, get_param(spi, cs, REG_KVAL_RUN, 1) as u8);
+    print_str(tx, "\r\n");
+    print_str(tx, "  KVAL_ACC: ");
+    print_hex_u8(tx, get_param(spi, cs, REG_KVAL_ACC, 1) as u8);
+    print_str(tx, "\r\n");
+    print_str(tx, "  KVAL_DEC: ");
+    print_hex_u8(tx, get_param(spi, cs, REG_KVAL_DEC, 1) as u8);
+    print_str(tx, "\r\n");
+    print_str(tx, "  INT_SPEED: ");
+    print_hex_u16(tx, get_param(spi, cs, REG_INT_SPEED, 2) as u16);
+    print_str(tx, "\r\n");
+    print_str(tx, "  ST_SLP: ");
+    print_hex_u8(tx, get_param(spi, cs, REG_ST_SLP, 1) as u8);
+    print_str(tx, "\r\n");
+    print_str(tx, "  FN_SLP_ACC: ");
+    print_hex_u8(tx, get_param(spi, cs, REG_FN_SLP_ACC, 1) as u8);
+    print_str(tx, "\r\n");
+    print_str(tx, "  FN_SLP_DEC: ");
+    print_hex_u8(tx, get_param(spi, cs, REG_FN_SLP_DEC, 1) as u8);
+    print_str(tx, "\r\n");
+    print_str(tx, "  K_THERM: ");
+    print_hex_u8(tx, get_param(spi, cs, REG_K_THERM, 1) as u8);
+    print_str(tx, "\r\n");
 }

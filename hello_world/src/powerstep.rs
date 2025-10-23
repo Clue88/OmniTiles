@@ -58,7 +58,8 @@ where
     P: hal::spi::Pins<I>,
     CS: crate::powerstep::CsPin,
 {
-    let _ = spi_send_recv_byte(spi, 0xC0, cs);
+    let opcode = 0xC0;
+    let _ = spi_send_recv_byte(spi, opcode, cs);
 }
 
 /// Send the GetStatus command to PowerSTEP01. The GetStatus command resets the STATUS register
@@ -75,7 +76,8 @@ where
     P: hal::spi::Pins<I>,
     CS: crate::powerstep::CsPin,
 {
-    let _ = spi_send_recv_byte(spi, 0xD0, cs);
+    let opcode = 0xD0;
+    let _ = spi_send_recv_byte(spi, opcode, cs);
     let b_hi = spi_send_recv_byte(spi, 0x00, cs);
     let b_lo = spi_send_recv_byte(spi, 0x00, cs);
     ((b_hi as u16) << 8) | (b_lo as u16)
@@ -136,6 +138,30 @@ pub fn set_param<I, P, CS>(
         let _ = spi_send_recv_byte(spi, b, cs);
         shift = shift.saturating_sub(8);
     }
+}
+
+/// Send the GoMark command to PowerSTEP01. This command makes the motor move to the absolute
+/// position stored in the MARK register (2C int from -2^21 to +2^21 - 1, unit based on step mode).
+pub fn go_mark<I, P, CS>(spi: &mut hal::spi::Spi<I, P, hal::spi::Enabled<u8>>, cs: &mut CS)
+where
+    I: hal::spi::Instance,
+    P: hal::spi::Pins<I>,
+    CS: crate::powerstep::CsPin,
+{
+    let opcode = 0x78;
+    let _ = spi_send_recv_byte(spi, opcode, cs);
+}
+
+/// Send the GoHome command to PowerSTEP01. This command makes the motor move to the absolute
+/// position stored in the HOME register (2C int from -2^21 to +2^21 - 1, unit based on step mode).
+pub fn go_home<I, P, CS>(spi: &mut hal::spi::Spi<I, P, hal::spi::Enabled<u8>>, cs: &mut CS)
+where
+    I: hal::spi::Instance,
+    P: hal::spi::Pins<I>,
+    CS: crate::powerstep::CsPin,
+{
+    let opcode = 0x70;
+    let _ = spi_send_recv_byte(spi, opcode, cs);
 }
 
 /// Send the Run command to PowerSTEP01.
