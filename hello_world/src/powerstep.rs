@@ -163,29 +163,3 @@ where
     let opcode = 0x70;
     let _ = spi_send_recv_byte(spi, opcode, cs);
 }
-
-/// Send the Run command to PowerSTEP01.
-/// * `dir`: direction to move in (1 is forward, 0 is backward)
-/// * `speed`: speed in steps/tick where tick is 250ns (unsigned fixed point 0.28)
-pub fn run<I, P, CS>(
-    spi: &mut hal::spi::Spi<I, P, hal::spi::Enabled<u8>>,
-    cs: &mut CS,
-    dir: bool,
-    speed: u32,
-) where
-    I: hal::spi::Instance,
-    P: hal::spi::Pins<I>,
-    CS: crate::powerstep::CsPin,
-{
-    let opcode = if dir { 0x51 } else { 0x50 }; // RUN opcode (0b0101000x)
-    let spd = speed & 0x000F_FFFF;
-    let b2 = ((spd >> 16) & 0x0F) as u8;
-    let b1 = ((spd >> 8) & 0xFF) as u8;
-    let b0 = (spd & 0xFF) as u8;
-
-    let _ = spi_send_recv_byte(spi, opcode, cs);
-
-    for &b in &[b2, b1, b0] {
-        let _ = spi_send_recv_byte(spi, b, cs);
-    }
-}
