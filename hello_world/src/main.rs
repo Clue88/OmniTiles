@@ -70,7 +70,7 @@ fn main() -> ! {
 
     // USER button (PC13)
     let button = gpioc.pc13.into_floating_input();
-    let mut last_button_state = button.is_high();
+    let mut prev_button = button.is_high();
 
     // USART3 via ST-LINK (PD8/PD9)
     let tx = gpiod.pd8.into_alternate::<7>();
@@ -100,6 +100,12 @@ fn main() -> ! {
         &mut rcc.apb2,
     );
 
+    // ADC (PA3)
+    let _adc_pin = gpioa.pa3.into_analog();
+    let rcc_pac = unsafe { &*pac::RCC::ptr() };
+    rcc_pac.apb2enr.modify(|_, w| w.adc1en().set_bit());
+    dp.ADC1.cr2.modify(|_, w| w.adon().set_bit());
+
     // SysTick delay
     let mut delay = Delay::new(cp.SYST, clocks.sysclk().raw());
 
@@ -112,7 +118,6 @@ fn main() -> ! {
     set_param(&mut spi, &mut cs, REG_STEP_MODE, 0x00, 1); // Full step
     set_param(&mut spi, &mut cs, REG_KVAL_HOLD, 0x1D, 1);
     set_param(&mut spi, &mut cs, REG_KVAL_RUN, 0x1D, 1);
-    set_param(&mut spi, &mut cs, REG_MARK, 0x64, 3); // 100 steps
 
     print_str(&mut tx, "PowerSTEP01 initialized with STATUS ");
     print_hex_u16(&mut tx, get_status(&mut spi, &mut cs));
@@ -122,24 +127,25 @@ fn main() -> ! {
 
     let _ = nb::block!(tx.flush());
 
-    let mut is_at_home = true;
+    let mut adc_mv = (read_adc1_channel3(&dp.ADC1) as u32 * 3300) / 4095;
 
     loop {
-        let current_state = button.is_high();
+        let curr_button = button.is_high();
 
-        // Toggle between HOME and MARK on button press
-        if !current_state && last_button_state {
-            if is_at_home {
-                print_str(&mut tx, "Going to MARK\r\n");
-                go_mark(&mut spi, &mut cs);
-                is_at_home = false;
-            } else {
-                print_str(&mut tx, "Going to HOME\r\n");
-                go_home(&mut spi, &mut cs);
-                is_at_home = true;
-            }
+        let new_adc_mv = (read_adc1_channel3(&dp.ADC1) as u32 * 3300) / 4095;
+        let diff = new_adc_mv.abs_diff(adc_mv);
+        if diff > 10 {
+            let mark_val = map_to_twos22(new_adc_mv);
+            set_param(&mut spi, &mut cs, REG_MARK, mark_val, 3);
+            go_mark(&mut spi, &mut cs);
+        }
+        adc_mv = new_adc_mv;
 
-            let _ = nb::block!(tx.flush());
+        // Print ADC1 value and blink on button press
+        if !curr_button && prev_button {
+            print_str(&mut tx, "ADC1 Channel 3 Value (mV): ");
+            print_hex_u32(&mut tx, adc_mv);
+            print_str(&mut tx, "\r\n");
 
             // Blink
             led.set_high();
@@ -147,7 +153,7 @@ fn main() -> ! {
             led.set_low();
         }
 
-        last_button_state = current_state;
+        prev_button = curr_button;
         delay.delay_ms(20_u32);
     }
 }
@@ -269,4 +275,24 @@ fn print_voltage_mode_config<U: Instance, I, P, CS>(
     print_str(tx, "  K_THERM: ");
     print_hex_u8(tx, get_param(spi, cs, REG_K_THERM, 1) as u8);
     print_str(tx, "\r\n");
+}
+
+/// Read ADC1 channel 3 (PA3) and return the 12-bit result.
+fn read_adc1_channel3(adc1: &pac::ADC1) -> u16 {
+    adc1.sqr3.modify(|_, w| unsafe { w.sq1().bits(3) });
+    adc1.smpr2.modify(|_, w| w.smp3().bits(0b111));
+    adc1.cr2.modify(|_, w| w.swstart().set_bit());
+
+    // Wait for completion
+    while adc1.sr.read().eoc().bit_is_clear() {}
+
+    adc1.dr.read().data().bits() as u16
+}
+
+/// Map a voltage in mV (0 to 3300) to a 22-bit two's complement value for the MARK register.
+fn map_to_twos22(x: u32) -> u32 {
+    let y: i32 = ((x as u64 * 400 + 1650) / 3300) as i32 - 200;
+    const WIDTH: u32 = 22;
+    const MASK: u32 = (1u32 << WIDTH) - 1; // 0x3F_FFFF
+    ((y as i32) as u32) & MASK
 }
