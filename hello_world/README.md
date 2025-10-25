@@ -1,7 +1,7 @@
 # HelloWorld
-Testing playground to gain familiarity with the NUCLEO-F767ZI development board and the
-X-NUCLEO-IHM03A1 stepper motor driver. This project includes an (incomplete) driver to program the
-powerSTEP01 motor controller over SPI and a debug terminal over USART.
+Mid-semester demo for 2025-26 ESE Senior Design. This project uses a NUCLEO-F767ZI development board
+with an attached X-NUCLEO-IHM03A1 stepper motor driver, and sets the stepper motor position
+according to input from a potentiometer wired to the development board's built-in ADC.
 
 ## Installation
 The following instructions are designed for macOS, but will probably also work on any other
@@ -28,7 +28,8 @@ To run the debug terminal, open a `screen` session with baud rate 115200:
 screen /dev/tty.usbmodem* 115200
 ```
 
-Press the USER button (B1) on the devboard to print the PS01 STATUS register to the debug terminal.
+Press the USER button (B1) on the devboard to print the current ADC1 value (in mV) to the debug
+terminal.
 
 To exit the debug terminal, press `Ctrl+A` then `Ctrl+\` then `y`.
 

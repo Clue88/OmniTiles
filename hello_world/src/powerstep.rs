@@ -5,6 +5,9 @@
 //!
 //! Currently it supports:
 //! - Reading the 16-bit `STATUS` register via the `GetStatus (0xD0)` command.
+//! - Reading and writing parameters via the `GET_PARAM (0x20 | reg)` and
+//!   `SET_PARAM (reg)` commands.
+//! - Sending the `ResetDevice (0xC0)`, `GoMark (0x78)`, and `GoHome (0x70)` commands.
 
 use hal::prelude::*;
 use stm32f7xx_hal as hal;
