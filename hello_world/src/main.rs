@@ -131,8 +131,9 @@ fn main() -> ! {
 
     loop {
         let curr_button = button.is_high();
-
         let new_adc_mv = (read_adc1_channel3(&dp.ADC1) as u32 * 3300) / 4095;
+
+        // Only modify MARK if ADC1 value has changed significantly
         let diff = new_adc_mv.abs_diff(adc_mv);
         if diff > 10 {
             let mark_val = map_to_twos22(new_adc_mv);
