@@ -49,6 +49,14 @@ const REG_FN_SLP_DEC: u8 = 0x10;
 const REG_K_THERM: u8 = 0x11;
 const REG_STALL_TH: u8 = 0x14;
 
+// Constants
+const MARK_UPDATE_EPS_MV: u32 = 10;
+const ADC_CENTER_MV: i32 = 1650;
+const MAX_DEG: i32 = 60; // limit to ±60°
+const STEPS_PER_REV: i32 = 200; // 1.8° motor, full-step
+const MICROSTEPS: i32 = 1; // STEP_MODE = 0x00 => full-step
+const ABS_MASK_22: u32 = 0x003F_FFFF;
+
 #[entry]
 fn main() -> ! {
     let dp = pac::Peripherals::take().unwrap();
@@ -118,6 +126,12 @@ fn main() -> ! {
     set_param(&mut spi, &mut cs, REG_STEP_MODE, 0x00, 1); // Full step
     set_param(&mut spi, &mut cs, REG_KVAL_HOLD, 0x1D, 1);
     set_param(&mut spi, &mut cs, REG_KVAL_RUN, 0x1D, 1);
+    set_param(&mut spi, &mut cs, REG_KVAL_ACC, 0x33, 1);
+    set_param(&mut spi, &mut cs, REG_KVAL_DEC, 0x33, 1);
+    set_param(&mut spi, &mut cs, REG_FS_SPD, 0x427, 2); // BOOST_MODE = 1
+    set_param(&mut spi, &mut cs, REG_ACC, 0xFB8, 2);
+    set_param(&mut spi, &mut cs, REG_DEC, 0xFB8, 2);
+    set_param(&mut spi, &mut cs, REG_MAX_SPEED, 0x10, 2);
 
     print_str(&mut tx, "PowerSTEP01 initialized with STATUS ");
     print_hex_u16(&mut tx, get_status(&mut spi, &mut cs));
@@ -125,27 +139,41 @@ fn main() -> ! {
     print_config(&mut tx, &mut spi, &mut cs);
     print_voltage_mode_config(&mut tx, &mut spi, &mut cs);
 
+    // Reset to HOME position
+    go_home(&mut spi, &mut cs);
+
     let _ = nb::block!(tx.flush());
 
     let mut adc_mv = (read_adc1_channel3(&dp.ADC1) as u32 * 3300) / 4095;
-
     loop {
         let curr_button = button.is_high();
         let new_adc_mv = (read_adc1_channel3(&dp.ADC1) as u32 * 3300) / 4095;
 
         // Only modify MARK if ADC1 value has changed significantly
         let diff = new_adc_mv.abs_diff(adc_mv);
-        if diff > 10 {
-            let mark_val = map_to_twos22(new_adc_mv);
-            set_param(&mut spi, &mut cs, REG_MARK, mark_val, 3);
-            go_mark(&mut spi, &mut cs);
+        if diff > MARK_UPDATE_EPS_MV {
+            let target_deg = adc_mv_to_deg(new_adc_mv);
+
+            let target_abs_u22 = deg_to_abspos_22(target_deg);
+            let target_abs_i22 = sign_extend_22(target_abs_u22);
+
+            let cur_abs_u22 = get_param(&mut spi, &mut cs, REG_ABS_POS, 3);
+            let cur_abs_i22 = sign_extend_22(cur_abs_u22);
+
+            let delta = target_abs_i22 - cur_abs_i22;
+            let dir_forward = delta >= 0;
+
+            go_to_dir(&mut spi, &mut cs, dir_forward, target_abs_u22);
         }
         adc_mv = new_adc_mv;
 
-        // Print ADC1 value and blink on button press
         if !curr_button && prev_button {
-            print_str(&mut tx, "ADC1 Channel 3 Value (mV): ");
-            print_hex_u32(&mut tx, adc_mv);
+            print_str(&mut tx, "ABS_POS: ");
+            print_hex_u32(&mut tx, get_param(&mut spi, &mut cs, REG_ABS_POS, 3));
+            print_str(&mut tx, "\r\n");
+
+            print_str(&mut tx, "STATUS: ");
+            print_hex_u16(&mut tx, get_status(&mut spi, &mut cs));
             print_str(&mut tx, "\r\n");
 
             // Blink
@@ -237,6 +265,15 @@ fn print_config<U: Instance, I, P, CS>(
     print_str(tx, "  MARK: ");
     print_hex_u32(tx, get_param(spi, cs, REG_MARK, 3));
     print_str(tx, "\r\n");
+    print_str(tx, "  ACC: ");
+    print_hex_u16(tx, get_param(spi, cs, REG_ACC, 2) as u16);
+    print_str(tx, "\r\n");
+    print_str(tx, "  DEC: ");
+    print_hex_u16(tx, get_param(spi, cs, REG_DEC, 2) as u16);
+    print_str(tx, "\r\n");
+    print_str(tx, "  FS_SPD: ");
+    print_hex_u16(tx, get_param(spi, cs, REG_FS_SPD, 2) as u16);
+    print_str(tx, "\r\n");
 }
 
 /// Print voltage mode configuration register values
@@ -276,6 +313,9 @@ fn print_voltage_mode_config<U: Instance, I, P, CS>(
     print_str(tx, "  K_THERM: ");
     print_hex_u8(tx, get_param(spi, cs, REG_K_THERM, 1) as u8);
     print_str(tx, "\r\n");
+    print_str(tx, "  STALL_TH: ");
+    print_hex_u8(tx, get_param(spi, cs, REG_STALL_TH, 1) as u8);
+    print_str(tx, "\r\n");
 }
 
 /// Read ADC1 channel 3 (PA3) and return the 12-bit result.
@@ -290,10 +330,34 @@ fn read_adc1_channel3(adc1: &pac::ADC1) -> u16 {
     adc1.dr.read().data().bits() as u16
 }
 
-/// Map a voltage in mV (0 to 3300) to a 22-bit two's complement value for the MARK register.
-fn map_to_twos22(x: u32) -> u32 {
-    let y: i32 = ((x as u64 * 400 + 1650) / 3300) as i32 - 200;
-    const WIDTH: u32 = 22;
-    const MASK: u32 = (1u32 << WIDTH) - 1; // 0x3F_FFFF
-    ((y as i32) as u32) & MASK
+/// TODO: Docs
+fn sign_extend_22(x: u32) -> i32 {
+    let v = x & ABS_MASK_22;
+    if (v & 0x0020_0000) != 0 {
+        // negative
+        (v | !ABS_MASK_22) as i32
+    } else {
+        v as i32
+    }
+}
+
+/// TODO: Docs
+fn encode_twos22(x: i32) -> u32 {
+    (x as u32) & ABS_MASK_22
+}
+
+/// TODO: Docs
+fn adc_mv_to_deg(adc_mv: u32) -> i32 {
+    // center at 1.65V and scale so 0V -> -30°, 3.3V -> +30°
+    let centered = adc_mv as i32 - ADC_CENTER_MV; // [-1650, 1650]
+    let deg = ((centered as i64) * (MAX_DEG as i64) + 825) / 1650; // +825 for rounding
+    deg.clamp(-MAX_DEG as i64, MAX_DEG as i64) as i32
+}
+
+/// TODO: Docs
+fn deg_to_abspos_22(deg: i32) -> u32 {
+    let steps_per_rev = STEPS_PER_REV * MICROSTEPS; // effective microsteps/rev
+                                                    // steps = round(deg * steps_per_rev / 360)
+    let steps = ((deg as i64) * (steps_per_rev as i64) + if deg >= 0 { 180 } else { -180 }) / 360;
+    encode_twos22(steps as i32)
 }

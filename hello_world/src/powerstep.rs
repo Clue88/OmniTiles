@@ -166,3 +166,23 @@ where
     let opcode = 0x70;
     let _ = spi_send_recv_byte(spi, opcode, cs);
 }
+
+/// TODO: Docs
+pub fn go_to_dir<I, P, CS>(
+    spi: &mut hal::spi::Spi<I, P, hal::spi::Enabled<u8>>,
+    cs: &mut CS,
+    dir: bool,
+    abs_pos: u32,
+) where
+    I: hal::spi::Instance,
+    P: hal::spi::Pins<I>,
+    CS: crate::powerstep::CsPin,
+{
+    let opcode = if dir { 0x69 } else { 0x68 };
+    let _ = spi_send_recv_byte(spi, opcode, cs);
+
+    let pos = abs_pos & 0x003F_FFFF; // keep lower 22 bits
+    let _ = spi_send_recv_byte(spi, ((pos >> 16) & 0x3F) as u8, cs);
+    let _ = spi_send_recv_byte(spi, ((pos >> 8) & 0xFF) as u8, cs);
+    let _ = spi_send_recv_byte(spi, (pos & 0xFF) as u8, cs);
+}
