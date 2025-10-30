@@ -167,7 +167,8 @@ where
     let _ = spi_send_recv_byte(spi, opcode, cs);
 }
 
-/// TODO: Docs
+/// Send the GoTo_Dir command to PowerSTEP01. This command makes the motor move to the given
+/// absolute position in the provided direction (1 = forward, 0 = backward).
 pub fn go_to_dir<I, P, CS>(
     spi: &mut hal::spi::Spi<I, P, hal::spi::Enabled<u8>>,
     cs: &mut CS,

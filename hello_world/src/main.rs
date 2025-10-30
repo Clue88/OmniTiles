@@ -52,7 +52,7 @@ const REG_STALL_TH: u8 = 0x14;
 // Constants
 const MARK_UPDATE_EPS_MV: u32 = 10;
 const ADC_CENTER_MV: i32 = 1650;
-const MAX_DEG: i32 = 360; // limit to ±60°
+const MAX_DEG: i32 = 360;
 const STEPS_PER_REV: i32 = 200; // 1.8° motor, full-step
 const MICROSTEPS: i32 = 1; // STEP_MODE = 0x00 => full-step
 const ABS_MASK_22: u32 = 0x003F_FFFF;
@@ -330,7 +330,7 @@ fn read_adc1_channel3(adc1: &pac::ADC1) -> u16 {
     adc1.dr.read().data().bits() as u16
 }
 
-/// TODO: Docs
+/// Sign-extend a 22-bit two’s complement value into a 32-bit signed integer.
 fn sign_extend_22(x: u32) -> i32 {
     let v = x & ABS_MASK_22;
     if (v & 0x0020_0000) != 0 {
@@ -341,23 +341,26 @@ fn sign_extend_22(x: u32) -> i32 {
     }
 }
 
-/// TODO: Docs
+/// Encode a signed 32-bit integer into a 22-bit two’s complement representation.
 fn encode_twos22(x: i32) -> u32 {
     (x as u32) & ABS_MASK_22
 }
 
-/// TODO: Docs
+/// Convert an ADC reading in millivolts to an angular displacement in degrees.
+///
+/// The ADC input is assumed to vary linearly between 0 V and 3.3 V, centered at
+/// `ADC_CENTER_MV` (typically 1650 mV). A centered reading (≈1.65 V)
+/// corresponds to 0°, while the extremes correspond to −MAX_DEG and +MAX_DEG.
 fn adc_mv_to_deg(adc_mv: u32) -> i32 {
-    // center at 1.65V and scale so 0V -> -30°, 3.3V -> +30°
-    let centered = adc_mv as i32 - ADC_CENTER_MV; // [-1650, 1650]
-    let deg = ((centered as i64) * (MAX_DEG as i64) + 825) / 1650; // +825 for rounding
+    let centered = adc_mv as i32 - ADC_CENTER_MV;
+    let deg = ((centered as i64) * (MAX_DEG as i64) + (ADC_CENTER_MV as i64 / 2))
+        / (ADC_CENTER_MV as i64);
     deg.clamp(-MAX_DEG as i64, MAX_DEG as i64) as i32
 }
 
-/// TODO: Docs
+/// Convert an angular displacement in degrees into a 22-bit absolute motor position.
 fn deg_to_abspos_22(deg: i32) -> u32 {
-    let steps_per_rev = STEPS_PER_REV * MICROSTEPS; // effective microsteps/rev
-                                                    // steps = round(deg * steps_per_rev / 360)
+    let steps_per_rev = STEPS_PER_REV * MICROSTEPS;
     let steps = ((deg as i64) * (steps_per_rev as i64) + if deg >= 0 { 180 } else { -180 }) / 360;
     encode_twos22(steps as i32)
 }
