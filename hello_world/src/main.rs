@@ -52,10 +52,10 @@ const REG_STALL_TH: u8 = 0x14;
 // Constants
 const MARK_UPDATE_EPS_MV: u32 = 10;
 const ADC_CENTER_MV: i32 = 1650;
-const MAX_DEG: i32 = 360;
+const MAX_DEG: i32 = 360; // ±360°
 const STEPS_PER_REV: i32 = 200; // 1.8° motor, full-step
 const MICROSTEPS: i32 = 1; // STEP_MODE = 0x00 => full-step
-const ABS_MASK_22: u32 = 0x003F_FFFF;
+const ABS_MASK_22: u32 = 0x003F_FFFF; // 22 bits
 
 #[entry]
 fn main() -> ! {
