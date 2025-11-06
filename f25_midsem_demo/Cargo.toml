@@ -1,5 +1,5 @@
 [package]
-name = "hello_world"
+name = "f25_midsem_demo"
 version = "0.1.0"
 authors = ["Christopher Liu <liuchris@seas.upenn.edu>"]
 edition = "2021"

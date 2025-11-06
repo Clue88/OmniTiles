@@ -1,4 +1,4 @@
-# HelloWorld
+# F25 Mid-Semester Demo
 Mid-semester demo for 2025-26 ESE Senior Design. This project uses a NUCLEO-F767ZI development board
 with an attached X-NUCLEO-IHM03A1 stepper motor driver, and sets the stepper motor position
 according to input from a potentiometer wired to the development board's built-in ADC.
