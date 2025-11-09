@@ -8,6 +8,10 @@ use panic_halt as _;
 use hal::{pac, prelude::*};
 use stm32f7xx_hal as hal;
 
+mod hw;
+use hw::led::Led;
+use hw::ActiveLevel;
+
 #[entry]
 fn main() -> ! {
     // Peripherals
