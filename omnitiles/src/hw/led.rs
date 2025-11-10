@@ -1,4 +1,6 @@
-use embedded_hal::digital::OutputPin;
+//! Abstraction layer for an LED driven by an STM32F7 pin.
+
+use stm32f7xx_hal::gpio::{self, Output, PinState, PushPull};
 
 /// Whether the LED is driven active-high or active-low on the board wiring.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -8,66 +10,64 @@ pub enum ActiveLevel {
 }
 
 /// LED abstraction that remembers its active level and last known state.
-pub struct Led<PIN: OutputPin> {
-    pin: PIN,
+pub struct Led<const P: char, const N: u8> {
+    pin: gpio::Pin<P, N, Output<PushPull>>,
     active: ActiveLevel,
-    is_on: bool,
 }
 
-impl<PIN: OutputPin> Led<PIN> {
+impl<const P: char, const N: u8> Led<P, N> {
     /// Create an LED wrapper, initializing it to OFF.
-    pub fn new(mut pin: PIN, active: ActiveLevel) -> Self {
-        match active {
-            ActiveLevel::High => pin.set_low().ok(),
-            ActiveLevel::Low => pin.set_high().ok(),
-        };
-        Self {
-            pin,
-            active,
-            is_on: false,
-        }
+    pub fn new(mut pin: gpio::Pin<P, N, Output<PushPull>>, active: ActiveLevel) -> Self {
+        pin.set_state(match active {
+            ActiveLevel::High => PinState::Low,
+            ActiveLevel::Low => PinState::High,
+        });
+        Self { pin, active }
     }
 
     /// Drive the LED logically ON (true) or OFF (false).
     pub fn set(&mut self, on: bool) {
         match (self.active, on) {
-            (ActiveLevel::High, true) => self.pin.set_high().ok(),
-            (ActiveLevel::High, false) => self.pin.set_low().ok(),
-            (ActiveLevel::Low, true) => self.pin.set_low().ok(),
-            (ActiveLevel::Low, false) => self.pin.set_high().ok(),
-        };
-        self.is_on = on;
+            (ActiveLevel::High, true) => self.pin.set_high(),
+            (ActiveLevel::High, false) => self.pin.set_low(),
+            (ActiveLevel::Low, true) => self.pin.set_low(),
+            (ActiveLevel::Low, false) => self.pin.set_high(),
+        }
     }
 
     #[inline]
     pub fn on(&mut self) {
-        self.set(true);
+        self.set(true)
     }
 
     #[inline]
     pub fn off(&mut self) {
-        self.set(false);
-    }
-
-    pub fn toggle(&mut self) {
-        self.set(!self.is_on);
+        self.set(false)
     }
 
     #[inline]
     pub fn is_on(&self) -> bool {
-        self.is_on
+        match self.active {
+            ActiveLevel::High => self.pin.is_set_high(),
+            ActiveLevel::Low => self.pin.is_set_low(),
+        }
     }
 
-    pub fn free(self) -> PIN {
+    #[inline]
+    pub fn toggle(&mut self) {
+        self.pin.toggle()
+    }
+
+    pub fn free(self) -> gpio::Pin<P, N, Output<PushPull>> {
         self.pin
     }
 }
 
-impl<PIN: OutputPin> Led<PIN> {
-    pub fn active_high(pin: PIN) -> Self {
+impl<const P: char, const N: u8> Led<P, N> {
+    pub fn active_high(pin: gpio::Pin<P, N, Output<PushPull>>) -> Self {
         Self::new(pin, ActiveLevel::High)
     }
-    pub fn active_low(pin: PIN) -> Self {
+    pub fn active_low(pin: gpio::Pin<P, N, Output<PushPull>>) -> Self {
         Self::new(pin, ActiveLevel::Low)
     }
 }

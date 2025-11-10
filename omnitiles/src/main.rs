@@ -9,8 +9,7 @@ use hal::{pac, prelude::*};
 use stm32f7xx_hal as hal;
 
 mod hw;
-use hw::led::Led;
-use hw::ActiveLevel;
+use hw::Led;
 
 #[entry]
 fn main() -> ! {
@@ -18,43 +17,22 @@ fn main() -> ! {
     let dp = pac::Peripherals::take().unwrap();
 
     // Clocks
-    dp.RCC.apb1enr.modify(|_, w| w.tim5en().set_bit());
-
     let rcc = dp.RCC.constrain();
     let _clocks = rcc.cfgr.freeze();
 
     // GPIO
-    let gpioa = dp.GPIOA.split();
+    let gpiod = dp.GPIOD.split();
 
-    // TIM5 (quadrature encoder)
-    let _tim5_ch1 = gpioa.pa0.into_alternate::<2>();
-    let _tim5_ch2 = gpioa.pa1.into_alternate::<2>();
-    let tim5 = dp.TIM5;
-    tim5.smcr.modify(|_, w| w.sms().bits(0b011));
+    // LED
+    let pd9 = gpiod.pd9.into_push_pull_output();
+    let pd10 = gpiod.pd10.into_push_pull_output();
+    let mut led_yellow = Led::active_low(pd9);
+    let mut led_green = Led::active_low(pd10);
 
-    tim5.ccmr1_input().modify(|_, w| {
-        w.cc1s().ti1();
-        w.cc2s().ti2();
-        w
-    });
-
-    tim5.ccer.modify(|_, w| {
-        w.cc1e()
-            .set_bit()
-            .cc1p()
-            .clear_bit()
-            .cc2e()
-            .set_bit()
-            .cc2p()
-            .clear_bit()
-    });
-
-    tim5.arr.write(|w| w.bits(0xFFFF_FFFF));
-    tim5.cnt.write(|w| w.bits(0));
-    tim5.cr1.modify(|_, w| w.cen().set_bit());
+    led_yellow.on();
+    led_green.on();
 
     loop {
-        let _position: u32 = tim5.cnt.read().bits();
         cortex_m::asm::nop();
     }
 }

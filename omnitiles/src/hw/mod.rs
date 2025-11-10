@@ -1,3 +1,3 @@
 pub mod led;
 
-pub use led::{ActiveLevel, Led};
+pub use led::Led;
