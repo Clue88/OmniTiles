@@ -17,7 +17,8 @@ pub struct Led<const P: char, const N: u8> {
 
 impl<const P: char, const N: u8> Led<P, N> {
     /// Create an LED wrapper, initializing it to OFF.
-    pub fn new(mut pin: gpio::Pin<P, N, Output<PushPull>>, active: ActiveLevel) -> Self {
+    pub fn new<MODE>(pin: gpio::Pin<P, N, MODE>, active: ActiveLevel) -> Self {
+        let mut pin = pin.into_push_pull_output();
         pin.set_state(match active {
             ActiveLevel::High => PinState::Low,
             ActiveLevel::Low => PinState::High,
@@ -64,10 +65,10 @@ impl<const P: char, const N: u8> Led<P, N> {
 }
 
 impl<const P: char, const N: u8> Led<P, N> {
-    pub fn active_high(pin: gpio::Pin<P, N, Output<PushPull>>) -> Self {
+    pub fn active_high<MODE>(pin: gpio::Pin<P, N, MODE>) -> Self {
         Self::new(pin, ActiveLevel::High)
     }
-    pub fn active_low(pin: gpio::Pin<P, N, Output<PushPull>>) -> Self {
+    pub fn active_low<MODE>(pin: gpio::Pin<P, N, MODE>) -> Self {
         Self::new(pin, ActiveLevel::Low)
     }
 }

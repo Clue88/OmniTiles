@@ -14,7 +14,7 @@ use nb::block;
 
 use stm32f7xx_hal::{
     prelude::*,
-    serial::{Instance, Tx},
+    serial::{Instance, Pins, Serial, Tx},
 };
 
 pub struct Usart<U: Instance> {
@@ -22,7 +22,8 @@ pub struct Usart<U: Instance> {
 }
 
 impl<U: Instance> Usart<U> {
-    pub fn new(tx: Tx<U>) -> Self {
+    pub fn new<PINS: Pins<U>>(serial: Serial<U, PINS>) -> Self {
+        let (tx, _rx) = serial.split();
         Self { tx }
     }
 
