@@ -98,7 +98,7 @@ impl<U: Instance> Usart<U> {
 // Implement `core::fmt::Write` so we can use `write!` / `writeln!` on `Usart`.
 impl<U: Instance> fmt::Write for Usart<U> {
     fn write_str(&mut self, s: &str) -> fmt::Result {
-        self.write_str(s);
+        Usart::write_str(self, s);
         Ok(())
     }
 }
