@@ -36,13 +36,13 @@ fn main() -> ! {
     let mut led_green = Led::active_low(gpiod.pd10);
 
     // USART1 (DBG)
-    let tx = gpioa.pa9.into_alternate::<7>();
-    let rx = gpioa.pa10.into_alternate::<7>();
+    let usart_tx = gpioa.pa9.into_alternate::<7>();
+    let usart_rx = gpioa.pa10.into_alternate::<7>();
     let usart_cfg = Config {
         baud_rate: 115_200.bps(),
         ..Default::default()
     };
-    let serial = Serial::new(dp.USART1, (tx, rx), &clocks, usart_cfg);
+    let serial = Serial::new(dp.USART1, (usart_tx, usart_rx), &clocks, usart_cfg);
     let mut usart = Usart::new(serial);
 
     // SPI4
