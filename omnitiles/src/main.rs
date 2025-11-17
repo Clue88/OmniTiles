@@ -17,7 +17,7 @@ use stm32f7xx_hal as hal;
 
 mod hw;
 use bxcan::StandardId;
-use hw::{CanBus, ChipSelect, Led, SpiBus, Usart};
+use hw::{CanBus, ChipSelect, Encoder, Led, SpiBus, Usart};
 
 #[entry]
 fn main() -> ! {
@@ -82,6 +82,24 @@ fn main() -> ! {
     let can2_hal = Can::new(dp.CAN2, &mut apb1, (can2_tx, can2_rx));
     let mut can_bus = CanBus::new(can2_hal, CAN_BTR, true, false); // Loopback mode
 
+    // ========== TIM2/TIM3 ==========
+    let _m1_enc_ch1 = gpioa.pa0.into_alternate::<1>();
+    let _m1_enc_ch2 = gpioa.pa1.into_alternate::<1>();
+
+    let _m2_enc_ch1 = gpioa.pa6.into_alternate::<2>();
+    let _m2_enc_ch2 = gpioa.pa7.into_alternate::<2>();
+
+    let rcc_regs = unsafe { &*pac::RCC::ptr() };
+    rcc_regs.apb1enr.modify(|_, w| {
+        w.tim2en().set_bit();
+        w.tim3en().set_bit()
+    });
+
+    let tim2 = dp.TIM2;
+    let tim3 = dp.TIM3;
+    let mut enc1 = Encoder::tim2(tim2);
+    let mut enc2 = Encoder::tim3(tim3);
+
     // ========== EXAMPLE USAGES ==========
     led_yellow.on();
     led_green.on();
@@ -97,6 +115,9 @@ fn main() -> ! {
 
     let can_id = StandardId::new(0x123).unwrap();
     let _ = can_bus.transmit_data(can_id, &[0xDE, 0xAD, 0xBE, 0xEF]);
+
+    enc1.reset();
+    enc2.reset();
 
     loop {
         cortex_m::asm::nop();
