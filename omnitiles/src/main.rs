@@ -5,7 +5,9 @@
 use cortex_m_rt::entry;
 use panic_halt as _;
 
+use core::fmt::Write;
 use hal::{
+    can::Can,
     pac,
     prelude::*,
     serial::{Config, Serial},
@@ -14,7 +16,8 @@ use hal::{
 use stm32f7xx_hal as hal;
 
 mod hw;
-use hw::{ChipSelect, Led, SpiBus, Usart};
+use bxcan::StandardId;
+use hw::{CanBus, ChipSelect, Led, SpiBus, Usart};
 
 #[entry]
 fn main() -> ! {
@@ -24,10 +27,12 @@ fn main() -> ! {
     // Clocks
     let rcc = dp.RCC.constrain();
     let clocks = rcc.cfgr.freeze();
+    let mut apb1 = rcc.apb1;
     let mut apb2 = rcc.apb2;
 
     // GPIO
     let gpioa = dp.GPIOA.split();
+    let gpiob = dp.GPIOB.split();
     let gpiod = dp.GPIOD.split();
     let gpioe = dp.GPIOE.split();
 
@@ -60,6 +65,23 @@ fn main() -> ! {
     let mut cs1 = ChipSelect::active_low(gpioe.pe4);
     let mut cs2 = ChipSelect::active_low(gpioe.pe11);
 
+    // CAN2
+    let pclk1_hz = clocks.pclk1().to_Hz();
+    writeln!(usart, "PCLK1 = {} Hz\r", pclk1_hz).ok(); // TODO: Use this to calculate CAN_BTR
+    const CAN_BTR: u32 = 0x001c_0014; // TODO: Recalculate based on actual APB1 frequency
+
+    let can1_tx = gpioa.pa12.into_alternate::<9>();
+    let can1_rx = gpioa.pa11.into_alternate::<9>();
+    let can1_hal = Can::new(dp.CAN1, &mut apb1, (can1_tx, can1_rx));
+    let mut can1_bus = CanBus::new(can1_hal, CAN_BTR, false, false);
+    can1_bus.configure_accept_all_filters(); // Configure filters on CAN1
+    drop(can1_bus);
+
+    let can2_tx = gpiob.pb12.into_alternate::<9>();
+    let can2_rx = gpiob.pb13.into_alternate::<9>();
+    let can2_hal = Can::new(dp.CAN2, &mut apb1, (can2_rx, can2_tx));
+    let mut can_bus = CanBus::new(can2_hal, CAN_BTR, true, false);
+
     // EXAMPLE USAGES
     led_yellow.on();
     led_green.on();
@@ -72,6 +94,9 @@ fn main() -> ! {
     cs2.select();
     let _ = spi_bus.transfer_byte(0xFE);
     cs2.deselect();
+
+    let id = StandardId::new(0x123).unwrap();
+    let _ = can_bus.transmit_data(id, &[0xDE, 0xAD, 0xBE, 0xEF]);
 
     loop {
         cortex_m::asm::nop();

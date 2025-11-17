@@ -9,11 +9,12 @@ cortex-m = "0.7"
 cortex-m-rt = { version = "0.7", features = ["device"] }
 panic-halt = "0.2.0"
 nb = "1"
+bxcan = "0.7.0"
 
 
 [dependencies.stm32f7xx-hal]
 version = "0.8.0"
-features = ["stm32f777", "rt"]
+features = ["stm32f777", "rt", "has-can"]
 
 
 

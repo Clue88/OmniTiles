@@ -169,6 +169,7 @@ checksum = "51d515d32fb182ee37cda2ccdcb92950d6a3c2893aa280e540671c2cd0f3b1d9"
 name = "omnitiles"
 version = "0.1.0"
 dependencies = [
+ "bxcan",
  "cortex-m",
  "cortex-m-rt",
  "nb 1.1.0",
