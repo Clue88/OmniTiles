@@ -8,7 +8,7 @@
 //! | Module | Purpose |
 //! | ------ | -------- |
 //! | [`hw`] | MCU-level wrappers around USART, SPI, CAN, timers, etc. |
-//! | [`drivers`] | Device-level drivers (DRV8873, etc.) |
+//! | [`drivers`] | Device-level drivers (e.g., DRV8873) |
 //!
 //! ## Getting Started
 //!
