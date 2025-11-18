@@ -5,7 +5,9 @@
 use cortex_m_rt::entry;
 use panic_halt as _;
 
+use bxcan::StandardId;
 use core::fmt::Write;
+
 use hal::{
     can::Can,
     pac,
@@ -16,8 +18,10 @@ use hal::{
 use stm32f7xx_hal as hal;
 
 mod hw;
-use bxcan::StandardId;
 use hw::{CanBus, ChipSelect, Encoder, Led, SpiBus, Usart};
+
+mod drivers;
+use drivers::drv8873::Drv8873;
 
 #[entry]
 fn main() -> ! {
@@ -62,8 +66,12 @@ fn main() -> ! {
     let spi4_enabled = spi4_raw.enable::<u8>(spi_mode, 10.kHz(), &clocks, &mut apb2);
     let mut spi_bus = SpiBus::new(spi4_enabled);
 
-    let mut cs1 = ChipSelect::active_low(gpioe.pe4);
-    let mut cs2 = ChipSelect::active_low(gpioe.pe11);
+    let cs1 = ChipSelect::active_low(gpioe.pe4);
+    let cs2 = ChipSelect::active_low(gpioe.pe11);
+
+    // ========== DRV8873 over SPI4 ==========
+    let mut drv_m1 = Drv8873::new(cs1);
+    let mut drv_m2 = Drv8873::new(cs2);
 
     // ========== CAN2 ==========
     let pclk1_hz = clocks.pclk1().to_Hz();
@@ -106,12 +114,14 @@ fn main() -> ! {
 
     usart.println("Hello world!");
 
-    cs1.select();
-    let _ = spi_bus.transfer_byte(0x67);
-    cs1.deselect();
-    cs2.select();
-    let _ = spi_bus.transfer_byte(0xFE);
-    cs2.deselect();
+    if let Ok(resp) = drv_m1.read_fault(&mut spi_bus) {
+        usart.print_hex_u8(resp.status.raw());
+        usart.write_str(" FAULT=");
+        usart.print_hex_u8(resp.data);
+        usart.println("");
+    }
+
+    let _ = drv_m2.write_ic1(&mut spi_bus, 0x5A);
 
     let can_id = StandardId::new(0x123).unwrap();
     let _ = can_bus.transmit_data(can_id, &[0xDE, 0xAD, 0xBE, 0xEF]);
