@@ -17,7 +17,7 @@ use hal::{
 };
 use stm32f7xx_hal as hal;
 
-use omnitiles::hw::{BoardPins, CanBus, ChipSelect, Encoder, Led, SpiBus, Usart};
+use omnitiles::hw::{pins_f767zi::BoardPins, CanBus, ChipSelect, Encoder, Led, SpiBus, Usart};
 
 #[entry]
 fn main() -> ! {
@@ -48,15 +48,15 @@ fn main() -> ! {
     // ================================
     // LEDs
     // ================================
-    let mut led_yellow = Led::active_low(pins.leds.yellow);
-    let mut led_green = Led::active_low(pins.leds.green);
+    let mut led_blue = Led::active_high(pins.leds.blue);
+    let mut led_green = Led::active_high(pins.leds.green);
 
     // ================================
-    // USART1 Debug
+    // USART3 Debug
     // ================================
     let serial = Serial::new(
-        dp.USART1,
-        (pins.usart1.tx, pins.usart1.rx),
+        dp.USART3,
+        (pins.usart3.tx, pins.usart3.rx),
         &clocks,
         Config {
             baud_rate: 115_200.bps(),
@@ -68,37 +68,31 @@ fn main() -> ! {
     usart.println("Booting OmniTiles test firmware...");
 
     // ================================
-    // SPI4 + Chip Selects
+    // SPI1 + Chip Selects
     // ================================
     let mut spi_bus = {
         let spi_mode = Mode {
             polarity: Polarity::IdleLow,
             phase: Phase::CaptureOnFirstTransition,
         };
-        let spi4_raw = Spi::new(dp.SPI4, (pins.spi4.sck, pins.spi4.miso, pins.spi4.mosi));
-        let spi4_enabled = spi4_raw.enable::<u8>(spi_mode, 10.kHz(), &clocks, &mut apb2);
-        SpiBus::new(spi4_enabled)
+        let spi1_raw = Spi::new(dp.SPI1, (pins.spi1.sck, pins.spi1.miso, pins.spi1.mosi));
+        let spi1_enabled = spi1_raw.enable::<u8>(spi_mode, 10.kHz(), &clocks, &mut apb2);
+        SpiBus::new(spi1_enabled)
     };
-    let mut cs1 = ChipSelect::active_low(pins.drv8873.m1_cs);
+    let mut cs1 = ChipSelect::active_low(pins.spi1.cs);
 
     // ================================
-    // CAN2 (Loopback)
+    // CAN1 (Loopback)
     // ================================
     let pclk1_hz = clocks.pclk1().to_Hz();
     writeln!(usart, "PCLK1 = {} Hz\r", pclk1_hz).ok();
     const CAN_BTR: u32 = 0x001C_0003; // 250 kbps @ 16 MHz
 
-    // CAN1 owns filter banks — must configure it even if unused
-    {
-        let can1_hal = Can::new(dp.CAN1, &mut apb1, (pins.can1.tx, pins.can1.rx));
-        let mut can1_bus = CanBus::new(can1_hal, CAN_BTR, false, false);
-        can1_bus.configure_accept_all_filters();
-    }
-
     let mut can_bus = {
-        let can2_hal = Can::new(dp.CAN2, &mut apb1, (pins.can2.tx, pins.can2.rx));
-        CanBus::new(can2_hal, CAN_BTR, true, false) // loopback
+        let can1_hal = Can::new(dp.CAN1, &mut apb1, (pins.can1.tx, pins.can1.rx));
+        CanBus::new(can1_hal, CAN_BTR, true, false) // loopback
     };
+    can_bus.configure_accept_all_filters();
 
     // ================================
     // TIM2 Encoder
@@ -112,7 +106,7 @@ fn main() -> ! {
     // ================================
     // HARDWARE TESTS
     // ================================
-    led_yellow.on();
+    led_blue.on();
     usart.println("LED OK");
 
     // ---- SPI Test ----
