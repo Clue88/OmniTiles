@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["DIAG","FAULT","IC1","IC2","IC3","IC4"]};

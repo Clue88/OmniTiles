@@ -1,0 +1,9 @@
+(function() {
+    var implementors = Object.fromEntries([["omnitiles",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.90.0/core/fmt/trait.Debug.html\" title=\"trait core::fmt::Debug\">Debug</a> for <a class=\"enum\" href=\"omnitiles/drivers/can_motor/enum.Error.html\" title=\"enum omnitiles::drivers::can_motor::Error\">Error</a>"],["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.90.0/core/fmt/trait.Debug.html\" title=\"trait core::fmt::Debug\">Debug</a> for <a class=\"enum\" href=\"omnitiles/drivers/spi_motor/enum.Direction.html\" title=\"enum omnitiles::drivers::spi_motor::Direction\">Direction</a>"],["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.90.0/core/fmt/trait.Debug.html\" title=\"trait core::fmt::Debug\">Debug</a> for <a class=\"enum\" href=\"omnitiles/hw/led/enum.ActiveLevel.html\" title=\"enum omnitiles::hw::led::ActiveLevel\">ActiveLevel</a>"],["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.90.0/core/fmt/trait.Debug.html\" title=\"trait core::fmt::Debug\">Debug</a> for <a class=\"struct\" href=\"omnitiles/drivers/drv8873/struct.Response.html\" title=\"struct omnitiles::drivers::drv8873::Response\">Response</a>"],["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.90.0/core/fmt/trait.Debug.html\" title=\"trait core::fmt::Debug\">Debug</a> for <a class=\"struct\" href=\"omnitiles/drivers/drv8873/struct.Status.html\" title=\"struct omnitiles::drivers::drv8873::Status\">Status</a>"]]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":57,"fragment_lengths":[1419]}
