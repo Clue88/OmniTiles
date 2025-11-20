@@ -1,4 +1,4 @@
-//! # Chip-level / Board-level Drivers
+//! # Device-Specific Drivers
 //!
 //! This module contains device-specific drivers that sit above the raw `hw/` layer and below the
 //! application logic.

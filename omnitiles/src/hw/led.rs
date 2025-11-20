@@ -1,4 +1,4 @@
-//! Abstraction layer for an LED driven by an STM32F7 pin.
+//! LED abstraction layer.
 
 use stm32f7xx_hal::gpio::{self, Output, PinState, PushPull};
 

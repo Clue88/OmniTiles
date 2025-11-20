@@ -1,4 +1,4 @@
-//! Quadrature encoder support using STM32F7 timers in encoder mode.
+//! Quadrature encoder support via STM32F7 timers in encoder mode.
 //!
 //! This module configures TIM2 (32-bit) and TIM3 (16-bit) reigsters for encoder mode and provides
 //! simple accessors.

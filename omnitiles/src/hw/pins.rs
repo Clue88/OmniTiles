@@ -1,4 +1,4 @@
-//! Central definition of all STM32F777 pin assignments used by OmniTiles.
+//! Pin definitions for STM32F777 MCU for OmniTiles.
 
 use stm32f7xx_hal::{
     gpio::{gpioa, gpiob, gpiod, gpioe, Alternate, Output, PushPull},

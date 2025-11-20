@@ -1,6 +1,7 @@
-//! Abstraction layer for a serial USART connection from STM32F7 to an attached debug terminal.
+//! USART abstraction layer.
 //!
-//! Provides several printing helpers for hex, decimal, and ASCII strings.
+//! Provides several printing helpers for hex, decimal, and ASCII strings to print to an attached
+//! debug terminal.
 //!
 //! To access the terminal on the host machine, connect to the debug USB port and use
 //! ```

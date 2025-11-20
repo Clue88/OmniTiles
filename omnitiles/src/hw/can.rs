@@ -1,4 +1,4 @@
-//! Abstraction layer for CAN on STM32F7 using bxcan.
+//! Controller Area Network (CAN) abstraction layer.
 //!
 //! - `CanBus` wraps a HAL `can::Can` instance in `bxcan::Can`.
 //! - Provides simple helpers for sending and receiving frames.

@@ -1,4 +1,4 @@
-//! Abstraction layer for SPI on STM32F7.
+//! Serial Peripheral Interface (SPI) abstraction layer.
 //!
 //! - `SpiBus` wraps a configured HAL SPI instance with 8-bit words.
 //! - `ChipSelect` is an active-low GPIO output wrappr for manual CS control.

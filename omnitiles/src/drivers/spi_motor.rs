@@ -1,4 +1,4 @@
-//! High-level motor abstraction for DRV8873 SPI driver with a TIM2 quadrature encoder.
+//! Motor abstraction for DRV8873 SPI driver with a TIM2 quadrature encoder.
 //!
 //! This module connects `Drv8873` and `Encoder<TIM2>`. The SPI bus is not owned here and must be
 //! passed in as `&mut SpiBus` so that multiple devices can share one bus safely.

@@ -1,5 +1,4 @@
-//! High-level CAN motor control for the SteadyWin GIM6010-48 Planetary Reducer Motor with a GDZ468
-//! driver.
+//! Motor control over CAN for SteadyWin GIM6010-48 with a GDZ468 driver.
 //!
 //! This module wraps the driver's custom CAN protocol for a single motor.
 
