@@ -16,6 +16,7 @@ pub mod can;
 pub mod encoder;
 pub mod led;
 pub mod pins;
+pub mod pins_f767zi;
 pub mod spi;
 pub mod usart;
 

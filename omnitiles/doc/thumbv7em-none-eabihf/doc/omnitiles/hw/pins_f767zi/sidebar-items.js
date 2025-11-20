@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["BoardPins","Can1Pins","EncoderPins","Leds","Spi4Pins","Usart3Pins"]};

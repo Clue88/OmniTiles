@@ -1,6 +1,10 @@
 //! Central definition of all STM32F777 pin assignments used by OmniTiles.
 
-use stm32f7xx_hal::{gpio, pac, prelude::*};
+use stm32f7xx_hal::{
+    gpio::{gpioa, gpiob, gpiod, gpioe, Alternate, Output, PushPull},
+    pac,
+    prelude::*,
+};
 
 /// All board pins. Construct this once at startup using:
 ///
@@ -17,51 +21,49 @@ pub struct BoardPins {
     pub can2: Can2Pins,
 }
 
-/// LED outputs
 pub struct LedPins {
-    pub red: gpio::Pin<'D', 8, gpio::Output<gpio::PushPull>>,
-    pub yellow: gpio::Pin<'D', 9, gpio::Output<gpio::PushPull>>,
-    pub green: gpio::Pin<'D', 10, gpio::Output<gpio::PushPull>>,
+    pub red: gpiod::PD8<Output<PushPull>>,
+    pub yellow: gpiod::PD9<Output<PushPull>>,
+    pub green: gpiod::PD10<Output<PushPull>>,
 }
 
-/// USART1 TX/RX
 pub struct Usart1Pins {
-    pub tx: gpio::Pin<'A', 9, gpio::Alternate<7>>,
-    pub rx: gpio::Pin<'A', 10, gpio::Alternate<7>>,
+    pub tx: gpioa::PA9<Alternate<7>>,
+    pub rx: gpioa::PA10<Alternate<7>>,
 }
 
 /// SPI4 SCK/MISO/MOSI
 pub struct Spi4Pins {
-    pub sck: gpio::Pin<'E', 12, gpio::Alternate<5>>,
-    pub miso: gpio::Pin<'E', 13, gpio::Alternate<5>>,
-    pub mosi: gpio::Pin<'E', 14, gpio::Alternate<5>>,
+    pub sck: gpioe::PE12<Alternate<5>>,
+    pub miso: gpioe::PE13<Alternate<5>>,
+    pub mosi: gpioe::PE14<Alternate<5>>,
 }
 
 /// Chip-select and digital I/O for DRV8873 drivers
 pub struct DrvPins {
-    pub m1_cs: gpio::Pin<'E', 4, gpio::Output<gpio::PushPull>>,
-    pub m2_cs: gpio::Pin<'E', 11, gpio::Output<gpio::PushPull>>,
+    pub m1_cs: gpioe::PE4<Output<PushPull>>,
+    pub m2_cs: gpioe::PE11<Output<PushPull>>,
 }
 
 /// TIM2/TIM3 Quadrature Encoder Inputs
 pub struct EncoderPins {
-    pub tim2_ch1: gpio::Pin<'A', 0, gpio::Alternate<1>>,
-    pub tim2_ch2: gpio::Pin<'A', 1, gpio::Alternate<1>>,
+    pub tim2_ch1: gpioa::PA0<Alternate<1>>,
+    pub tim2_ch2: gpioa::PA1<Alternate<1>>,
 
-    pub tim3_ch1: gpio::Pin<'A', 6, gpio::Alternate<2>>,
-    pub tim3_ch2: gpio::Pin<'A', 7, gpio::Alternate<2>>,
+    pub tim3_ch1: gpioa::PA6<Alternate<2>>,
+    pub tim3_ch2: gpioa::PA7<Alternate<2>>,
 }
 
 /// CAN1 bus pins
 pub struct Can1Pins {
-    pub tx: gpio::Pin<'A', 12, gpio::Alternate<9>>,
-    pub rx: gpio::Pin<'A', 11, gpio::Alternate<9>>,
+    pub tx: gpioa::PA12<Alternate<9>>,
+    pub rx: gpioa::PA11<Alternate<9>>,
 }
 
 /// CAN2 bus pins
 pub struct Can2Pins {
-    pub tx: gpio::Pin<'B', 13, gpio::Alternate<9>>,
-    pub rx: gpio::Pin<'B', 12, gpio::Alternate<9>>,
+    pub tx: gpiob::PB13<Alternate<9>>,
+    pub rx: gpiob::PB12<Alternate<9>>,
 }
 
 impl BoardPins {
