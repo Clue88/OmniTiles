@@ -21,7 +21,7 @@ mod hw;
 use hw::{CanBus, ChipSelect, Encoder, Led, SpiBus, Usart};
 
 mod drivers;
-use drivers::Drv8873;
+use drivers::drv8873::Drv8873;
 
 #[entry]
 fn main() -> ! {

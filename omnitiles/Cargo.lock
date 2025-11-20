@@ -172,6 +172,7 @@ dependencies = [
  "bxcan",
  "cortex-m",
  "cortex-m-rt",
+ "micromath",
  "nb 1.1.0",
  "panic-halt",
  "stm32f7xx-hal",
