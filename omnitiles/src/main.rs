@@ -24,27 +24,39 @@ mod drivers;
 
 #[entry]
 fn main() -> ! {
-    // ========== Peripherals ==========
+    // ================================
+    // Peripherals
+    // ================================
     let dp = pac::Peripherals::take().unwrap();
     let cp = cortex_m::Peripherals::take().unwrap();
 
-    // ========== Clocks ==========
+    // ================================
+    // Clocks
+    // ================================
     let rcc = dp.RCC.constrain();
     let clocks = rcc.cfgr.freeze();
     let mut apb1 = rcc.apb1;
     let mut apb2 = rcc.apb2;
 
-    // ========== SysTick Delay ==========
+    // ================================
+    // SysTick Delay
+    // ================================
     let mut delay = Delay::new(cp.SYST, clocks.sysclk().raw());
 
-    // ========== Pins ==========
+    // ================================
+    // Board Pins
+    // ================================
     let pins = BoardPins::new(dp.GPIOA, dp.GPIOB, dp.GPIOD, dp.GPIOE);
 
-    // ========== LED ==========
+    // ================================
+    // LEDs
+    // ================================
     let mut led_yellow = Led::active_low(pins.leds.yellow);
     let mut led_green = Led::active_low(pins.leds.green);
 
-    // ========== USART1 (DBG) ==========
+    // ================================
+    // USART1 Debug
+    // ================================
     let serial = Serial::new(
         dp.USART1,
         (pins.usart1.tx, pins.usart1.rx),
@@ -56,7 +68,11 @@ fn main() -> ! {
     );
     let mut usart = Usart::new(serial);
 
-    // ========== SPI4 ==========
+    usart.println("Booting OmniTiles test firmware...");
+
+    // ================================
+    // SPI4 + Chip Selects
+    // ================================
     let mut spi_bus = {
         let spi_mode = Mode {
             polarity: Polarity::IdleLow,
@@ -68,52 +84,64 @@ fn main() -> ! {
     };
     let mut cs1 = ChipSelect::active_low(pins.drv8873.m1_cs);
 
-    // ========== CAN2 Loopback ==========
+    // ================================
+    // CAN2 (Loopback)
+    // ================================
     let pclk1_hz = clocks.pclk1().to_Hz();
-    writeln!(usart, "PCLK1 = {} Hz\r", pclk1_hz).ok(); // TODO: Use this to calculate CAN_BTR
-    const CAN_BTR: u32 = 0x001c_0014; // TODO: Recalculate based on actual APB1 frequency
+    writeln!(usart, "PCLK1 = {} Hz", pclk1_hz).ok();
 
-    let mut can1_bus = {
+    // TODO: compute correct bit timing for final bitrate based on PCLK1
+    const CAN_BTR: u32 = 0x001C_0014;
+
+    // CAN1 owns filter banks — must configure it even if unused
+    {
         let can1_hal = Can::new(dp.CAN1, &mut apb1, (pins.can1.tx, pins.can1.rx));
-        CanBus::new(can1_hal, CAN_BTR, false, false)
-    };
-    can1_bus.configure_accept_all_filters(); // Configure filters on CAN1
-    drop(can1_bus);
+        let mut can1_bus = CanBus::new(can1_hal, CAN_BTR, false, false);
+        can1_bus.configure_accept_all_filters();
+    }
 
     let mut can_bus = {
         let can2_hal = Can::new(dp.CAN2, &mut apb1, (pins.can2.tx, pins.can2.rx));
-        CanBus::new(can2_hal, CAN_BTR, true, false) // Loopback mode
+        CanBus::new(can2_hal, CAN_BTR, true, false) // loopback
     };
 
-    // ========== TIM2 Encoder ==========
+    // ================================
+    // TIM2 Encoder
+    // ================================
     let enc = {
         let rcc_regs = unsafe { &*pac::RCC::ptr() };
         rcc_regs.apb1enr.modify(|_, w| w.tim2en().set_bit());
         Encoder::tim2(dp.TIM2)
     };
 
-    // ========== HARDWARE TEST ==========
+    // ================================
+    // HARDWARE TESTS
+    // ================================
     led_yellow.on();
+    usart.println("LED OK");
 
-    usart.println("Hello world!");
-
-    writeln!(usart, "SPI test...").ok();
+    // ---- SPI Test ----
+    usart.println("SPI test...");
     cs1.select();
-    let r = spi_bus.transfer_byte(0xAA);
+    let rx = spi_bus.transfer_byte(0xAA);
     cs1.deselect();
-    writeln!(usart, "SPI RX={:?}", r).ok();
+    writeln!(usart, "SPI RX = {:?}", rx).ok();
 
-    writeln!(usart, "CAN loopback test...").ok();
+    // ---- CAN Loopback Test ----
+    usart.println("CAN loopback test...");
     let id = bxcan::StandardId::new(0x123).unwrap();
     let _ = can_bus.transmit_data(id, &[1, 2, 3, 4]);
     let frame = can_bus.receive().unwrap();
-    writeln!(usart, "CAN RX={:?}", frame.data()).ok();
+    writeln!(usart, "CAN RX = {:?}", frame.data()).ok();
 
-    writeln!(usart, "Spin encoder to see values").ok();
+    usart.println("Rotate encoder — printing every 20 ms.");
 
+    // ================================
+    // Main Loop
+    // ================================
     loop {
         led_green.toggle();
-        writeln!(usart, "ENC={}", enc.position()).ok();
+        writeln!(usart, "ENC = {}", enc.position()).ok();
         delay.delay_ms(20_u32);
     }
 }
