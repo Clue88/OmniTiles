@@ -17,16 +17,6 @@ pub mod reg {
 }
 
 /// Status byte returned in the upper 8 bits of SDO.
-///
-/// Layout (bit positions in this struct's `raw`):
-///   7: B15 = 1
-///   6: B14 = 1
-///   5: OTW
-///   4: UVLO
-///   3: CPUV
-///   2: OCP
-///   1: TSD
-///   0: OLD
 #[derive(Copy, Clone, Debug)]
 pub struct Status {
     raw: u8,
@@ -38,34 +28,159 @@ impl Status {
         self.raw
     }
 
+    /// Overtemperature warning.
     #[inline]
     pub fn otw(&self) -> bool {
         (self.raw & (1 << 5)) != 0
     }
 
+    /// UVLO fault condition.
     #[inline]
     pub fn uvlo(&self) -> bool {
         (self.raw & (1 << 4)) != 0
     }
 
+    /// Charge-pump undervoltage fault condition.
     #[inline]
     pub fn cpuv(&self) -> bool {
         (self.raw & (1 << 3)) != 0
     }
 
+    /// Overcurrent condition.
     #[inline]
     pub fn ocp(&self) -> bool {
         (self.raw & (1 << 2)) != 0
     }
 
+    /// Overcurrent shutdown.
     #[inline]
     pub fn tsd(&self) -> bool {
         (self.raw & (1 << 1)) != 0
     }
 
+    /// Open-load detection.
     #[inline]
     pub fn old(&self) -> bool {
         (self.raw & (1 << 0)) != 0
+    }
+}
+
+/// FAULT status register.
+#[derive(Copy, Clone, Debug)]
+pub struct Fault {
+    raw: u8,
+}
+
+impl Fault {
+    #[inline]
+    pub fn raw(&self) -> u8 {
+        self.raw
+    }
+
+    /// Global FAULT status register. Complements the nFAULT pin.
+    #[inline]
+    pub fn fault(&self) -> bool {
+        (self.raw & (1 << 6)) != 0
+    }
+
+    /// Overtemperature warning.
+    #[inline]
+    pub fn otw(&self) -> bool {
+        (self.raw & (1 << 5)) != 0
+    }
+
+    /// UVLO fault condition.
+    #[inline]
+    pub fn uvlo(&self) -> bool {
+        (self.raw & (1 << 4)) != 0
+    }
+
+    /// Charge-pump undervoltage fault condition.
+    #[inline]
+    pub fn cpuv(&self) -> bool {
+        (self.raw & (1 << 3)) != 0
+    }
+
+    /// Overcurrent condition.
+    #[inline]
+    pub fn ocp(&self) -> bool {
+        (self.raw & (1 << 2)) != 0
+    }
+
+    /// Overcurrent shutdown.
+    #[inline]
+    pub fn tsd(&self) -> bool {
+        (self.raw & (1 << 1)) != 0
+    }
+
+    /// Open-load detection.
+    #[inline]
+    pub fn old(&self) -> bool {
+        (self.raw & (1 << 0)) != 0
+    }
+}
+
+/// DIAG status register.
+pub struct Diag {
+    raw: u8,
+}
+
+impl Diag {
+    #[inline]
+    pub fn raw(&self) -> u8 {
+        self.raw
+    }
+
+    /// Open-load detection on half bridge 1.
+    #[inline]
+    pub fn ol1(&self) -> bool {
+        (self.raw & (1 << 7)) != 0
+    }
+
+    /// Open-load detection on half bridge 2.
+    #[inline]
+    pub fn ol2(&self) -> bool {
+        (self.raw & (1 << 6)) != 0
+    }
+
+    /// Current regulation status of half bridge 1.
+    ///
+    /// 1 indicates output 1 is in current regulation, 0 indicates it is not.
+    #[inline]
+    pub fn itrip1(&self) -> bool {
+        (self.raw & (1 << 5)) != 0
+    }
+
+    /// Current regulation status of half bridge 2.
+    ///
+    /// 1 indicates output 2 is in current regulation, 0 indicates it is not.
+    #[inline]
+    pub fn itrip2(&self) -> bool {
+        (self.raw & (1 << 4)) != 0
+    }
+
+    /// Overcurrent fault on the high-side FET of half bridge 1.
+    #[inline]
+    pub fn ocp_h1(&self) -> bool {
+        (self.raw & (1 << 3)) != 0
+    }
+
+    /// Overcurrent fault on the low-side FET of half bridge 1.
+    #[inline]
+    pub fn ocp_l1(&self) -> bool {
+        (self.raw & (1 << 2)) != 0
+    }
+
+    /// Overcurrent fault on the high-side FET of half bridge 2.
+    #[inline]
+    pub fn ocp_h2(&self) -> bool {
+        (self.raw & (1 << 1)) != 0
+    }
+
+    /// Overcurrent fault on the low-side FET of half bridge 2.
+    #[inline]
+    pub fn ocp_l2(&self) -> bool {
+        (self.raw & 1) != 0
     }
 }
 
@@ -174,43 +289,29 @@ impl<const P: char, const N: u8> Drv8873<P, N> {
         self.transfer_word(spi, word)
     }
 
-    #[inline]
-    pub fn read_fault<I, PINS>(&mut self, spi: &mut SpiBus<I, PINS>) -> Result<Response, spi::Error>
+    /// Read the FAULT register and parse into a `Fault` struct.
+    ///
+    /// To get the status result as well, use `read_reg`.
+    pub fn read_fault<I, PINS>(&mut self, spi: &mut SpiBus<I, PINS>) -> Result<Fault, spi::Error>
     where
         I: spi::Instance,
         PINS: spi::Pins<I>,
     {
-        self.read_reg(spi, reg::FAULT)
+        Ok(Fault {
+            raw: self.read_reg(spi, reg::FAULT)?.data,
+        })
     }
 
-    #[inline]
-    pub fn read_diag<I, PINS>(&mut self, spi: &mut SpiBus<I, PINS>) -> Result<Response, spi::Error>
+    /// Read the DIAG register and parse into a `Diag` struct.
+    ///
+    /// To get the status result as well, use `read_reg`.
+    pub fn read_diag<I, PINS>(&mut self, spi: &mut SpiBus<I, PINS>) -> Result<Diag, spi::Error>
     where
         I: spi::Instance,
         PINS: spi::Pins<I>,
     {
-        self.read_reg(spi, reg::DIAG)
-    }
-
-    #[inline]
-    pub fn read_ic1<I, PINS>(&mut self, spi: &mut SpiBus<I, PINS>) -> Result<Response, spi::Error>
-    where
-        I: spi::Instance,
-        PINS: spi::Pins<I>,
-    {
-        self.read_reg(spi, reg::IC1)
-    }
-
-    #[inline]
-    pub fn write_ic1<I, PINS>(
-        &mut self,
-        spi: &mut SpiBus<I, PINS>,
-        value: u8,
-    ) -> Result<Response, spi::Error>
-    where
-        I: spi::Instance,
-        PINS: spi::Pins<I>,
-    {
-        self.write_reg(spi, reg::IC1, value)
+        Ok(Diag {
+            raw: self.read_reg(spi, reg::DIAG)?.data,
+        })
     }
 }
