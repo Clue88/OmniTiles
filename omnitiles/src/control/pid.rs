@@ -77,8 +77,7 @@ impl Pid {
     /// `measurement` — current value  
     /// `dt` — timestep in seconds (e.g. 0.02 for 50 Hz control loop)
     ///
-    /// Returns a normalized command in [`out_min`, `out_max`] which you can map
-    /// to motor drive (direction + duty).
+    /// Returns a normalized command in [`out_min`, `out_max`] which can be mapped to motor drive.
     pub fn update(&mut self, setpoint: f32, measurement: f32, dt: f32) -> f32 {
         let error = setpoint - measurement;
 
