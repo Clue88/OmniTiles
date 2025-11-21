@@ -1,13 +1,19 @@
 //! Motor abstraction for DRV8873 SPI driver with a TIM2 quadrature encoder.
 //!
-//! This module connects `Drv8873` and `Encoder<TIM2>`. The SPI bus is not owned here and must be
-//! passed in as `&mut SpiBus` so that multiple devices can share one bus safely.
+//! This module includes functions to drive the motor and read encoder values. A higher-level
+//! controller like a PID loop can be built on top of this module.
 
-use crate::drivers::drv8873::{reg, Drv8873, Response, Status};
+use crate::drivers::drv8873::{Diag, Drv8873, Fault};
 use crate::hw::{Encoder, SpiBus};
-use stm32f7xx_hal::{pac, spi};
 
-/// Logical drive direction for the motor.
+use micromath::F32Ext;
+
+use stm32f7xx_hal::{
+    gpio::{self, Output, PushPull},
+    pac, spi,
+};
+
+/// Logical drive direction / mode for the H-bridge.
 #[derive(Copy, Clone, Debug)]
 pub enum Direction {
     Forward,
@@ -16,145 +22,219 @@ pub enum Direction {
     Coast,
 }
 
-/// High-level motor that combines a DRV8873 driver IC (SPI + CS) and a TIM2 32-bit encoder.
-pub struct SpiMotor<const P: char, const N: u8> {
-    drv: Drv8873<P, N>,
+/// Motor abstraction that combines a DRV8873 driver, four control pins, and a TIM2 encoder.
+pub struct SpiMotor<
+    const CS_P: char,
+    const CS_N: u8,
+    const IN1_P: char,
+    const IN1_N: u8,
+    const IN2_P: char,
+    const IN2_N: u8,
+    const SLP_P: char,
+    const SLP_N: u8,
+    const DIS_P: char,
+    const DIS_N: u8,
+> {
+    drv: Drv8873<CS_P, CS_N>,
     enc: Encoder<pac::TIM2>,
+    in1: gpio::Pin<IN1_P, IN1_N, Output<PushPull>>,
+    in2: gpio::Pin<IN2_P, IN2_N, Output<PushPull>>,
+    nsleep: gpio::Pin<SLP_P, SLP_N, Output<PushPull>>,
+    disable: gpio::Pin<DIS_P, DIS_N, Output<PushPull>>,
     counts_per_rev: u32,
 }
 
-impl<const P: char, const N: u8> SpiMotor<P, N> {
-    /// Create a new motor from its DRV8873 driver and TIM2 encoder.
+impl<
+        const CS_P: char,
+        const CS_N: u8,
+        const IN1_P: char,
+        const IN1_N: u8,
+        const IN2_P: char,
+        const IN2_N: u8,
+        const SLP_P: char,
+        const SLP_N: u8,
+        const DIS_P: char,
+        const DIS_N: u8,
+    > SpiMotor<CS_P, CS_N, IN1_P, IN1_N, IN2_P, IN2_N, SLP_P, SLP_N, DIS_P, DIS_N>
+{
+    /// Construct a new `SpiMotor`.
     ///
-    /// `counts_per_rev` is the encoder resolution after gear ratio: i.e., ticks at the shaft per
-    /// one mechanical revolution.
-    pub fn new(drv: Drv8873<P, N>, enc: Encoder<pac::TIM2>, counts_per_rev: u32) -> Self {
+    /// `counts_per_rev` is the encoder resolution at the mechanical shaft (after any gear ratio).
+    pub fn new<In1Mode, In2Mode, SlpMode, DisMode>(
+        drv: Drv8873<CS_P, CS_N>,
+        enc: Encoder<pac::TIM2>,
+        in1: gpio::Pin<IN1_P, IN1_N, In1Mode>,
+        in2: gpio::Pin<IN2_P, IN2_N, In2Mode>,
+        nsleep: gpio::Pin<SLP_P, SLP_N, SlpMode>,
+        disable: gpio::Pin<DIS_P, DIS_N, DisMode>,
+        counts_per_rev: u32,
+    ) -> Self {
+        let mut in1 = in1.into_push_pull_output();
+        let mut in2 = in2.into_push_pull_output();
+        let mut nsleep = nsleep.into_push_pull_output();
+        let mut disable = disable.into_push_pull_output();
+
+        in1.set_low();
+        in2.set_low();
+
+        // Initialize as awake + disabled
+        nsleep.set_high();
+        disable.set_high();
+
         Self {
             drv,
             enc,
+            in1,
+            in2,
+            nsleep,
+            disable,
             counts_per_rev,
         }
     }
 
     /// Tear down this motor and return its constituent parts.
-    pub fn free(self) -> (Drv8873<P, N>, Encoder<pac::TIM2>) {
-        (self.drv, self.enc)
+    pub fn free(
+        self,
+    ) -> (
+        Drv8873<CS_P, CS_N>,
+        Encoder<pac::TIM2>,
+        gpio::Pin<IN1_P, IN1_N, Output<PushPull>>,
+        gpio::Pin<IN2_P, IN2_N, Output<PushPull>>,
+        gpio::Pin<SLP_P, SLP_N, Output<PushPull>>,
+        gpio::Pin<DIS_P, DIS_N, Output<PushPull>>,
+    ) {
+        (
+            self.drv,
+            self.enc,
+            self.in1,
+            self.in2,
+            self.nsleep,
+            self.disable,
+        )
     }
 
-    /// Configure the DRV8873 into a known safe operating mode.
-    /// - Set the control mode
-    /// - Configure current limits, OCP behavior, etc.
-    /// - Clear latched faults as appropriate.
+    /// Initialize and set base configuration for the DRV8873.
     pub fn init<I, PINS>(&mut self, spi_bus: &mut SpiBus<I, PINS>) -> Result<(), spi::Error>
     where
         I: spi::Instance,
         PINS: spi::Pins<I>,
     {
-        // Example:
-        //   - configure IC1/IC2/IC3/IC4 with your selected mode.
-        //
-        // let ic1_val = ...; // TODO: derive from DRV8873-Q1 datasheet
-        // let ic2_val = ...;
-        // let ic3_val = ...;
-        // let ic4_val = ...;
-        //
-        // let _ = self.drv.write_reg(spi_bus, reg::IC1, ic1_val)?;
-        // let _ = self.drv.write_reg(spi_bus, reg::IC2, ic2_val)?;
-        // let _ = self.drv.write_reg(spi_bus, reg::IC3, ic3_val)?;
-        // let _ = self.drv.write_reg(spi_bus, reg::IC4, ic4_val)?;
-
-        // For now, just read back FAULT/DIAG as a sanity check.
-        let _ = self.drv.read_fault(spi_bus)?;
-        let _ = self.drv.read_diag(spi_bus)?;
+        let _fault = self.drv.read_fault(spi_bus)?;
+        let _diag = self.drv.read_diag(spi_bus)?;
 
         Ok(())
     }
 
-    /// Read the current status flags (OTW, UVLO, OCP, etc.).
-    pub fn read_status<I, PINS>(
+    /// Read the FAULT status register.
+    #[inline]
+    pub fn read_fault<I, PINS>(
         &mut self,
         spi_bus: &mut SpiBus<I, PINS>,
-    ) -> Result<Status, spi::Error>
+    ) -> Result<Fault, spi::Error>
     where
         I: spi::Instance,
         PINS: spi::Pins<I>,
     {
-        let resp = self.drv.read_fault(spi_bus)?;
-        Ok(resp.status)
+        self.drv.read_fault(spi_bus)
     }
 
-    /// Enable the motor output stage.
-    /// - Clear disable bits
-    /// - Configure bridge mode
-    /// - Ensure the driver is awake and ready.
-    pub fn enable<I, PINS>(&mut self, spi_bus: &mut SpiBus<I, PINS>) -> Result<(), spi::Error>
+    /// Read the DIAG status register.
+    #[inline]
+    pub fn read_diag<I, PINS>(&mut self, spi_bus: &mut SpiBus<I, PINS>) -> Result<Diag, spi::Error>
     where
         I: spi::Instance,
         PINS: spi::Pins<I>,
     {
-        // TODO: Implement by updating ICx registers (e.g., set EN bits).
-        // let mut ic1 = self.drv.read_ic1(spi_bus)?.data;
-        // ic1 |= ...; // set enable bit(s)
-        // let _ = self.drv.write_ic1(spi_bus, ic1)?;
-        let _ = spi_bus; // silence unused warning for now
-        Ok(())
+        self.drv.read_diag(spi_bus)
     }
 
-    /// Disable the motor output stage (coast or brake, depending on config).
-    pub fn disable<I, PINS>(&mut self, spi_bus: &mut SpiBus<I, PINS>) -> Result<(), spi::Error>
-    where
-        I: spi::Instance,
-        PINS: spi::Pins<I>,
-    {
-        // TODO: Implement by clearing EN bits or forcing a safe state.
-        let _ = spi_bus;
-        Ok(())
+    /// Access the underlying DRV8873 driver for advanced SPI control.
+    #[inline]
+    pub fn drv(&mut self) -> &mut Drv8873<CS_P, CS_N> {
+        &mut self.drv
     }
 
-    /// Command the motor with a desired direction and duty cycle.
+    /// Put the driver into sleep mode.
     ///
-    /// `duty` is a normalized value in [0.0, 1.0], where:
-    ///   - 0.0 -> no drive
-    ///   - 1.0 -> maximum allowed drive (as configured in IC registers)
-    ///
-    /// Internally, this should:
-    ///   - map `Direction` to DRV8873 mode bits (e.g., PH/EN or in1/in2 states),
-    ///   - quantize `duty` into whatever resolution the DRV8873 expects.
-    pub fn set_drive<I, PINS>(
-        &mut self,
-        spi_bus: &mut SpiBus<I, PINS>,
-        dir: Direction,
-        duty: f32,
-    ) -> Result<(), spi::Error>
-    where
-        I: spi::Instance,
-        PINS: spi::Pins<I>,
-    {
-        // Clamp duty to [0.0, 1.0]
-        let duty = if duty < 0.0 {
-            0.0
-        } else if duty > 1.0 {
-            1.0
-        } else {
-            duty
-        };
-
-        // TODO:
-        //  - turn `dir` + `duty` into appropriate ICx values,
-        //  - e.g., set PH bit, EN PWM amplitude, mode selection, etc.
-
-        let _ = (spi_bus, dir, duty); // placeholder
-
-        Ok(())
+    /// This shuts down most of the internal circuitry to reduce power consumption.
+    #[inline]
+    pub fn sleep(&mut self) {
+        self.nsleep.set_low();
     }
 
-    /// Raw encoder position in ticks, centered around 0.
+    /// Wake the driver from sleep mode.
+    #[inline]
+    pub fn wake(&mut self) {
+        self.nsleep.set_high();
+    }
+
+    /// Enable the motor and wake the driver if in sleep.
+    #[inline]
+    pub fn enable_outputs(&mut self) {
+        self.wake();
+        self.disable.set_low();
+    }
+
+    /// Disable the motor and coast.
+    #[inline]
+    pub fn disable_outputs(&mut self) {
+        self.set_direction_pins(Direction::Coast);
+        self.disable.set_high();
+    }
+
+    /// Configure IN1/IN2 pins for a given direction/mode.
+    fn set_direction_pins(&mut self, dir: Direction) {
+        match dir {
+            Direction::Forward => {
+                self.in1.set_high();
+                self.in2.set_low();
+            }
+            Direction::Reverse => {
+                self.in1.set_low();
+                self.in2.set_high();
+            }
+            Direction::Brake => {
+                self.in1.set_high();
+                self.in2.set_high();
+            }
+            Direction::Coast => {
+                self.in1.set_low();
+                self.in2.set_low();
+            }
+        }
+    }
+
+    /// Drive the motor forward.
+    #[inline]
+    pub fn forward(&mut self) {
+        self.set_direction_pins(Direction::Forward);
+    }
+
+    /// Drive the motor in reverse.
+    #[inline]
+    pub fn reverse(&mut self) {
+        self.set_direction_pins(Direction::Reverse);
+    }
+
+    /// Apply brakes.
+    #[inline]
+    pub fn brake(&mut self) {
+        self.set_direction_pins(Direction::Brake);
+    }
+
+    /// Coast (this sets outputs to HiZ).
+    #[inline]
+    pub fn coast(&mut self) {
+        self.set_direction_pins(Direction::Coast);
+    }
+
+    /// Raw encoder position in ticks (signed).
     #[inline]
     pub fn position_ticks(&self) -> i32 {
         self.enc.position()
     }
 
-    /// Encoder position converted to revolutions (float).
+    /// Encoder position converted to revolutions.
     #[inline]
     pub fn position_revs(&self) -> f32 {
         self.enc.position() as f32 / self.counts_per_rev as f32
@@ -166,7 +246,26 @@ impl<const P: char, const N: u8> SpiMotor<P, N> {
         self.enc.reset();
     }
 
-    /// Expose the underlying encoder if needed for advanced usage.
+    /// Convert a number of revolutions into encoder ticks.
+    #[inline]
+    pub fn ticks_for_revs(&self, revs: f32) -> i32 {
+        (revs * self.counts_per_rev as f32).round() as i32
+    }
+
+    /// Compute a target tick position for a relative move from the current position.
+    #[inline]
+    pub fn target_for_delta_ticks(&self, delta_ticks: i32) -> i32 {
+        self.position_ticks().wrapping_add(delta_ticks)
+    }
+
+    /// Compute a target tick position for a relative move in revolutions.
+    #[inline]
+    pub fn target_for_delta_revs(&self, delta_revs: f32) -> i32 {
+        let delta_ticks = self.ticks_for_revs(delta_revs);
+        self.target_for_delta_ticks(delta_ticks)
+    }
+
+    /// Expose the underlying encoder.
     #[inline]
     pub fn encoder(&self) -> &Encoder<pac::TIM2> {
         &self.enc
