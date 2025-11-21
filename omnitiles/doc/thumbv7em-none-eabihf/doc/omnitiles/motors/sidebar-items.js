@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["lift_motor"]};
+window.SIDEBAR_ITEMS = {"mod":["lift_motor","tilt_motor"]};

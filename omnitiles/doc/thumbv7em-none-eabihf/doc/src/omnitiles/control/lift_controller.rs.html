@@ -129,29 +129,31 @@
 <a href=#129 id=129 data-nosnippet>129</a>
 <a href=#130 id=130 data-nosnippet>130</a>            LiftMode::PositionControl =&gt; {
 <a href=#131 id=131 data-nosnippet>131</a>                <span class="kw">let </span>current = <span class="self">self</span>.motor.height_mm();
-<a href=#132 id=132 data-nosnippet>132</a>                <span class="kw">let </span>target = <span class="self">self</span>.target_height_mm;
-<a href=#133 id=133 data-nosnippet>133</a>                <span class="kw">let </span>error = target - current;
-<a href=#134 id=134 data-nosnippet>134</a>
-<a href=#135 id=135 data-nosnippet>135</a>                <span class="comment">// PID output
-<a href=#136 id=136 data-nosnippet>136</a>                </span><span class="kw">let </span><span class="kw-2">mut </span>u = <span class="self">self</span>.pid.update(target, current, dt);
-<a href=#137 id=137 data-nosnippet>137</a>
-<a href=#138 id=138 data-nosnippet>138</a>                <span class="comment">// Clamp to [-1.0, 1.0]
-<a href=#139 id=139 data-nosnippet>139</a>                </span><span class="kw">if </span>u &gt; <span class="number">1.0 </span>{
-<a href=#140 id=140 data-nosnippet>140</a>                    u = <span class="number">1.0</span>;
-<a href=#141 id=141 data-nosnippet>141</a>                }
-<a href=#142 id=142 data-nosnippet>142</a>                <span class="kw">if </span>u &lt; -<span class="number">1.0 </span>{
-<a href=#143 id=143 data-nosnippet>143</a>                    u = -<span class="number">1.0</span>;
-<a href=#144 id=144 data-nosnippet>144</a>                }
-<a href=#145 id=145 data-nosnippet>145</a>
-<a href=#146 id=146 data-nosnippet>146</a>                <span class="comment">// Near-target deadband
-<a href=#147 id=147 data-nosnippet>147</a>                </span><span class="kw">if </span>error.abs() &lt;= <span class="self">self</span>.on_target_tolerance_mm {
-<a href=#148 id=148 data-nosnippet>148</a>                    <span class="self">self</span>.motor.inner_motor().brake();
-<a href=#149 id=149 data-nosnippet>149</a>                    <span class="kw">return</span>;
-<a href=#150 id=150 data-nosnippet>150</a>                }
-<a href=#151 id=151 data-nosnippet>151</a>
-<a href=#152 id=152 data-nosnippet>152</a>                <span class="comment">// Apply PID output
-<a href=#153 id=153 data-nosnippet>153</a>                </span><span class="self">self</span>.motor.apply_pid_output(u);
-<a href=#154 id=154 data-nosnippet>154</a>            }
-<a href=#155 id=155 data-nosnippet>155</a>        }
-<a href=#156 id=156 data-nosnippet>156</a>    }
-<a href=#157 id=157 data-nosnippet>157</a>}</code></pre></div></section></main></body></html>
+<a href=#132 id=132 data-nosnippet>132</a>                <span class="kw">let </span>target = <span class="self">self
+<a href=#133 id=133 data-nosnippet>133</a>                    </span>.target_height_mm
+<a href=#134 id=134 data-nosnippet>134</a>                    .clamp(<span class="self">self</span>.min_height_mm, <span class="self">self</span>.max_height_mm);
+<a href=#135 id=135 data-nosnippet>135</a>                <span class="kw">let </span>error = target - current;
+<a href=#136 id=136 data-nosnippet>136</a>
+<a href=#137 id=137 data-nosnippet>137</a>                <span class="comment">// PID output
+<a href=#138 id=138 data-nosnippet>138</a>                </span><span class="kw">let </span><span class="kw-2">mut </span>u = <span class="self">self</span>.pid.update(target, current, dt);
+<a href=#139 id=139 data-nosnippet>139</a>
+<a href=#140 id=140 data-nosnippet>140</a>                <span class="comment">// Clamp to [-1.0, 1.0]
+<a href=#141 id=141 data-nosnippet>141</a>                </span><span class="kw">if </span>u &gt; <span class="number">1.0 </span>{
+<a href=#142 id=142 data-nosnippet>142</a>                    u = <span class="number">1.0</span>;
+<a href=#143 id=143 data-nosnippet>143</a>                }
+<a href=#144 id=144 data-nosnippet>144</a>                <span class="kw">if </span>u &lt; -<span class="number">1.0 </span>{
+<a href=#145 id=145 data-nosnippet>145</a>                    u = -<span class="number">1.0</span>;
+<a href=#146 id=146 data-nosnippet>146</a>                }
+<a href=#147 id=147 data-nosnippet>147</a>
+<a href=#148 id=148 data-nosnippet>148</a>                <span class="comment">// Near-target deadband
+<a href=#149 id=149 data-nosnippet>149</a>                </span><span class="kw">if </span>error.abs() &lt;= <span class="self">self</span>.on_target_tolerance_mm {
+<a href=#150 id=150 data-nosnippet>150</a>                    <span class="self">self</span>.motor.inner_motor().brake();
+<a href=#151 id=151 data-nosnippet>151</a>                    <span class="kw">return</span>;
+<a href=#152 id=152 data-nosnippet>152</a>                }
+<a href=#153 id=153 data-nosnippet>153</a>
+<a href=#154 id=154 data-nosnippet>154</a>                <span class="comment">// Apply PID output
+<a href=#155 id=155 data-nosnippet>155</a>                </span><span class="self">self</span>.motor.apply_pid_output(u);
+<a href=#156 id=156 data-nosnippet>156</a>            }
+<a href=#157 id=157 data-nosnippet>157</a>        }
+<a href=#158 id=158 data-nosnippet>158</a>    }
+<a href=#159 id=159 data-nosnippet>159</a>}</code></pre></div></section></main></body></html>

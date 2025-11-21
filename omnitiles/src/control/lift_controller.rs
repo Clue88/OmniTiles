@@ -129,7 +129,9 @@ impl<
 
             LiftMode::PositionControl => {
                 let current = self.motor.height_mm();
-                let target = self.target_height_mm;
+                let target = self
+                    .target_height_mm
+                    .clamp(self.min_height_mm, self.max_height_mm);
                 let error = target - current;
 
                 // PID output
