@@ -275,4 +275,20 @@ impl<
     pub fn encoder_mut(&mut self) -> &mut Encoder<pac::TIM2> {
         &mut self.enc
     }
+
+    /// Apply PID output.
+    pub fn apply_pid_output<I, PINS>(&mut self, u: f32) -> Result<(), spi::Error>
+    where
+        I: spi::Instance,
+        PINS: spi::Pins<I>,
+    {
+        if u > 0.0 {
+            self.forward();
+        } else if u < 0.0 {
+            self.reverse();
+        } else {
+            self.coast();
+        }
+        Ok(())
+    }
 }

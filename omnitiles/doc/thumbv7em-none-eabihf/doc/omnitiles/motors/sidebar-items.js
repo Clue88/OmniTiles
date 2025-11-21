@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["lift_motor"]};

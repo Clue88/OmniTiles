@@ -20,6 +20,7 @@ use stm32f7xx_hal as hal;
 mod hw;
 use hw::{BoardPins, CanBus, ChipSelect, Encoder, Led, SpiBus, Usart};
 
+mod control;
 mod drivers;
 mod motors;
 

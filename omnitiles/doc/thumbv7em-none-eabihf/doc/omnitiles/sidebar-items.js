@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["drivers","hw"]};
+window.SIDEBAR_ITEMS = {"mod":["control","drivers","hw","motors"]};
