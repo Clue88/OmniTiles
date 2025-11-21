@@ -4,8 +4,11 @@
 //!
 //! ## Modules
 //!
-//! - [`lift_motor`] - Lift actuator built on `SpiMotor` (DRV8873 + encoder)
+//! - [`lift_motor`] - Lift actuator built on `SpiMotor` (DRV8873 + encoder).
+//! - [`tilt_motor`] - Tilt actuator built on `CanMotor`.
 
 pub mod lift_motor;
+pub mod tilt_motor;
 
 pub use lift_motor::LiftMotor;
+pub use tilt_motor::TiltMotor;

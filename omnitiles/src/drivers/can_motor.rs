@@ -6,6 +6,7 @@ use crate::hw::CanBus;
 
 use bxcan::{Frame, Id, OverrunError, StandardId};
 use core::convert::TryInto;
+use core::f32::consts::PI;
 use micromath::F32Ext;
 
 /// Error type for `CanMotor` operations.
@@ -110,12 +111,15 @@ impl<const DEV_ADDR: u16> CanMotor<DEV_ADDR> {
         loop {
             let frame: Frame = bus.receive()?;
 
+            // Standard frame only
             let id = match frame.id() {
                 Id::Standard(id) => id,
-                Id::Extended(_) => continue, // ignore extended frames
+                Id::Extended(_) => continue,
             };
+
+            // Only accept DEV_ADDR responses
             if id != Self::dev_id() {
-                continue; // some other device's response
+                continue;
             }
 
             let data = match frame.data() {
@@ -203,5 +207,72 @@ impl<const DEV_ADDR: u16> CanMotor<DEV_ADDR> {
         }
 
         Ok(resp)
+    }
+}
+
+impl<const DEV_ADDR: u16> CanMotor<DEV_ADDR> {
+    /// Default Pos_Max from the driver documentation, in units of 0.1 rad.
+    ///
+    /// The encoder range [0..65535] is mapped to [-Pos_Max, +Pos_Max], with:
+    ///   `Pos_Max = 955` → ±95.5 rad at the motor shaft.
+    pub const POS_MAX_0P1_RAD: i16 = 955;
+
+    /// Maximum mechanical shaft angle in radians that the raw encoder value represents.
+    #[inline]
+    pub fn shaft_pos_max_rad() -> f32 {
+        (Self::POS_MAX_0P1_RAD as f32) * 0.1
+    }
+
+    /// Convert a raw encoder value [0..65535] to a motor shaft angle in radians.
+    ///
+    /// Mapping assumed:
+    ///   raw = 0       -> -Pos_Max
+    ///   raw = 32767.5 -> 0
+    ///   raw = 65535   -> +Pos_Max
+    #[inline]
+    pub fn raw_angle_to_rad(raw: u16) -> f32 {
+        let max = Self::shaft_pos_max_rad(); // ~95.5 rad
+        let norm = (raw as f32) / 65535.0 * 2.0 - 1.0; // [-1, +1]
+        norm * max
+    }
+
+    /// Convert a raw encoder value [0..65535] to a motor shaft angle in degrees.
+    #[inline]
+    pub fn raw_angle_to_deg(raw: u16) -> f32 {
+        let rad = Self::raw_angle_to_rad(raw);
+        rad * 180.0 / PI
+    }
+
+    /// Convert a desired motor shaft angle in radians to a raw encoder value [0..65535].
+    ///
+    /// Input is automatically clamped to [-Pos_Max, +Pos_Max].
+    #[inline]
+    pub fn angle_rad_to_raw(angle_rad: f32) -> u16 {
+        let max = Self::shaft_pos_max_rad();
+        let a = if angle_rad > max {
+            max
+        } else if angle_rad < -max {
+            -max
+        } else {
+            angle_rad
+        };
+
+        let norm = a / max; // [-1, +1]
+        let raw_f = (norm + 1.0) * 0.5 * 65535.0;
+        let raw_f = if raw_f < 0.0 {
+            0.0
+        } else if raw_f > 65535.0 {
+            65535.0
+        } else {
+            raw_f
+        };
+        raw_f.round() as u16
+    }
+
+    /// Convert a desired motor shaft angle in degrees to a raw encoder value [0..65535].
+    #[inline]
+    pub fn angle_deg_to_raw(angle_deg: f32) -> u16 {
+        let rad = angle_deg * PI / 180.0;
+        Self::angle_rad_to_raw(rad)
     }
 }
