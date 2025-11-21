@@ -21,6 +21,7 @@ mod hw;
 use hw::{BoardPins, CanBus, ChipSelect, Encoder, Led, SpiBus, Usart};
 
 mod drivers;
+mod motors;
 
 #[entry]
 fn main() -> ! {

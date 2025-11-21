@@ -1,7 +1,6 @@
 //! Motor abstraction for DRV8873 SPI driver with a TIM2 quadrature encoder.
 //!
-//! This module includes functions to drive the motor and read encoder values. A higher-level
-//! controller like a PID loop can be built on top of this module.
+//! This module includes functions to drive the motor and read encoder values.
 
 use crate::drivers::drv8873::{Diag, Drv8873, Fault};
 use crate::hw::{Encoder, SpiBus};
