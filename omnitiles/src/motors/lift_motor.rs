@@ -101,4 +101,9 @@ impl<
     ) -> &mut SpiMotor<CS_P, CS_N, IN1_P, IN1_N, IN2_P, IN2_N, SLP_P, SLP_N, DIS_P, DIS_N> {
         &mut self.motor
     }
+
+    /// Apply PID output to the underlying motor.
+    pub fn apply_pid_output(&mut self, u: f32) {
+        self.motor.apply_pid_output(u)
+    }
 }

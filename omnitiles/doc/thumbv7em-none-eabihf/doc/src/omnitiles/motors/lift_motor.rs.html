@@ -101,4 +101,9 @@
 <a href=#101 id=101 data-nosnippet>101</a>    ) -&gt; <span class="kw-2">&amp;mut </span>SpiMotor&lt;CS_P, CS_N, IN1_P, IN1_N, IN2_P, IN2_N, SLP_P, SLP_N, DIS_P, DIS_N&gt; {
 <a href=#102 id=102 data-nosnippet>102</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>.motor
 <a href=#103 id=103 data-nosnippet>103</a>    }
-<a href=#104 id=104 data-nosnippet>104</a>}</code></pre></div></section></main></body></html>
+<a href=#104 id=104 data-nosnippet>104</a>
+<a href=#105 id=105 data-nosnippet>105</a>    <span class="doccomment">/// Apply PID output to the underlying motor.
+<a href=#106 id=106 data-nosnippet>106</a>    </span><span class="kw">pub fn </span>apply_pid_output(<span class="kw-2">&amp;mut </span><span class="self">self</span>, u: f32) {
+<a href=#107 id=107 data-nosnippet>107</a>        <span class="self">self</span>.motor.apply_pid_output(u)
+<a href=#108 id=108 data-nosnippet>108</a>    }
+<a href=#109 id=109 data-nosnippet>109</a>}</code></pre></div></section></main></body></html>

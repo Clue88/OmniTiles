@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["pid"]};
+window.SIDEBAR_ITEMS = {"mod":["lift_controller","pid"]};

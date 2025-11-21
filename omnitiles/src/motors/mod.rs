@@ -7,3 +7,5 @@
 //! - [`lift_motor`] - Lift actuator built on `SpiMotor` (DRV8873 + encoder)
 
 pub mod lift_motor;
+
+pub use lift_motor::LiftMotor;

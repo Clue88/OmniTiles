@@ -277,11 +277,7 @@ impl<
     }
 
     /// Apply PID output.
-    pub fn apply_pid_output<I, PINS>(&mut self, u: f32) -> Result<(), spi::Error>
-    where
-        I: spi::Instance,
-        PINS: spi::Pins<I>,
-    {
+    pub fn apply_pid_output(&mut self, u: f32) {
         if u > 0.0 {
             self.forward();
         } else if u < 0.0 {
@@ -289,6 +285,5 @@ impl<
         } else {
             self.coast();
         }
-        Ok(())
     }
 }
