@@ -3,7 +3,7 @@
 //! This allows for some amount of firmware testing if only the development board is available.
 
 use stm32f7xx_hal::{
-    gpio::{gpioa, gpiob, gpiod, gpioe, Alternate, Output, PushPull},
+    gpio::{gpioa, gpiob, gpiod, Alternate, Output, PushPull},
     pac,
     prelude::*,
 };
@@ -45,11 +45,15 @@ pub struct EncoderPins {
 }
 
 impl BoardPins {
-    pub fn new(gpioa: pac::GPIOA, gpiob: pac::GPIOB, gpiod: pac::GPIOD, gpioe: pac::GPIOE) -> Self {
+    pub fn new(
+        gpioa: pac::GPIOA,
+        gpiob: pac::GPIOB,
+        gpiod: pac::GPIOD,
+        _gpioe: pac::GPIOE,
+    ) -> Self {
         let gpioa = gpioa.split();
         let gpiob = gpiob.split();
         let gpiod = gpiod.split();
-        let gpioe = gpioe.split();
 
         Self {
             leds: Leds {
