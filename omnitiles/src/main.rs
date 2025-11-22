@@ -120,7 +120,10 @@ fn main() -> ! {
     cs1.select();
     let rx = spi_bus.transfer_byte(0xAA);
     cs1.deselect();
-    writeln!(usart, "SPI RX = {:?}\r", rx).ok();
+    match rx {
+        Ok(b) => writeln!(usart, "SPI RX = 0x{:02X}\r", b).ok(),
+        Err(e) => writeln!(usart, "SPI RX ERROR: {:?}\r", e).ok(),
+    };
 
     // ---- CAN Loopback Test ----
     usart.println("CAN loopback test...");
