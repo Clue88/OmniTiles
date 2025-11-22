@@ -85,7 +85,7 @@ fn main() -> ! {
     // CAN2 (Loopback)
     // ================================
     let pclk1_hz = clocks.pclk1().to_Hz();
-    writeln!(usart, "PCLK1 = {} Hz", pclk1_hz).ok();
+    writeln!(usart, "PCLK1 = {} Hz\r", pclk1_hz).ok();
 
     // TODO: compute correct bit timing for final bitrate based on PCLK1
     const CAN_BTR: u32 = 0x001C_0014;
@@ -122,14 +122,14 @@ fn main() -> ! {
     cs1.select();
     let rx = spi_bus.transfer_byte(0xAA);
     cs1.deselect();
-    writeln!(usart, "SPI RX = {:?}", rx).ok();
+    writeln!(usart, "SPI RX = {:?}\r", rx).ok();
 
     // ---- CAN Loopback Test ----
     usart.println("CAN loopback test...");
     let id = bxcan::StandardId::new(0x123).unwrap();
     let _ = can_bus.transmit_data(id, &[1, 2, 3, 4]);
     let frame = can_bus.receive().unwrap();
-    writeln!(usart, "CAN RX = {:?}", frame.data()).ok();
+    writeln!(usart, "CAN RX = {:?}\r", frame.data()).ok();
 
     usart.println("Rotate encoder — printing every 20 ms.");
 
@@ -138,7 +138,7 @@ fn main() -> ! {
     // ================================
     loop {
         led_green.toggle();
-        writeln!(usart, "ENC = {}", enc.position()).ok();
+        writeln!(usart, "ENC = {}\r", enc.position()).ok();
         delay.delay_ms(20_u32);
     }
 }

@@ -3,6 +3,9 @@
 //! Provides several printing helpers for hex, decimal, and ASCII strings to print to an attached
 //! debug terminal.
 //!
+//! Note: When using `writeln!`, be sure to include `\r` (CR) in the format string to ensure correct
+//! line endings on the terminal.
+//!
 //! To access the terminal on the host machine, connect to the debug USB port and use
 //! ```
 //! $ screen /dev/tty.usbmodem* <baud_rate>
