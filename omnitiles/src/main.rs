@@ -116,21 +116,29 @@ fn main() -> ! {
     usart.println("LED OK");
 
     // ---- SPI Test ----
-    usart.println("SPI test...");
+    usart.println("SPI test (expected: 0xAA)... ");
     cs1.select();
     let rx = spi_bus.transfer_byte(0xAA);
     cs1.deselect();
     match rx {
-        Ok(b) => writeln!(usart, "SPI RX = 0x{:02X}\r", b).ok(),
-        Err(e) => writeln!(usart, "SPI RX ERROR: {:?}\r", e).ok(),
+        Ok(b) => writeln!(usart, "  SPI RX = 0x{:02X}\r", b).ok(),
+        Err(e) => writeln!(usart, "  SPI RX ERROR: {:?}\r", e).ok(),
     };
 
     // ---- CAN Loopback Test ----
-    usart.println("CAN loopback test...");
+    usart.println("CAN loopback test (expected: [1, 2, 3, 4])...");
     let id = bxcan::StandardId::new(0x123).unwrap();
     let _ = can_bus.transmit_data(id, &[1, 2, 3, 4]);
     let frame = can_bus.receive().unwrap();
-    writeln!(usart, "CAN RX = {:?}\r", frame.data()).ok();
+    match frame.data() {
+        Some(data) => {
+            let bytes: &[u8] = data.as_ref();
+            writeln!(usart, "  CAN RX = {:?}\r", bytes).ok();
+        }
+        None => {
+            writeln!(usart, "  CAN RX = <no data>\r").ok();
+        }
+    }
 
     usart.println("Rotate encoder — printing every 200 ms.");
 
