@@ -131,7 +131,7 @@ fn main() -> ! {
     let frame = can_bus.receive().unwrap();
     writeln!(usart, "CAN RX = {:?}\r", frame.data()).ok();
 
-    usart.println("Rotate encoder — printing every 20 ms.");
+    usart.println("Rotate encoder — printing every 200 ms.");
 
     // ================================
     // Main Loop
@@ -139,6 +139,6 @@ fn main() -> ! {
     loop {
         led_green.toggle();
         writeln!(usart, "ENC = {}\r", enc.position()).ok();
-        delay.delay_ms(20_u32);
+        delay.delay_ms(200_u32);
     }
 }
