@@ -86,9 +86,7 @@ fn main() -> ! {
     // ================================
     let pclk1_hz = clocks.pclk1().to_Hz();
     writeln!(usart, "PCLK1 = {} Hz\r", pclk1_hz).ok();
-
-    // TODO: compute correct bit timing for final bitrate based on PCLK1
-    const CAN_BTR: u32 = 0x001C_0014;
+    const CAN_BTR: u32 = 0x001C_0003; // 250 kbps @ 16 MHz
 
     // CAN1 owns filter banks — must configure it even if unused
     {
