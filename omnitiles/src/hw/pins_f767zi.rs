@@ -17,7 +17,7 @@ pub struct BoardPins {
 }
 
 pub struct Leds {
-    pub green: gpioa::PA5<Output<PushPull>>, // LD1
+    pub green: gpiob::PB0<Output<PushPull>>, // LD1
     pub blue: gpiob::PB7<Output<PushPull>>,  // LD3
     pub red: gpiob::PB14<Output<PushPull>>,  // LD2
 }
@@ -53,7 +53,7 @@ impl BoardPins {
 
         Self {
             leds: Leds {
-                green: gpioa.pa5.into_push_pull_output(),
+                green: gpiob.pb0.into_push_pull_output(),
                 blue: gpiob.pb7.into_push_pull_output(),
                 red: gpiob.pb14.into_push_pull_output(),
             },
