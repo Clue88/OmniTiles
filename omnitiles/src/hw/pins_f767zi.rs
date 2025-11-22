@@ -11,7 +11,7 @@ use stm32f7xx_hal::{
 pub struct BoardPins {
     pub leds: Leds,
     pub usart3: Usart3Pins,
-    pub spi4: Spi4Pins,
+    pub spi1: Spi1Pins,
     pub can1: Can1Pins,
     pub encoder: EncoderPins,
 }
@@ -27,11 +27,11 @@ pub struct Usart3Pins {
     pub rx: gpiod::PD9<Alternate<7>>,
 }
 
-pub struct Spi4Pins {
-    pub sck: gpioe::PE2<Alternate<5>>,
-    pub miso: gpioe::PE5<Alternate<5>>,
-    pub mosi: gpioe::PE6<Alternate<5>>,
-    pub cs: gpioe::PE4<Output<PushPull>>,
+pub struct Spi1Pins {
+    pub sck: gpioa::PA5<Alternate<5>>,
+    pub miso: gpioa::PA6<Alternate<5>>,
+    pub mosi: gpioa::PA7<Alternate<5>>,
+    pub cs: gpioa::PA4<Output<PushPull>>,
 }
 
 pub struct Can1Pins {
@@ -63,11 +63,11 @@ impl BoardPins {
                 rx: gpiod.pd9.into_alternate::<7>(),
             },
 
-            spi4: Spi4Pins {
-                sck: gpioe.pe2.into_alternate::<5>(),
-                miso: gpioe.pe5.into_alternate::<5>(),
-                mosi: gpioe.pe6.into_alternate::<5>(),
-                cs: gpioe.pe4.into_push_pull_output(),
+            spi1: Spi1Pins {
+                sck: gpioa.pa5.into_alternate::<5>(),
+                miso: gpioa.pa6.into_alternate::<5>(),
+                mosi: gpioa.pa7.into_alternate::<5>(),
+                cs: gpioa.pa4.into_push_pull_output(),
             },
 
             can1: Can1Pins {

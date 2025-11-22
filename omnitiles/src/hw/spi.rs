@@ -3,7 +3,6 @@
 //! - `SpiBus` wraps a configured HAL SPI instance with 8-bit words.
 //! - `ChipSelect` is an active-low GPIO output wrappr for manual CS control.
 
-use nb::block;
 use stm32f7xx_hal::{
     gpio::{self, Output, PinState, PushPull},
     prelude::*,
@@ -24,11 +23,11 @@ where
         Self { spi }
     }
 
-    /// Perform a blocking, full-duplex of one byte.
+    /// Perform a blocking, full-duplex transfer of one byte.
     pub fn transfer_byte(&mut self, byte: u8) -> Result<u8, spi::Error> {
-        block!(self.spi.send(byte))?;
-        let rx = block!(self.spi.read())?;
-        Ok(rx)
+        let mut tmp = [byte];
+        self.spi.transfer(&mut tmp)?;
+        Ok(tmp[0])
     }
 
     /// Send a byte, ignoring the response.
