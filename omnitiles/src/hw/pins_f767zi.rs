@@ -35,8 +35,8 @@ pub struct Spi4Pins {
 }
 
 pub struct Can1Pins {
-    pub tx: gpiod::PD1<Alternate<9>>,
-    pub rx: gpiod::PD0<Alternate<9>>,
+    pub tx: gpioa::PA12<Alternate<9>>,
+    pub rx: gpioa::PA11<Alternate<9>>,
 }
 
 pub struct EncoderPins {
@@ -71,8 +71,8 @@ impl BoardPins {
             },
 
             can1: Can1Pins {
-                tx: gpiod.pd1.into_alternate::<9>(),
-                rx: gpiod.pd0.into_alternate::<9>(),
+                tx: gpioa.pa12.into_alternate::<9>(),
+                rx: gpioa.pa11.into_alternate::<9>().internal_pull_up(true),
             },
 
             encoder: EncoderPins {

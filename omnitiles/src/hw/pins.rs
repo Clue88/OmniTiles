@@ -106,12 +106,12 @@ impl BoardPins {
 
             can1: Can1Pins {
                 tx: gpioa.pa12.into_alternate::<9>(),
-                rx: gpioa.pa11.into_alternate::<9>(),
+                rx: gpioa.pa11.into_alternate::<9>().internal_pull_up(true),
             },
 
             can2: Can2Pins {
                 tx: gpiob.pb13.into_alternate::<9>(),
-                rx: gpiob.pb12.into_alternate::<9>(),
+                rx: gpiob.pb12.into_alternate::<9>().internal_pull_up(true),
             },
         }
     }
