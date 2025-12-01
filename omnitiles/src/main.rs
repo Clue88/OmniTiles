@@ -88,17 +88,16 @@ fn main() -> ! {
     writeln!(usart, "PCLK1 = {} Hz\r", pclk1_hz).ok();
     const CAN_BTR: u32 = 0x001C_0003; // 250 kbps @ 16 MHz
 
-    // CAN1 owns filter banks — must configure it even if unused
+    let mut can2_hal = Can::new(dp.CAN2, &mut apb1, (pins.can2.tx, pins.can2.rx));
+
+    // For dual CAN filter setup, we need to configure filters on CAN1
     {
         let can1_hal = Can::new(dp.CAN1, &mut apb1, (pins.can1.tx, pins.can1.rx));
         let mut can1_bus = CanBus::new(can1_hal, CAN_BTR, false, false);
-        can1_bus.configure_accept_all_filters();
+        can1_bus.configure_accept_all_filters_for_dual_can(&mut can2_hal);
     }
 
-    let mut can_bus = {
-        let can2_hal = Can::new(dp.CAN2, &mut apb1, (pins.can2.tx, pins.can2.rx));
-        CanBus::new(can2_hal, CAN_BTR, true, false) // loopback
-    };
+    let mut can_bus = CanBus::new(can2_hal, CAN_BTR, true, false); // loopback mode
 
     // ================================
     // TIM2 Encoder
