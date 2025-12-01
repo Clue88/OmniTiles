@@ -33,7 +33,8 @@ respectively. See https://github.com/burrbull/stm32-template/ for more informati
 template that was used to generate the project skeleton.
 
 ## Documentation
-Documentation can be automatically generated using `rustdoc`.
+Documentation can be automatically generated using `rustdoc`. To regenerate the documentation in
+`/doc` and update the documentation hosted on GitHub Pages, run:
 ```bash
-cargo doc --no-deps --open
+cargo doc --no-deps --target-dir doc
 ```
