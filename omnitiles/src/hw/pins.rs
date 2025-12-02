@@ -22,6 +22,7 @@ pub struct BoardPins {
 }
 
 pub struct LedPins {
+    pub red: gpiod::PD8<Output<PushPull>>,
     pub yellow: gpiod::PD9<Output<PushPull>>,
     pub green: gpiod::PD10<Output<PushPull>>,
 }
@@ -75,6 +76,7 @@ impl BoardPins {
 
         Self {
             leds: LedPins {
+                red: gpiod.pd8.into_push_pull_output(),
                 yellow: gpiod.pd9.into_push_pull_output(),
                 green: gpiod.pd10.into_push_pull_output(),
             },
