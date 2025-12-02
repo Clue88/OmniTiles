@@ -32,6 +32,21 @@ You can also use `cargo build --release` and `cargo flash --release` to only bui
 respectively. See https://github.com/burrbull/stm32-template/ for more information about the
 template that was used to generate the project skeleton.
 
+### USB-UART Bridge for RP2040
+OmniTiles PCB v1 has an RP2040 (Raspberry Pi Pico) connected to the MCU over UART. In order to use
+the debug terminal, it is necessary to flash a USB-UART program to the RP2040 (not needed for dev
+boards).
+
+1. Download the .uf2 file from the
+[pico-uart-bridge repo](https://github.com/Noltari/pico-uart-bridge/releases/tag/v4.2).
+2. While pressing the BOOT button on the RP2040, connect the board to a computer with a USB cable,
+then release the button.
+3. The RP2040 will now appear as a storage volume named `RPI-RP2`. Drag and drop the .uf2 file onto
+the drive. It will automatically disconnect.
+
+This should only be necessary once—after flashing the RP2040, you can use the debug terminal as
+normal.
+
 ## Documentation
 Documentation can be automatically generated using `rustdoc`. To regenerate the documentation in
 `/doc` and update the documentation hosted on GitHub Pages, run:
