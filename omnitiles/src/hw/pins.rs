@@ -19,6 +19,7 @@ pub struct BoardPins {
     pub spi4: Spi4Pins,
     pub drv8873: DrvPins,
     pub m1: Motor1Pins,
+    pub m2: Motor2Pins,
     pub encoder: EncoderPins,
     pub can1: Can1Pins,
     pub can2: Can2Pins,
@@ -63,6 +64,14 @@ pub struct Motor1Pins {
     pub in2: gpioc::PC0<Output<PushPull>>,
     pub nsleep: gpioa::PA4<Input<Floating>>,
     pub disable: gpioa::PA3<Output<PushPull>>,
+}
+
+/// Motor 2 control pins
+pub struct Motor2Pins {
+    pub in1: gpiod::PD3<Output<PushPull>>,
+    pub in2: gpiod::PD4<Output<PushPull>>,
+    pub nsleep: gpiod::PD2<Input<Floating>>,
+    pub disable: gpiod::PD1<Output<PushPull>>,
 }
 
 /// CAN1 bus pins
@@ -129,6 +138,13 @@ impl BoardPins {
                 in2: gpioc.pc0.into_push_pull_output(),
                 nsleep: gpioa.pa4.into_floating_input(),
                 disable: gpioa.pa3.into_push_pull_output(),
+            },
+
+            m2: Motor2Pins {
+                in1: gpiod.pd3.into_push_pull_output(),
+                in2: gpiod.pd4.into_push_pull_output(),
+                nsleep: gpiod.pd2.into_floating_input(),
+                disable: gpiod.pd1.into_push_pull_output(),
             },
 
             can1: Can1Pins {
