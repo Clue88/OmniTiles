@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["BoardPins","Can1Pins","Can2Pins","DrvPins","EncoderPins","LedPins","Spi4Pins","Usart1Pins"]};
+window.SIDEBAR_ITEMS = {"struct":["BoardPins","Can1Pins","Can2Pins","DrvPins","EncoderPins","LedPins","Motor1Pins","Spi4Pins","Usart1Pins"]};
