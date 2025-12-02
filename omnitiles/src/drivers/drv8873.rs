@@ -121,6 +121,7 @@ impl Fault {
 }
 
 /// DIAG status register.
+#[derive(Copy, Clone, Debug)]
 pub struct Diag {
     raw: u8,
 }
