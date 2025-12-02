@@ -1,9 +1,7 @@
 //! Pin definitions for STM32F777 MCU for OmniTiles.
 
 use stm32f7xx_hal::{
-    gpio::{
-        gpioa, gpiob, gpioc, gpiod, gpioe, gpioh, Alternate, Floating, Input, Output, PushPull,
-    },
+    gpio::{gpioa, gpiob, gpioc, gpiod, gpioe, gpioh, Alternate, Output, PushPull},
     pac,
     prelude::*,
 };
@@ -62,7 +60,7 @@ pub struct EncoderPins {
 pub struct Motor1Pins {
     pub in1: gpioh::PH1<Output<PushPull>>,
     pub in2: gpioc::PC0<Output<PushPull>>,
-    pub nsleep: gpioa::PA4<Input<Floating>>,
+    pub nsleep: gpioa::PA4<Output<PushPull>>,
     pub disable: gpioa::PA3<Output<PushPull>>,
 }
 
@@ -70,7 +68,7 @@ pub struct Motor1Pins {
 pub struct Motor2Pins {
     pub in1: gpiod::PD3<Output<PushPull>>,
     pub in2: gpiod::PD4<Output<PushPull>>,
-    pub nsleep: gpiod::PD2<Input<Floating>>,
+    pub nsleep: gpiod::PD2<Output<PushPull>>,
     pub disable: gpiod::PD1<Output<PushPull>>,
 }
 
@@ -136,14 +134,14 @@ impl BoardPins {
             m1: Motor1Pins {
                 in1: gpioh.ph1.into_push_pull_output(),
                 in2: gpioc.pc0.into_push_pull_output(),
-                nsleep: gpioa.pa4.into_floating_input(),
+                nsleep: gpioa.pa4.into_push_pull_output(),
                 disable: gpioa.pa3.into_push_pull_output(),
             },
 
             m2: Motor2Pins {
                 in1: gpiod.pd3.into_push_pull_output(),
                 in2: gpiod.pd4.into_push_pull_output(),
-                nsleep: gpiod.pd2.into_floating_input(),
+                nsleep: gpiod.pd2.into_push_pull_output(),
                 disable: gpiod.pd1.into_push_pull_output(),
             },
 
