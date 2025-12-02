@@ -17,7 +17,10 @@ use hal::{
 };
 use stm32f7xx_hal as hal;
 
-use omnitiles::hw::{BoardPins, CanBus, ChipSelect, Encoder, Led, SpiBus, Usart};
+use omnitiles::{
+    drivers::{Drv8873, SpiMotor},
+    hw::{BoardPins, CanBus, ChipSelect, Encoder, Led, SpiBus, Usart},
+};
 
 #[entry]
 fn main() -> ! {
@@ -43,7 +46,7 @@ fn main() -> ! {
     // ================================
     // Board Pins
     // ================================
-    let pins = BoardPins::new(dp.GPIOA, dp.GPIOB, dp.GPIOD, dp.GPIOE);
+    let pins = BoardPins::new(dp.GPIOA, dp.GPIOB, dp.GPIOC, dp.GPIOD, dp.GPIOE, dp.GPIOH);
 
     // ================================
     // LEDs
@@ -79,7 +82,7 @@ fn main() -> ! {
         let spi4_enabled = spi4_raw.enable::<u8>(spi_mode, 10.kHz(), &clocks, &mut apb2);
         SpiBus::new(spi4_enabled)
     };
-    let mut cs1 = ChipSelect::active_low(pins.drv8873.m1_cs);
+    let cs1 = ChipSelect::active_low(pins.drv8873.m1_cs);
 
     // ================================
     // CAN2 (Loopback)
@@ -109,20 +112,23 @@ fn main() -> ! {
     };
 
     // ================================
+    // SPI Motor (Lift)
+    // ================================
+    let mut lift_motor = SpiMotor::new(
+        Drv8873::new(cs1),
+        enc,
+        pins.m1.in1,
+        pins.m1.in2,
+        pins.m1.nsleep,
+        pins.m1.disable,
+        1024, // counts per revolution
+    );
+
+    // ================================
     // HARDWARE TESTS
     // ================================
     led_yellow.on();
     usart.println("LED OK");
-
-    // ---- SPI Test ----
-    usart.println("SPI test (expected: 0xAA)... ");
-    cs1.select();
-    let rx = spi_bus.transfer_byte(0xAA);
-    cs1.deselect();
-    match rx {
-        Ok(b) => writeln!(usart, "  SPI RX = 0x{:02X}\r", b).ok(),
-        Err(e) => writeln!(usart, "  SPI RX ERROR: {:?}\r", e).ok(),
-    };
 
     // ---- CAN Loopback Test ----
     usart.println("CAN loopback test (expected: [1, 2, 3, 4])...");
@@ -139,14 +145,35 @@ fn main() -> ! {
         }
     }
 
-    usart.println("Rotate encoder — printing every 200 ms.");
+    // ---- SPI Motor Test ----
+    usart.println("SPI motor test...");
+    let spi_fault = lift_motor.read_fault(&mut spi_bus);
+    match spi_fault {
+        Ok(fault) => {
+            writeln!(usart, "  SPI Motor FAULT = {:?}\r", fault).ok();
+        }
+        Err(e) => {
+            writeln!(usart, "  SPI Motor read_fault error: {:?}\r", e).ok();
+        }
+    }
+    let spi_diag = lift_motor.read_diag(&mut spi_bus);
+    match spi_diag {
+        Ok(diag) => {
+            writeln!(usart, "  SPI Motor DIAG = {:?}\r", diag).ok();
+        }
+        Err(e) => {
+            writeln!(usart, "  SPI Motor read_diag error: {:?}\r", e).ok();
+        }
+    }
+
+    usart.println("Attempting to move lift motor forward...");
+    lift_motor.forward();
 
     // ================================
     // Main Loop
     // ================================
     loop {
         led_green.toggle();
-        writeln!(usart, "ENC = {}\r", enc.position()).ok();
         delay.delay_ms(200_u32);
     }
 }
