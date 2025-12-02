@@ -1,7 +1,9 @@
 //! Pin definitions for STM32F777 MCU for OmniTiles.
 
 use stm32f7xx_hal::{
-    gpio::{gpioa, gpiob, gpiod, gpioe, Alternate, Output, PushPull},
+    gpio::{
+        gpioa, gpiob, gpioc, gpiod, gpioe, gpioh, Alternate, Floating, Input, Output, PushPull,
+    },
     pac,
     prelude::*,
 };
@@ -16,6 +18,7 @@ pub struct BoardPins {
     pub usart1: Usart1Pins,
     pub spi4: Spi4Pins,
     pub drv8873: DrvPins,
+    pub m1: Motor1Pins,
     pub encoder: EncoderPins,
     pub can1: Can1Pins,
     pub can2: Can2Pins,
@@ -54,6 +57,14 @@ pub struct EncoderPins {
     pub tim3_ch2: gpioa::PA7<Alternate<2>>,
 }
 
+/// Motor 1 control pins
+pub struct Motor1Pins {
+    pub in1: gpioh::PH1<Output<PushPull>>,
+    pub in2: gpioc::PC0<Output<PushPull>>,
+    pub nsleep: gpioa::PA4<Input<Floating>>,
+    pub disable: gpioa::PA3<Output<PushPull>>,
+}
+
 /// CAN1 bus pins
 pub struct Can1Pins {
     pub tx: gpioa::PA12<Alternate<9>>,
@@ -68,11 +79,20 @@ pub struct Can2Pins {
 
 impl BoardPins {
     /// Create all named pins from raw GPIO peripherals.
-    pub fn new(gpioa: pac::GPIOA, gpiob: pac::GPIOB, gpiod: pac::GPIOD, gpioe: pac::GPIOE) -> Self {
+    pub fn new(
+        gpioa: pac::GPIOA,
+        gpiob: pac::GPIOB,
+        gpioc: pac::GPIOC,
+        gpiod: pac::GPIOD,
+        gpioe: pac::GPIOE,
+        gpioh: pac::GPIOH,
+    ) -> Self {
         let gpioa = gpioa.split();
         let gpiob = gpiob.split();
+        let gpioc = gpioc.split();
         let gpiod = gpiod.split();
         let gpioe = gpioe.split();
+        let gpioh = gpioh.split();
 
         Self {
             leds: LedPins {
@@ -102,6 +122,13 @@ impl BoardPins {
                 tim2_ch2: gpioa.pa1.into_alternate::<1>(),
                 tim3_ch1: gpioa.pa6.into_alternate::<2>(),
                 tim3_ch2: gpioa.pa7.into_alternate::<2>(),
+            },
+
+            m1: Motor1Pins {
+                in1: gpioh.ph1.into_push_pull_output(),
+                in2: gpioc.pc0.into_push_pull_output(),
+                nsleep: gpioa.pa4.into_floating_input(),
+                disable: gpioa.pa3.into_push_pull_output(),
             },
 
             can1: Can1Pins {
