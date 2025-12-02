@@ -15,4 +15,5 @@ pub mod can_motor;
 pub mod spi_motor;
 
 pub use can_motor::CanMotor;
+pub use drv8873::Drv8873;
 pub use spi_motor::SpiMotor;
