@@ -31,7 +31,7 @@ impl Encoder<pac::TIM2> {
         // Slave mode: encoder mode 3 (count on both TI1 and TI2)
         tim.smcr.modify(|_, w| w.sms().bits(0b011));
 
-        // Configure CH1/CH2 as inputs from TI1/TI2.
+        // Configure CH1/CH2 as inputs from TI1/TI2
         tim.ccmr1_input().modify(|_, w| w.cc1s().ti1().cc2s().ti2());
 
         // Polarity and enable for both channels.
