@@ -122,15 +122,19 @@ fn main() -> ! {
     // ================================
     // FIT0185 Motor
     // ================================
-    let mut fit0185 = Fit0185::new(
-        Drv8873::new(cs1),
-        enc,
-        pins.m1.in1,
-        pins.m1.in2,
-        pins.m1.nsleep,
-        pins.m1.disable,
-        2803, // counts per revolution
-    );
+    let mut fit0185 = {
+        let cpr = 2803;
+        Fit0185::new(
+            Drv8873::new(cs1),
+            enc,
+            pins.m1.in1,
+            pins.m1.in2,
+            pins.m1.nsleep,
+            pins.m1.disable,
+            cpr,
+        )
+    };
+    fit0185.enable_outputs();
 
     // ================================
     // Main Program
@@ -172,7 +176,6 @@ fn main() -> ! {
     }
 
     usart.println("Starting motor cycling test...");
-    fit0185.enable_outputs();
 
     loop {
         usart.println("Motor FORWARD for 5 seconds...");
