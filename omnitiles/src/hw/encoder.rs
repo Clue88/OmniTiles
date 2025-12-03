@@ -5,6 +5,7 @@
 
 use stm32f7xx_hal::pac;
 
+/// Generic encoder wrapper over a PAC TIMx peripheral.
 pub struct Encoder<TIM> {
     tim: TIM,
 }
