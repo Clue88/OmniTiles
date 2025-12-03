@@ -30,16 +30,18 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rust-docs
+          targets: thumbv7em-none-eabihf
 
-      # Build your docs into ./doc/
+      # Build docs inside the omnitiles directory
       - name: Build docs
+        working-directory: ./omnitiles
         run: cargo doc --no-deps --target-dir doc
 
-      # Upload the generated docs to GitHub Pages
+      # Upload the generated docs (now located at omnitiles/doc/<target>/doc)
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./doc/thumbv7em-none-eabihf/doc
+          path: ./omnitiles/doc/thumbv7em-none-eabihf/doc
 
       # Deploy to GitHub Pages
       - name: Deploy to GitHub Pages
