@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"mod":["reg"],"struct":["Diag","Drv8873","Fault","Response","Status"]};

@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"mod":["adc","can","encoder","led","pins","pins_f767zi","spi","usart"]};

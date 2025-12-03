@@ -48,8 +48,7 @@ This should only be necessary once—after flashing the RP2040, you can use the 
 normal.
 
 ## Documentation
-Documentation can be automatically generated using `rustdoc`. To regenerate the documentation in
-`/doc` and update the documentation hosted on GitHub Pages, run:
+Documentation can be automatically generated using `rustdoc`.
 ```bash
-cargo doc --no-deps --target-dir doc
+cargo doc --no-deps --open
 ```

@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["volts_from_adc"],"struct":["Adc"],"trait":["AdcRead"]};
