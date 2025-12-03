@@ -3,51 +3,51 @@
 //! This module converts between the motor's internal shaft angle representation and a physical tile
 //! tilt angle, using a configurable gear ratio.
 
-use crate::drivers::CanMotor;
+use crate::drivers::Gim6010;
 
 /// High-level tilt motor wrapped around a `CanMotor`.
 ///
 /// Geometry parameters:
 /// - `gear_ratio` — number of motor revolutions per tile revolution.
 pub struct TiltMotor<const DEV_ADDR: u16> {
-    motor: CanMotor<DEV_ADDR>,
+    motor: Gim6010<DEV_ADDR>,
     gear_ratio: f32,
 }
 
 impl<const DEV_ADDR: u16> TiltMotor<DEV_ADDR> {
     /// Create a new `TiltMotor` from an underlying `CanMotor` and a gear ratio.
-    pub fn new(motor: CanMotor<DEV_ADDR>, gear_ratio: f32) -> Self {
+    pub fn new(motor: Gim6010<DEV_ADDR>, gear_ratio: f32) -> Self {
         Self { motor, gear_ratio }
     }
 
     /// Access the underlying `CanMotor`.
     #[inline]
-    pub fn inner_motor(&mut self) -> &mut CanMotor<DEV_ADDR> {
+    pub fn inner_motor(&mut self) -> &mut Gim6010<DEV_ADDR> {
         &mut self.motor
     }
 
     /// Convert a raw encoder value [0..65535] into motor shaft angle in radians.
     #[inline]
     pub fn shaft_angle_rad_from_raw(&self, raw: u16) -> f32 {
-        CanMotor::<DEV_ADDR>::raw_angle_to_rad(raw)
+        Gim6010::<DEV_ADDR>::raw_angle_to_rad(raw)
     }
 
     /// Convert a raw encoder value [0..65535] into motor shaft angle in degrees.
     #[inline]
     pub fn shaft_angle_deg_from_raw(&self, raw: u16) -> f32 {
-        CanMotor::<DEV_ADDR>::raw_angle_to_deg(raw)
+        Gim6010::<DEV_ADDR>::raw_angle_to_deg(raw)
     }
 
     /// Convert a desired motor shaft angle (radians) into a raw encoder value.
     #[inline]
     pub fn raw_for_shaft_angle_rad(&self, angle_rad: f32) -> u16 {
-        CanMotor::<DEV_ADDR>::angle_rad_to_raw(angle_rad)
+        Gim6010::<DEV_ADDR>::angle_rad_to_raw(angle_rad)
     }
 
     /// Convert a desired motor shaft angle (degrees) into a raw encoder value.
     #[inline]
     pub fn raw_for_shaft_angle_deg(&self, angle_deg: f32) -> u16 {
-        CanMotor::<DEV_ADDR>::angle_deg_to_raw(angle_deg)
+        Gim6010::<DEV_ADDR>::angle_deg_to_raw(angle_deg)
     }
 
     /// Convert a raw encoder value into tile tilt angle in radians.

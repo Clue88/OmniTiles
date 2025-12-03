@@ -1,4 +1,4 @@
-//! Motor control over CAN for SteadyWin GIM6010-48 with a GDZ468 driver.
+//! Motor control over CAN for SteadyWin GIM6010-48 with a built-in GDZ468 driver.
 //!
 //! This module wraps the driver's custom CAN protocol for a single motor.
 
@@ -38,9 +38,9 @@ impl From<OverrunError> for Error {
 /// The driver will:
 ///   - transmit commands with `StdID = 0x100 | DEV_ADDR`
 ///   - expect responses from `StdID = DEV_ADDR`
-pub struct CanMotor<const DEV_ADDR: u16>;
+pub struct Gim6010<const DEV_ADDR: u16>;
 
-impl<const DEV_ADDR: u16> CanMotor<DEV_ADDR> {
+impl<const DEV_ADDR: u16> Gim6010<DEV_ADDR> {
     /// Create a new handle for this motor address.
     ///
     /// This is a zero-sized type; all state lives on the driver itself.
@@ -210,7 +210,7 @@ impl<const DEV_ADDR: u16> CanMotor<DEV_ADDR> {
     }
 }
 
-impl<const DEV_ADDR: u16> CanMotor<DEV_ADDR> {
+impl<const DEV_ADDR: u16> Gim6010<DEV_ADDR> {
     /// Default Pos_Max from the driver documentation, in units of 0.1 rad.
     ///
     /// The encoder range [0..65535] is mapped to [-Pos_Max, +Pos_Max], with:
