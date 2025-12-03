@@ -121,7 +121,7 @@ fn main() -> ! {
         pins.m1.in2,
         pins.m1.nsleep,
         pins.m1.disable,
-        1024, // counts per revolution
+        2803, // counts per revolution
     );
 
     // ================================
