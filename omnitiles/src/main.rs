@@ -1,6 +1,5 @@
 #![no_main]
 #![no_std]
-#![allow(dead_code)]
 
 use cortex_m::delay::Delay;
 use cortex_m_rt::entry;
@@ -121,9 +120,9 @@ fn main() -> ! {
     let mut read_m1_iprop2 = Adc::make_reader(&adc1, 15);
 
     // ================================
-    // SPI Motor (Lift)
+    // FIT0185 Motor
     // ================================
-    let mut spi_motor = Fit0185::new(
+    let mut fit0185 = Fit0185::new(
         Drv8873::new(cs1),
         enc,
         pins.m1.in1,
@@ -151,37 +150,37 @@ fn main() -> ! {
         }
     }
 
-    // ---- SPI Motor Test ----
-    usart.println("Reading SPI motor status...");
-    let spi_fault = spi_motor.read_fault(&mut spi_bus);
+    // ---- FIT0185 Test ----
+    usart.println("Reading FIT0185 status...");
+    let spi_fault = fit0185.read_fault(&mut spi_bus);
     match spi_fault {
         Ok(fault) => {
-            writeln!(usart, "  SPI Motor FAULT = {:?}\r", fault).ok();
+            writeln!(usart, "  FIT0185 FAULT = {:?}\r", fault).ok();
         }
         Err(e) => {
-            writeln!(usart, "  SPI Motor read_fault error: {:?}\r", e).ok();
+            writeln!(usart, "  FIT0185 read_fault error: {:?}\r", e).ok();
         }
     }
-    let spi_diag = spi_motor.read_diag(&mut spi_bus);
+    let spi_diag = fit0185.read_diag(&mut spi_bus);
     match spi_diag {
         Ok(diag) => {
-            writeln!(usart, "  SPI Motor DIAG = {:?}\r", diag).ok();
+            writeln!(usart, "  FIT0185 DIAG = {:?}\r", diag).ok();
         }
         Err(e) => {
-            writeln!(usart, "  SPI Motor read_diag error: {:?}\r", e).ok();
+            writeln!(usart, "  FIT0185 read_diag error: {:?}\r", e).ok();
         }
     }
 
     usart.println("Starting motor cycling test...");
-    spi_motor.enable_outputs();
+    fit0185.enable_outputs();
 
     loop {
         usart.println("Motor FORWARD for 5 seconds...");
-        spi_motor.forward();
+        fit0185.forward();
         for _ in 0..25 {
             led_green.toggle();
 
-            let revs = spi_motor.position_revs();
+            let revs = fit0185.position_revs();
             let iprop1_amps = {
                 let volts = volts_from_adc(read_m1_iprop1(), 3.3);
                 (volts / 680.) * 1100.
@@ -203,16 +202,16 @@ fn main() -> ! {
         }
 
         usart.println("Motor STOP for 2 seconds...");
-        spi_motor.brake();
+        fit0185.brake();
         led_green.off();
         delay.delay_ms(2000_u32);
 
         usart.println("Motor REVERSE for 5 seconds...");
-        spi_motor.reverse();
+        fit0185.reverse();
         for _ in 0..25 {
             led_yellow.toggle();
 
-            let revs = spi_motor.position_revs();
+            let revs = fit0185.position_revs();
             let iprop1_amps = {
                 let volts = volts_from_adc(read_m1_iprop1(), 3.3);
                 (volts / 680.) * 1100.
@@ -234,7 +233,7 @@ fn main() -> ! {
         }
 
         usart.println("Motor STOP for 2 seconds...");
-        spi_motor.brake();
+        fit0185.brake();
         led_yellow.off();
         delay.delay_ms(2000_u32);
     }
