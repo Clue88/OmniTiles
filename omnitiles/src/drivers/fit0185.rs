@@ -1,4 +1,4 @@
-//! Motor abstraction for DRV8873 SPI driver with a TIM2 quadrature encoder.
+//! Motor abstraction for DFRobot FIT0185 motor with DRV8873 SPI driver and TIM2 quadrature encoder.
 //!
 //! This module includes functions to drive the motor and read encoder values.
 
@@ -22,7 +22,7 @@ pub enum Direction {
 }
 
 /// Motor abstraction that combines a DRV8873 driver, four control pins, and a TIM2 encoder.
-pub struct SpiMotor<
+pub struct Fit0185<
     const CS_P: char,
     const CS_N: u8,
     const IN1_P: char,
@@ -54,7 +54,7 @@ impl<
         const SLP_N: u8,
         const DIS_P: char,
         const DIS_N: u8,
-    > SpiMotor<CS_P, CS_N, IN1_P, IN1_N, IN2_P, IN2_N, SLP_P, SLP_N, DIS_P, DIS_N>
+    > Fit0185<CS_P, CS_N, IN1_P, IN1_N, IN2_P, IN2_N, SLP_P, SLP_N, DIS_P, DIS_N>
 {
     /// Construct a new `SpiMotor`.
     ///

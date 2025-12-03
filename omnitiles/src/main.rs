@@ -19,7 +19,7 @@ use hal::{
 use stm32f7xx_hal as hal;
 
 use omnitiles::{
-    drivers::{Drv8873, SpiMotor},
+    drivers::{Drv8873, Fit0185},
     hw::{adc::volts_from_adc, Adc, BoardPins, CanBus, ChipSelect, Encoder, Led, SpiBus, Usart},
 };
 
@@ -123,7 +123,7 @@ fn main() -> ! {
     // ================================
     // SPI Motor (Lift)
     // ================================
-    let mut spi_motor = SpiMotor::new(
+    let mut spi_motor = Fit0185::new(
         Drv8873::new(cs1),
         enc,
         pins.m1.in1,

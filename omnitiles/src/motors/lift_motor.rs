@@ -3,7 +3,7 @@
 //! This module converts encoder ticks into physical height and provides target-based movement
 //! helpers, which can be used in a higher-level controller like a PID loop.
 
-use crate::drivers::SpiMotor;
+use crate::drivers::Fit0185;
 
 /// Lift motor abstraction layered on top of a `SpiMotor`.
 ///
@@ -22,7 +22,7 @@ pub struct LiftMotor<
     const DIS_P: char,
     const DIS_N: u8,
 > {
-    motor: SpiMotor<CS_P, CS_N, IN1_P, IN1_N, IN2_P, IN2_N, SLP_P, SLP_N, DIS_P, DIS_N>,
+    motor: Fit0185<CS_P, CS_N, IN1_P, IN1_N, IN2_P, IN2_N, SLP_P, SLP_N, DIS_P, DIS_N>,
     mm_per_rev: f32,
 }
 
@@ -43,7 +43,7 @@ impl<
     ///
     /// `mm_per_rev` — how many millimeters the actuator moves per full revolution.
     pub fn new(
-        motor: SpiMotor<CS_P, CS_N, IN1_P, IN1_N, IN2_P, IN2_N, SLP_P, SLP_N, DIS_P, DIS_N>,
+        motor: Fit0185<CS_P, CS_N, IN1_P, IN1_N, IN2_P, IN2_N, SLP_P, SLP_N, DIS_P, DIS_N>,
         mm_per_rev: f32,
     ) -> Self {
         Self { motor, mm_per_rev }
@@ -98,7 +98,7 @@ impl<
     /// Expose the underlying `SpiMotor`.
     pub fn inner_motor(
         &mut self,
-    ) -> &mut SpiMotor<CS_P, CS_N, IN1_P, IN1_N, IN2_P, IN2_N, SLP_P, SLP_N, DIS_P, DIS_N> {
+    ) -> &mut Fit0185<CS_P, CS_N, IN1_P, IN1_N, IN2_P, IN2_N, SLP_P, SLP_N, DIS_P, DIS_N> {
         &mut self.motor
     }
 
