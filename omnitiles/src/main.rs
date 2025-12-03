@@ -76,7 +76,7 @@ fn main() -> ! {
     let mut spi_bus = {
         let spi_mode = Mode {
             polarity: Polarity::IdleLow,
-            phase: Phase::CaptureOnFirstTransition,
+            phase: Phase::CaptureOnSecondTransition,
         };
         let spi4_raw = Spi::new(dp.SPI4, (pins.spi4.sck, pins.spi4.miso, pins.spi4.mosi));
         let spi4_enabled = spi4_raw.enable::<u8>(spi_mode, 10.kHz(), &clocks, &mut apb2);
