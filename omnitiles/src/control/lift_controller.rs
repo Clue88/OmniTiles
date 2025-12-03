@@ -156,4 +156,18 @@ impl<
             }
         }
     }
+
+    /// Expose the underlying LiftMotor.
+    pub fn motor(
+        &self,
+    ) -> &LiftMotor<CS_P, CS_N, IN1_P, IN1_N, IN2_P, IN2_N, SLP_P, SLP_N, DIS_P, DIS_N> {
+        &self.motor
+    }
+
+    /// Mutable access to the underlying LiftMotor.
+    pub fn motor_mut(
+        &mut self,
+    ) -> &mut LiftMotor<CS_P, CS_N, IN1_P, IN1_N, IN2_P, IN2_N, SLP_P, SLP_N, DIS_P, DIS_N> {
+        &mut self.motor
+    }
 }
