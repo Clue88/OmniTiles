@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["can","encoder","led","pins","pins_f767zi","spi","usart"]};
+window.SIDEBAR_ITEMS = {"mod":["adc","can","encoder","led","pins","pins_f767zi","spi","usart"]};

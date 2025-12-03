@@ -6,13 +6,15 @@
 //! ## Modules
 //!
 //! - [`pins`] - OmniTiles STM32F777 pin assignments
-//!     - [`pins_f767zi`] - NUCLEO-F767ZI devboard pin assignments.
+//!     - [`pins_f767zi`] - NUCLEO-F767ZI devboard pin assignments
 //! - [`led`] – Active-high / active-low LED wrapper
 //! - [`usart`] – Blocking TX helpers with `core::fmt::Write` impl
 //! - [`spi`] – Blocking byte-level SPI and reusable CS abstraction
 //! - [`can`] – Safe wrapper around `bxcan` with blocking send/receive
 //! - [`encoder`] – TIM2/TIM3 quadrature encoder mode
+//! - [`adc`] – ADC1/ADC2/ADC3 single-channel blocking reads
 
+pub mod adc;
 pub mod can;
 pub mod encoder;
 pub mod led;
@@ -21,6 +23,7 @@ pub mod pins_f767zi;
 pub mod spi;
 pub mod usart;
 
+pub use adc::Adc;
 pub use can::CanBus;
 pub use encoder::Encoder;
 pub use led::Led;
