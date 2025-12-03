@@ -123,7 +123,7 @@ fn main() -> ! {
     // ================================
     // SPI Motor (Lift)
     // ================================
-    let mut lift_motor = SpiMotor::new(
+    let mut spi_motor = SpiMotor::new(
         Drv8873::new(cs1),
         enc,
         pins.m1.in1,
@@ -153,7 +153,7 @@ fn main() -> ! {
 
     // ---- SPI Motor Test ----
     usart.println("Reading SPI motor status...");
-    let spi_fault = lift_motor.read_fault(&mut spi_bus);
+    let spi_fault = spi_motor.read_fault(&mut spi_bus);
     match spi_fault {
         Ok(fault) => {
             writeln!(usart, "  SPI Motor FAULT = {:?}\r", fault).ok();
@@ -162,7 +162,7 @@ fn main() -> ! {
             writeln!(usart, "  SPI Motor read_fault error: {:?}\r", e).ok();
         }
     }
-    let spi_diag = lift_motor.read_diag(&mut spi_bus);
+    let spi_diag = spi_motor.read_diag(&mut spi_bus);
     match spi_diag {
         Ok(diag) => {
             writeln!(usart, "  SPI Motor DIAG = {:?}\r", diag).ok();
@@ -173,15 +173,15 @@ fn main() -> ! {
     }
 
     usart.println("Starting motor cycling test...");
-    lift_motor.enable_outputs();
+    spi_motor.enable_outputs();
 
     loop {
         usart.println("Motor FORWARD for 5 seconds...");
-        lift_motor.forward();
+        spi_motor.forward();
         for _ in 0..25 {
             led_green.toggle();
 
-            let revs = lift_motor.position_revs();
+            let revs = spi_motor.position_revs();
             let iprop1_amps = {
                 let volts = volts_from_adc(read_m1_iprop1(), 3.3);
                 (volts / 680.) * 1100.
@@ -203,16 +203,16 @@ fn main() -> ! {
         }
 
         usart.println("Motor STOP for 2 seconds...");
-        lift_motor.brake();
+        spi_motor.brake();
         led_green.off();
         delay.delay_ms(2000_u32);
 
         usart.println("Motor REVERSE for 5 seconds...");
-        lift_motor.reverse();
+        spi_motor.reverse();
         for _ in 0..25 {
             led_yellow.toggle();
 
-            let revs = lift_motor.position_revs();
+            let revs = spi_motor.position_revs();
             let iprop1_amps = {
                 let volts = volts_from_adc(read_m1_iprop1(), 3.3);
                 (volts / 680.) * 1100.
@@ -234,7 +234,7 @@ fn main() -> ! {
         }
 
         usart.println("Motor STOP for 2 seconds...");
-        lift_motor.brake();
+        spi_motor.brake();
         led_yellow.off();
         delay.delay_ms(2000_u32);
     }
