@@ -8,6 +8,8 @@
 //! let value = adc1.read(3);
 //! ```
 
+use core::cell::RefCell;
+
 use stm32f7xx_hal::pac;
 
 /// Generic ADC wrapper over a PAC ADCx peripheral.
@@ -20,6 +22,11 @@ impl<ADC> Adc<ADC> {
     pub fn free(self) -> ADC {
         self.adc
     }
+}
+
+/// Trait for reading a single channel from an ADC peripheral.
+pub trait AdcRead {
+    fn read_channel(&mut self, ch: u8) -> u16;
 }
 
 fn configure_common() {
@@ -144,5 +151,33 @@ impl Adc<pac::ADC3> {
     #[inline]
     pub fn read(&self, channel: u8) -> u16 {
         read_channel(&self.adc, channel)
+    }
+}
+
+impl AdcRead for Adc<pac::ADC1> {
+    fn read_channel(&mut self, ch: u8) -> u16 {
+        self.read(ch)
+    }
+}
+
+impl AdcRead for Adc<pac::ADC2> {
+    fn read_channel(&mut self, ch: u8) -> u16 {
+        self.read(ch)
+    }
+}
+
+impl AdcRead for Adc<pac::ADC3> {
+    fn read_channel(&mut self, ch: u8) -> u16 {
+        self.read(ch)
+    }
+}
+
+impl<ADC> Adc<ADC>
+where
+    Adc<ADC>: AdcRead,
+{
+    /// Create a closure that reads the given channel from the ADC reference.
+    pub fn make_reader<'a>(adc_ref: &'a RefCell<Self>, channel: u8) -> impl FnMut() -> u16 + 'a {
+        move || adc_ref.borrow_mut().read_channel(channel)
     }
 }

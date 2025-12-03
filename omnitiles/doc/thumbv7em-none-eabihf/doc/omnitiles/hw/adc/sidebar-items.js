@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"struct":["Adc"]};
+window.SIDEBAR_ITEMS = {"struct":["Adc"],"trait":["AdcRead"]};
