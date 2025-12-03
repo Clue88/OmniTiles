@@ -181,3 +181,9 @@ where
         move || adc_ref.borrow_mut().read_channel(channel)
     }
 }
+
+/// Convert raw ADC value to voltage, assuming 12-bit resolution.
+pub fn volts_from_adc(adc_value: u16, v_ref: f32) -> f32 {
+    let max_adc = (1 << 12) - 1;
+    (adc_value as f32 / max_adc as f32) * v_ref
+}

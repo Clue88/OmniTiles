@@ -6,6 +6,7 @@ use cortex_m::delay::Delay;
 use cortex_m_rt::entry;
 use panic_halt as _;
 
+use core::cell::RefCell;
 use core::fmt::Write;
 
 use hal::{
@@ -19,7 +20,7 @@ use stm32f7xx_hal as hal;
 
 use omnitiles::{
     drivers::{Drv8873, SpiMotor},
-    hw::{BoardPins, CanBus, ChipSelect, Encoder, Led, SpiBus, Usart},
+    hw::{adc::volts_from_adc, Adc, BoardPins, CanBus, ChipSelect, Encoder, Led, SpiBus, Usart},
 };
 
 #[entry]
@@ -112,6 +113,14 @@ fn main() -> ! {
     };
 
     // ================================
+    // ADC1 Current Sense
+    // ================================
+    let adc1 = RefCell::new(Adc::adc1(dp.ADC1));
+
+    let mut read_m1_iprop1 = Adc::make_reader(&adc1, 14);
+    let mut read_m1_iprop2 = Adc::make_reader(&adc1, 15);
+
+    // ================================
     // SPI Motor (Lift)
     // ================================
     let mut lift_motor = SpiMotor::new(
@@ -125,11 +134,8 @@ fn main() -> ! {
     );
 
     // ================================
-    // HARDWARE TESTS
+    // Main Program
     // ================================
-    led_yellow.on();
-    usart.println("LED OK");
-
     // ---- CAN Loopback Test ----
     usart.println("CAN loopback test (expected: [1, 2, 3, 4])...");
     let id = bxcan::StandardId::new(0x123).unwrap();
@@ -146,7 +152,7 @@ fn main() -> ! {
     }
 
     // ---- SPI Motor Test ----
-    usart.println("SPI motor test...");
+    usart.println("Reading SPI motor status...");
     let spi_fault = lift_motor.read_fault(&mut spi_bus);
     match spi_fault {
         Ok(fault) => {
@@ -166,14 +172,70 @@ fn main() -> ! {
         }
     }
 
-    usart.println("Attempting to move lift motor forward...");
-    lift_motor.forward();
+    usart.println("Starting motor cycling test...");
+    lift_motor.enable_outputs();
 
-    // ================================
-    // Main Loop
-    // ================================
     loop {
-        led_green.toggle();
-        delay.delay_ms(200_u32);
+        usart.println("Motor FORWARD for 5 seconds...");
+        lift_motor.forward();
+        for _ in 0..25 {
+            led_green.toggle();
+
+            let revs = lift_motor.position_revs();
+            let iprop1_amps = {
+                let volts = volts_from_adc(read_m1_iprop1(), 3.3);
+                (volts / 680.) * 1100.
+            };
+            let iprop2_amps = {
+                let volts = volts_from_adc(read_m1_iprop2(), 3.3);
+                (volts / 680.) * 1100.
+            };
+            let nfault = pins.m1.nfault.is_high();
+
+            writeln!(
+                usart,
+                "Revs={}, IPROP1={} A, IPROP2={} A, nFAULT={}\r",
+                revs, iprop1_amps, iprop2_amps, nfault
+            )
+            .ok();
+
+            delay.delay_ms(200_u32);
+        }
+
+        usart.println("Motor STOP for 2 seconds...");
+        lift_motor.brake();
+        led_green.off();
+        delay.delay_ms(2000_u32);
+
+        usart.println("Motor REVERSE for 5 seconds...");
+        lift_motor.reverse();
+        for _ in 0..25 {
+            led_yellow.toggle();
+
+            let revs = lift_motor.position_revs();
+            let iprop1_amps = {
+                let volts = volts_from_adc(read_m1_iprop1(), 3.3);
+                (volts / 680.) * 1100.
+            };
+            let iprop2_amps = {
+                let volts = volts_from_adc(read_m1_iprop2(), 3.3);
+                (volts / 680.) * 1100.
+            };
+            let nfault = pins.m1.nfault.is_high();
+
+            writeln!(
+                usart,
+                "Revs={}, IPROP1={} A, IPROP2={} A, nFAULT={}\r",
+                revs, iprop1_amps, iprop2_amps, nfault
+            )
+            .ok();
+
+            delay.delay_ms(200_u32);
+        }
+
+        usart.println("Motor STOP for 2 seconds...");
+        lift_motor.brake();
+        led_yellow.off();
+        delay.delay_ms(2000_u32);
     }
 }
