@@ -180,16 +180,26 @@ fn main() -> ! {
     }
 
     usart.println("Starting lift motor test...");
-    fit0185.reverse();
-    delay.delay_ms(7000_u32);
-    fit0185.brake();
-    delay.delay_ms(1000_u32);
-    fit0185.forward();
-    delay.delay_ms(7000_u32);
-    fit0185.brake();
 
     loop {
-        led_green.toggle();
-        delay.delay_ms(500_u32);
+        // BOTTOM (safe to turn on)
+        led_green.on();
+        delay.delay_ms(5000_u32);
+
+        // GOING UP
+        led_green.off();
+        led_yellow.on();
+        fit0185.reverse();
+        delay.delay_ms(7000_u32);
+        fit0185.brake();
+
+        // TOP
+        delay.delay_ms(1000_u32);
+
+        // GOING DOWN
+        fit0185.forward();
+        delay.delay_ms(7000_u32);
+        fit0185.brake();
+        led_yellow.off();
     }
 }
