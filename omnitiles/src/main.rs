@@ -190,7 +190,7 @@ fn main() -> ! {
         led_green.off();
         led_yellow.on();
         fit0185.reverse();
-        delay.delay_ms(7000_u32);
+        delay.delay_ms(6500_u32);
         fit0185.brake();
 
         // TOP
@@ -198,7 +198,7 @@ fn main() -> ! {
 
         // GOING DOWN
         fit0185.forward();
-        delay.delay_ms(7000_u32);
+        delay.delay_ms(6500_u32);
         fit0185.brake();
         led_yellow.off();
     }
