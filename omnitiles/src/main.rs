@@ -3,6 +3,7 @@
 
 #![no_main]
 #![no_std]
+#![allow(unused)]
 
 use cortex_m::delay::Delay;
 use cortex_m_rt::entry;
@@ -178,69 +179,17 @@ fn main() -> ! {
         }
     }
 
-    usart.println("Starting motor cycling test...");
+    usart.println("Starting lift motor test...");
+    fit0185.reverse();
+    delay.delay_ms(7000_u32);
+    fit0185.brake();
+    delay.delay_ms(1000_u32);
+    fit0185.forward();
+    delay.delay_ms(7000_u32);
+    fit0185.brake();
 
     loop {
-        usart.println("Motor FORWARD for 5 seconds...");
-        fit0185.forward();
-        for _ in 0..25 {
-            led_green.toggle();
-
-            let revs = fit0185.position_revs();
-            let iprop1_amps = {
-                let volts = volts_from_adc(read_m1_iprop1(), 3.3);
-                (volts / 680.) * 1100.
-            };
-            let iprop2_amps = {
-                let volts = volts_from_adc(read_m1_iprop2(), 3.3);
-                (volts / 680.) * 1100.
-            };
-            let nfault = pins.m1.nfault.is_high();
-
-            writeln!(
-                usart,
-                "Revs={}, IPROP1={} A, IPROP2={} A, nFAULT={}\r",
-                revs, iprop1_amps, iprop2_amps, nfault
-            )
-            .ok();
-
-            delay.delay_ms(200_u32);
-        }
-
-        usart.println("Motor STOP for 2 seconds...");
-        fit0185.brake();
-        led_green.off();
-        delay.delay_ms(2000_u32);
-
-        usart.println("Motor REVERSE for 5 seconds...");
-        fit0185.reverse();
-        for _ in 0..25 {
-            led_yellow.toggle();
-
-            let revs = fit0185.position_revs();
-            let iprop1_amps = {
-                let volts = volts_from_adc(read_m1_iprop1(), 3.3);
-                (volts / 680.) * 1100.
-            };
-            let iprop2_amps = {
-                let volts = volts_from_adc(read_m1_iprop2(), 3.3);
-                (volts / 680.) * 1100.
-            };
-            let nfault = pins.m1.nfault.is_high();
-
-            writeln!(
-                usart,
-                "Revs={}, IPROP1={} A, IPROP2={} A, nFAULT={}\r",
-                revs, iprop1_amps, iprop2_amps, nfault
-            )
-            .ok();
-
-            delay.delay_ms(200_u32);
-        }
-
-        usart.println("Motor STOP for 2 seconds...");
-        fit0185.brake();
-        led_yellow.off();
-        delay.delay_ms(2000_u32);
+        led_green.toggle();
+        delay.delay_ms(500_u32);
     }
 }
