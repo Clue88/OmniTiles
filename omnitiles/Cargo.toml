@@ -18,7 +18,6 @@ version = "0.8.0"
 features = ["stm32f777", "rt", "has-can"]
 
 
-
 # Set the default for dependencies.
 [profile.dev.package."*"]
 opt-level = "s"
