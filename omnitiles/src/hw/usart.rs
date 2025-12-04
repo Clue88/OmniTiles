@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// © 2025–2026 Christopher Liu
+
 //! USART abstraction layer.
 //!
 //! Provides several printing helpers for hex, decimal, and ASCII strings to print to an attached

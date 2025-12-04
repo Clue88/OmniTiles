@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// © 2025–2026 Christopher Liu
+
 //! Basic ADC support for STM32F7 using direct PAC register access.
 //!
 //! Thin wrapper around ADC1/ADC2/ADC3 with blocking single-channel reads.

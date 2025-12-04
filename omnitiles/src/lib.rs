@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// © 2025–2026 Christopher Liu
+
 //! # OmniTiles Firmware
 //!
 //! This crate contains all firmware components for the OmniTiles robotics platform, written in
@@ -29,13 +32,16 @@
 //! ## Hardware Notes
 //!
 //! * **MCU:** STM32F777VI
-//! * **Motor control:** DRV8873 via SPI4, two chip select lines
-//! * **Position feedback:** TIM2 (32-bit) + TIM3 (16-bit) encoder mode
 //! * **Debug UART:** USART1 @ 115200 baud
-//! * **CAN:** CAN2 for real network, CAN1 owns filter banks
+//! * **Lift Motor:** FIT0185 with DRV8873 driver over SPI4 and TIM2 32-bit quadrature encoder
+//! * **Tilt Motor:** GIM6010-48 over CAN2 with built-in GDZ468 encoder
 //!
 //! ## License
-//! MIT
+//!
+//! Licensed under the **MIT License**.
+//! See the `LICENSE` file in the repository root for full terms.
+//!
+//! © 2025–2026 Christopher Liu
 
 #![no_std]
 

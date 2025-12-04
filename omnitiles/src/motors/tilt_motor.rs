@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// © 2025–2026 Christopher Liu
+
 //! Tilt actuator interface built on top of `CanMotor`.
 //!
 //! This module converts between the motor's internal shaft angle representation and a physical tile

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// © 2025–2026 Christopher Liu
+
 //! DRV8873-Q1 SPI motor driver.
 //!
 //! This module handles SPI framing and register access for DRV8873-Q1. Higher-level motor control

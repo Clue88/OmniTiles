@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// © 2025–2026 Christopher Liu
+
 //! # Hardware Abstraction Layer (HAL‐level board support)
 //!
 //! This module contains low-level, MCU-specific abstractions for the STM32F777 that are safe, thin

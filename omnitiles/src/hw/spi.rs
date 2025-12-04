@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// © 2025–2026 Christopher Liu
+
 //! Serial Peripheral Interface (SPI) abstraction layer.
 //!
 //! - `SpiBus` wraps a configured HAL SPI instance with 8-bit words.

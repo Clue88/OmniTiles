@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// © 2025–2026 Christopher Liu
+
 //! Closed-loop controller for the linear lift actuator.
 //!
 //! This controller wraps a [`LiftMotor`] and provides a periodic `step()` function that computes a

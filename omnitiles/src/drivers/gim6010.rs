@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// © 2025–2026 Christopher Liu
+
 //! Motor control over CAN for SteadyWin GIM6010-48 with a built-in GDZ468 driver.
 //!
 //! This module wraps the driver's custom CAN protocol for a single motor.

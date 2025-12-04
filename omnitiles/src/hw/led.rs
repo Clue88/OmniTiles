@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// © 2025–2026 Christopher Liu
+
 //! LED abstraction layer.
 
 use stm32f7xx_hal::gpio::{self, Output, PinState, PushPull};

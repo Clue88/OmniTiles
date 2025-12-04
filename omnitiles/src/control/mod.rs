@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// © 2025–2026 Christopher Liu
+
 //! # Control Algorithms
 //!
 //! This module provides reusable building blocks for closed-loop motor control.

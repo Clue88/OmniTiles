@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// © 2025–2026 Christopher Liu
+
 //! Controller Area Network (CAN) abstraction layer.
 //!
 //! - `CanBus` wraps a HAL `can::Can` instance in `bxcan::Can`.

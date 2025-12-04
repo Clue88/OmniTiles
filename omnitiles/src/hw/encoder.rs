@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// © 2025–2026 Christopher Liu
+
 //! Quadrature encoder support via STM32F7 timers in encoder mode.
 //!
 //! This module configures TIM2 (32-bit) and TIM3 (16-bit) reigsters for encoder mode and provides

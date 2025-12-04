@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// © 2025–2026 Christopher Liu
+
 //! Motor abstraction for DFRobot FIT0185 motor with DRV8873 SPI driver and TIM2 quadrature encoder.
 //!
 //! This module includes functions to drive the motor and read encoder values.

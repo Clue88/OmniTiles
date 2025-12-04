@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// © 2025–2026 Christopher Liu
+
 //! Generic PID controller for closed-loop control.
 //!
 //! Works in `no_std` and does not allocate memory.

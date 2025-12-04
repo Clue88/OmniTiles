@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// © 2025–2026 Christopher Liu
+
 //! # Actuator Abstractions
 //!
 //! This module contains motor-level wrappers that sit above device-level drivers in `drivers`.

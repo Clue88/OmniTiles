@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// © 2025–2026 Christopher Liu
+
 //! # Device-Specific Drivers
 //!
 //! This module contains device-specific drivers that sit above the raw `hw/` layer and below the

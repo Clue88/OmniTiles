@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// © 2025–2026 Christopher Liu
+
 //! Pin definitions for the NUCLEO-F767ZI development board.
 //!
 //! This allows for some amount of firmware testing if only the development board is available.

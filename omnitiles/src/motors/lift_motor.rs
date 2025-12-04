@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// © 2025–2026 Christopher Liu
+
 //! Linear actuator interface built on top of `SpiMotor`.
 //!
 //! This module converts encoder ticks into physical height and provides target-based movement
