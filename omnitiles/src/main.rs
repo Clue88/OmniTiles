@@ -179,27 +179,21 @@ fn main() -> ! {
         }
     }
 
-    usart.println("Starting lift motor test...");
+    usart.println("Starting tilt motor test...");
 
-    loop {
-        // BOTTOM (safe to turn on)
-        led_green.on();
-        delay.delay_ms(5000_u32);
+    // STOPPED (safe to turn on)
+    led_green.on();
+    delay.delay_ms(2000_u32);
 
-        // GOING UP
-        led_green.off();
-        led_yellow.on();
-        fit0185.reverse();
-        delay.delay_ms(6500_u32);
-        fit0185.brake();
+    // CLOCKWISE
+    led_green.off();
+    led_yellow.on();
+    fit0185.forward();
+    delay.delay_ms(15000_u32);
+    fit0185.brake();
 
-        // TOP
-        delay.delay_ms(1000_u32);
+    led_yellow.off();
+    led_green.on();
 
-        // GOING DOWN
-        fit0185.forward();
-        delay.delay_ms(6500_u32);
-        fit0185.brake();
-        led_yellow.off();
-    }
+    loop {}
 }
