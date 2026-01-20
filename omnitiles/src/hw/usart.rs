@@ -21,17 +21,27 @@ use nb::block;
 
 use stm32f7xx_hal::{
     prelude::*,
-    serial::{Instance, Pins, Serial, Tx},
+    serial::{Instance, Pins, Rx, Serial, Tx},
 };
 
 pub struct Usart<U: Instance> {
     tx: Tx<U>,
+    rx: Rx<U>,
 }
 
 impl<U: Instance> Usart<U> {
     pub fn new<PINS: Pins<U>>(serial: Serial<U, PINS>) -> Self {
-        let (tx, _rx) = serial.split();
-        Self { tx }
+        let (tx, rx) = serial.split();
+        Self { tx, rx }
+    }
+
+    /// Read a single byte from the RX buffer, if available (non-blocking).
+    pub fn read_byte(&mut self) -> Option<u8> {
+        match self.rx.read() {
+            Ok(b) => Some(b),
+            Err(nb::Error::WouldBlock) => None,
+            Err(_) => None,
+        }
     }
 
     #[inline]

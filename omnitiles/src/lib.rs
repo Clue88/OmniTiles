@@ -49,3 +49,4 @@ pub mod control;
 pub mod drivers;
 pub mod hw;
 pub mod motors;
+pub mod protocol;

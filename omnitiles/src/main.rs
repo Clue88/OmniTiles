@@ -3,6 +3,7 @@
 
 #![no_main]
 #![no_std]
+#![allow(unused)]
 
 use cortex_m::delay::Delay;
 use cortex_m_rt::entry;
@@ -23,6 +24,7 @@ use stm32f7xx_hal as hal;
 use omnitiles::{
     drivers::{Drv8873, Fit0185},
     hw::{adc::volts_from_adc, Adc, BoardPins, CanBus, ChipSelect, Encoder, Led, SpiBus, Usart},
+    protocol::{Command, Parser},
 };
 
 #[entry]
@@ -140,107 +142,60 @@ fn main() -> ! {
     fit0185.enable_outputs();
 
     // ================================
+    // Protocol Parser
+    // ================================
+    let mut parser = Parser::new();
+
+    // ================================
     // Main Program
     // ================================
-    // ---- CAN Loopback Test ----
-    usart.println("CAN loopback test (expected: [1, 2, 3, 4])...");
-    let id = bxcan::StandardId::new(0x123).unwrap();
-    let _ = can_bus.transmit_data(id, &[1, 2, 3, 4]);
-    let frame = can_bus.receive().unwrap();
-    match frame.data() {
-        Some(data) => {
-            let bytes: &[u8] = data.as_ref();
-            writeln!(usart, "  CAN RX = {:?}\r", bytes).ok();
-        }
-        None => {
-            writeln!(usart, "  CAN RX = <no data>\r").ok();
-        }
-    }
+    usart.println("System Ready. Waiting for UART commands...");
 
-    // ---- FIT0185 Test ----
-    usart.println("Reading FIT0185 status...");
-    let spi_fault = fit0185.read_fault(&mut spi_bus);
-    match spi_fault {
-        Ok(fault) => {
-            writeln!(usart, "  FIT0185 FAULT = {:?}\r", fault).ok();
-        }
-        Err(e) => {
-            writeln!(usart, "  FIT0185 read_fault error: {:?}\r", e).ok();
-        }
-    }
-    let spi_diag = fit0185.read_diag(&mut spi_bus);
-    match spi_diag {
-        Ok(diag) => {
-            writeln!(usart, "  FIT0185 DIAG = {:?}\r", diag).ok();
-        }
-        Err(e) => {
-            writeln!(usart, "  FIT0185 read_diag error: {:?}\r", e).ok();
-        }
-    }
-
-    usart.println("Starting motor cycling test...");
+    // Telemetry ticker counter
+    let mut ticker = 0u32;
 
     loop {
-        usart.println("Motor FORWARD for 5 seconds...");
-        fit0185.forward();
-        for _ in 0..25 {
-            led_green.toggle();
+        // Poll UART for incoming bytes
+        if let Some(byte) = usart.read_byte() {
+            if let Some(command) = parser.push(byte) {
+                match command {
+                    Command::Fit0185Forward => {
+                        usart.println("CMD: Motor Forward");
+                        fit0185.forward();
+                        led_green.on();
+                        led_yellow.off();
+                    }
+                    Command::Fit0185Reverse => {
+                        usart.println("CMD: Motor Reverse");
+                        fit0185.reverse();
+                        led_green.off();
+                        led_yellow.on();
+                    }
+                    Command::Fit0185Brake => {
+                        usart.println("CMD: Motor Brake");
+                        fit0185.brake();
+                        led_green.off();
+                        led_yellow.off();
+                    }
+                }
+            }
+        }
+
+        // Periodic telemetry
+        delay.delay_ms(10_u32);
+        ticker += 1;
+
+        if ticker >= 20 {
+            ticker = 0;
 
             let revs = fit0185.position_revs();
             let iprop1_amps = {
                 let volts = volts_from_adc(read_m1_iprop1(), 3.3);
                 (volts / 680.) * 1100.
             };
-            let iprop2_amps = {
-                let volts = volts_from_adc(read_m1_iprop2(), 3.3);
-                (volts / 680.) * 1100.
-            };
             let nfault = pins.m1.nfault.is_high();
 
-            writeln!(
-                usart,
-                "Revs={}, IPROP1={} A, IPROP2={} A, nFAULT={}\r",
-                revs, iprop1_amps, iprop2_amps, nfault
-            )
-            .ok();
-
-            delay.delay_ms(200_u32);
+            writeln!(usart, "STATUS {:.3} {:.2} {}\r", revs, iprop1_amps, nfault).ok();
         }
-
-        usart.println("Motor STOP for 2 seconds...");
-        fit0185.brake();
-        led_green.off();
-        delay.delay_ms(2000_u32);
-
-        usart.println("Motor REVERSE for 5 seconds...");
-        fit0185.reverse();
-        for _ in 0..25 {
-            led_yellow.toggle();
-
-            let revs = fit0185.position_revs();
-            let iprop1_amps = {
-                let volts = volts_from_adc(read_m1_iprop1(), 3.3);
-                (volts / 680.) * 1100.
-            };
-            let iprop2_amps = {
-                let volts = volts_from_adc(read_m1_iprop2(), 3.3);
-                (volts / 680.) * 1100.
-            };
-            let nfault = pins.m1.nfault.is_high();
-
-            writeln!(
-                usart,
-                "Revs={}, IPROP1={} A, IPROP2={} A, nFAULT={}\r",
-                revs, iprop1_amps, iprop2_amps, nfault
-            )
-            .ok();
-
-            delay.delay_ms(200_u32);
-        }
-
-        usart.println("Motor STOP for 2 seconds...");
-        fit0185.brake();
-        led_yellow.off();
-        delay.delay_ms(2000_u32);
     }
 }
