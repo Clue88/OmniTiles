@@ -45,7 +45,7 @@ def main():
     server = viser.ViserServer(label="OmniTiles Debugger")
 
     # Define GUI Layout
-    with server.gui.add_folder("Lift Motor Control"):
+    with server.gui.add_folder("FIT0185 Motor Control"):
 
         # Telemetry display
         telemetry_md = server.gui.add_markdown("**Status:** Waiting for telemetry...")
