@@ -6,9 +6,9 @@ import viser
 
 # Protocol Constants
 START_BYTE = 0xA5
-MSG_MOTOR_FORWARD = 0x30
-MSG_MOTOR_REVERSE = 0x31
-MSG_MOTOR_BRAKE = 0x32
+MSG_P16_EXTEND = 0x30
+MSG_P16_RETRACT = 0x31
+MSG_P16_BRAKE = 0x32
 
 
 def create_packet(msg_id):
@@ -45,15 +45,15 @@ def main():
     server = viser.ViserServer(label="OmniTiles Debugger")
 
     # Define GUI Layout
-    with server.gui.add_folder("FIT0185 Motor Control"):
+    with server.gui.add_folder("P16 Linear Actuator"):
 
         # Telemetry display
         telemetry_md = server.gui.add_markdown("**Status:** Waiting for telemetry...")
 
         # Control buttons
-        btn_fwd = server.gui.add_button("Forward", color="green", icon=viser.Icon.ARROW_UP)
+        btn_extend = server.gui.add_button("Extend", color="green", icon=viser.Icon.ARROW_UP)
         btn_stop = server.gui.add_button("Brake", color="red", icon=viser.Icon.SQUARE)
-        btn_rev = server.gui.add_button("Reverse", color="yellow", icon=viser.Icon.ARROW_DOWN)
+        btn_retract = server.gui.add_button("Retract", color="yellow", icon=viser.Icon.ARROW_DOWN)
 
     # Helper to send commands
     def send_command(cmd_id, name):
@@ -64,17 +64,17 @@ def main():
             print(f"[MOCK] Sending {name} command ({hex(cmd_id)})")
 
     # Bind buttons
-    @btn_fwd.on_click
+    @btn_extend.on_click
     def _(_):
-        send_command(MSG_MOTOR_FORWARD, "Forward")
+        send_command(MSG_P16_EXTEND, "Extend")
 
     @btn_stop.on_click
     def _(_):
-        send_command(MSG_MOTOR_BRAKE, "Brake")
+        send_command(MSG_P16_BRAKE, "Brake")
 
-    @btn_rev.on_click
+    @btn_retract.on_click
     def _(_):
-        send_command(MSG_MOTOR_REVERSE, "Reverse")
+        send_command(MSG_P16_RETRACT, "Retract")
 
     # Serial read loop
     def read_serial_loop():
@@ -85,11 +85,11 @@ def main():
                     line = ser.readline().decode("utf-8", errors="ignore").strip()
 
                     if line.startswith("STATUS"):
-                        # Expected: "STATUS <Revs> <Amps> <Fault>"
+                        # Firmware sends: "STATUS <Pos_mm> <Raw_ADC> <Fault>"
                         parts = line.split()
                         if len(parts) >= 4:
-                            revs = parts[1]
-                            amps = parts[2]
+                            pos_mm = parts[1]
+                            raw_adc = parts[2]
                             fault_bool = parts[3]
 
                             fault_status = "FAULT" if fault_bool == "true" else "OK"
@@ -98,8 +98,8 @@ def main():
                             # Update Viser Markdown
                             telemetry_md.content = (
                                 f"### Telemetry\n"
-                                f"**Position:** {revs} revs\n\n"
-                                f"**Current:** {amps} A\n\n"
+                                f"**Position:** {pos_mm} mm\n\n"
+                                f"**Raw ADC:** {raw_adc}\n\n"
                                 f"**Status:** <span style='color:{color}'>{fault_status}</span>"
                             )
                     elif line:
