@@ -97,6 +97,28 @@ def main():
         btn_stop = server.gui.add_button("Brake", color="red", icon=viser.Icon.SQUARE)
         btn_retract = server.gui.add_button("Retract", color="yellow", icon=viser.Icon.ARROW_DOWN)
 
+        # MOCK MODE CONTROLS
+        # Only show this slider if we are NOT connected to hardware
+        if ser is None:
+            server.gui.add_markdown("---")  # Divider
+            server.gui.add_markdown("**Mock Simulation:**")
+            mock_slider = server.gui.add_slider(
+                "Position (mm)", min=0.0, max=150.0, step=1.0, initial_value=0.0
+            )
+
+            @mock_slider.on_update
+            def _(_):
+                pos_mm = mock_slider.value
+
+                # Update 3D Model
+                extension_meters = pos_mm / 1000.0
+                p16_shaft.position = (0.0, 0.0, extension_meters)
+
+                # Update Telemetry Text to simulate firmware response
+                telemetry_md.content = (
+                    f"**Position:** {pos_mm:.2f} mm\n\n" f"**Raw ADC:** SIM\n\n" f"**Status:** MOCK"
+                )
+
     # Helper to send commands
     def send_command(cmd_id, name):
         if ser:
@@ -137,7 +159,6 @@ def main():
 
                             # Update Text
                             telemetry_md.content = (
-                                f"### Telemetry\n"
                                 f"**Position:** {pos_mm:.2f} mm\n\n"
                                 f"**Raw ADC:** {raw_adc}\n\n"
                                 f"**Status:** <span style='color:{color}'>{fault_status}</span>"
