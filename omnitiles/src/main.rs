@@ -82,6 +82,7 @@ fn main() -> ! {
         SpiBus::new(spi4_enabled)
     };
     let cs1 = ChipSelect::active_low(pins.spi4.cs1);
+    let cs2 = ChipSelect::active_low(pins.spi4.cs2);
 
     // ================================
     // CAN2 (Loopback)
@@ -118,10 +119,24 @@ fn main() -> ! {
         pins.m1.in2,
         pins.m1.nsleep,
         pins.m1.disable,
-        Adc::make_reader(&adc1, 8), // ADC1_IN8, update based on actual wiring
-        150.0,                      // stroke length in mm
+        Adc::make_reader(&adc1, 8), // ADC1_IN8, TODO: update based on actual wiring
+        150.0,
     );
     p16.enable_outputs();
+
+    // ================================
+    // P16 Track Actuator
+    // ================================
+    let mut t16 = ActuonixLinear::new(
+        Drv8873::new(cs2),
+        pins.m2.in1,
+        pins.m2.in2,
+        pins.m2.nsleep,
+        pins.m2.disable,
+        Adc::make_reader(&adc1, 12), // ADC1_IN12, TODO: update based on actual wiring
+        100.0,
+    );
+    t16.enable_outputs();
 
     // ================================
     // Parser + Telemetry Ticker
@@ -136,20 +151,31 @@ fn main() -> ! {
         if let Some(byte) = usart.read_byte() {
             if let Some(command) = parser.push(byte) {
                 match command {
+                    // P16 Controls
                     Command::P16Extend => {
-                        usart.println("CMD: Extend");
                         p16.extend();
                         led_green.on();
                     }
                     Command::P16Retract => {
-                        usart.println("CMD: Retract");
                         p16.retract();
-                        led_yellow.on();
+                        led_green.on();
                     }
                     Command::P16Brake => {
-                        usart.println("CMD: Brake");
                         p16.brake();
                         led_green.off();
+                    }
+
+                    // T16 Controls
+                    Command::T16Extend => {
+                        t16.extend();
+                        led_yellow.on();
+                    }
+                    Command::T16Retract => {
+                        t16.retract();
+                        led_yellow.on();
+                    }
+                    Command::T16Brake => {
+                        t16.brake();
                         led_yellow.off();
                     }
                 }
@@ -159,14 +185,22 @@ fn main() -> ! {
         // Periodic telemetry
         delay.delay_ms(10_u32);
         ticker += 1;
-
         if ticker >= 20 {
             ticker = 0;
-
-            let pos_mm = p16.position_mm();
-            let raw_adc = p16.position_raw();
-
-            writeln!(usart, "STATUS {:.2} {} false\r", pos_mm, raw_adc).ok();
+            writeln!(
+                usart,
+                "STATUS_P16 {:.2} {} false\r",
+                p16.position_mm(),
+                p16.position_raw()
+            )
+            .ok();
+            writeln!(
+                usart,
+                "STATUS_T16 {:.2} {} false\r",
+                t16.position_mm(),
+                t16.position_raw()
+            )
+            .ok();
         }
     }
 }

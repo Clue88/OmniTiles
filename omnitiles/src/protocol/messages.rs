@@ -11,10 +11,17 @@ pub const MSG_P16_EXTEND: u8 = 0x30;
 pub const MSG_P16_RETRACT: u8 = 0x31;
 pub const MSG_P16_BRAKE: u8 = 0x32;
 
+pub const MSG_T16_EXTEND: u8 = 0x40;
+pub const MSG_T16_RETRACT: u8 = 0x41;
+pub const MSG_T16_BRAKE: u8 = 0x42;
+
 /// Direct motor commands.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Command {
     P16Extend,
     P16Retract,
     P16Brake,
+    T16Extend,
+    T16Retract,
+    T16Brake,
 }

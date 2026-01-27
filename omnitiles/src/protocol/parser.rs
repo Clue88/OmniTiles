@@ -40,7 +40,10 @@ impl Parser {
                 self.checksum = self.checksum.wrapping_add(byte);
 
                 match byte {
-                    MSG_P16_EXTEND | MSG_P16_RETRACT | MSG_P16_BRAKE => {
+                    // P16
+                    MSG_P16_EXTEND | MSG_P16_RETRACT | MSG_P16_BRAKE |
+                    // T16
+                    MSG_T16_EXTEND | MSG_T16_RETRACT | MSG_T16_BRAKE => {
                         self.state = State::WaitChecksum { id: byte };
                     }
                     _ => {
@@ -59,6 +62,9 @@ impl Parser {
                         MSG_P16_EXTEND => Some(Command::P16Extend),
                         MSG_P16_RETRACT => Some(Command::P16Retract),
                         MSG_P16_BRAKE => Some(Command::P16Brake),
+                        MSG_T16_EXTEND => Some(Command::T16Extend),
+                        MSG_T16_RETRACT => Some(Command::T16Retract),
+                        MSG_T16_BRAKE => Some(Command::T16Brake),
                         _ => None,
                     };
                 }
