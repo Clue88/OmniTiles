@@ -14,6 +14,9 @@ START_BYTE = 0xA5
 MSG_P16_EXTEND = 0x30
 MSG_P16_RETRACT = 0x31
 MSG_P16_BRAKE = 0x32
+MSG_T16_EXTEND = 0x40
+MSG_T16_RETRACT = 0x41
+MSG_T16_BRAKE = 0x42
 
 
 def create_packet(msg_id):
@@ -52,133 +55,95 @@ def main():
     # Add grid for context
     server.scene.add_grid("Ground Grid", width=0.5, height=0.5, cell_size=0.05)
 
-    # Helper to load mesh safely
-    def load_mesh(name, filename, color, pos=(0, 0, 0)):
-        # Check file existence
+    def load_mesh(name, filename, color, pos):
         if not os.path.exists(filename):
-            print(f"Warning: {filename} not found. Using placeholder.")
-            if "shaft" in name:
-                return server.scene.add_cylinder(name, 0.005, 0.1, color=color, position=pos)
-            else:
-                return server.scene.add_box(
-                    name, dimensions=(0.04, 0.04, 0.1), color=color, position=pos
-                )
-
-        # Load mesh
-        try:
-            mesh = trimesh.load_mesh(filename)
-        except Exception as e:
-            print(f"Failed to load {filename}: {e}")
             return server.scene.add_box(
                 name, dimensions=(0.04, 0.04, 0.1), color=color, position=pos
             )
-
-        # Apply scale and color
+        mesh = trimesh.load_mesh(filename)
         mesh.apply_scale(0.001)
         mesh.visual = ColorVisuals(mesh=mesh, face_colors=to_rgba(color))
-
-        # Add to Viser
         return server.scene.add_mesh_trimesh(name, mesh, position=pos)
 
     # Load P16 models
-    load_mesh("p16_base", "p16_base.stl", color=(50, 50, 50), pos=(0, 0, 0))  # Dark Grey
-    p16_shaft = load_mesh(
-        "p16_shaft", "p16_shaft.stl", color=(200, 200, 200), pos=(0, 0, 0)  # Silver
-    )
+    load_mesh("p16_base", "p16_base.stl", color=(50, 50, 50), pos=(0, 0, 0))
+    p16_shaft = load_mesh("p16_shaft", "p16_shaft.stl", color=(200, 200, 200), pos=(0, 0, 0))
 
-    # Define GUI Layout
-    with server.gui.add_folder("P16 Linear Actuator"):
+    # Load T16 models with P16 mesh for now as placeholder
+    load_mesh("t16_base", "p16_base.stl", (50, 50, 80), (0.1, 0, 0))
+    t16_shaft = load_mesh("t16_shaft", "p16_shaft.stl", (200, 200, 200), (0.1, 0, 0))
 
-        # Telemetry display
-        telemetry_md = server.gui.add_markdown("**Status:** Waiting for telemetry...")
+    # Telemetry helpers
+    def update_p16_telemetry(pos_mm, raw_adc, fault, md_handle):
+        p16_shaft.position = (0.0, 0.0, pos_mm / 1000.0)
+        status = "FAULT" if fault else "OK"
+        md_handle.content = f"**Pos:** {pos_mm:.2f} mm | **ADC:** {raw_adc} | {status}"
 
-        # Control buttons
-        btn_extend = server.gui.add_button("Extend", color="green", icon=viser.Icon.ARROW_UP)
-        btn_stop = server.gui.add_button("Brake", color="red", icon=viser.Icon.SQUARE)
-        btn_retract = server.gui.add_button("Retract", color="yellow", icon=viser.Icon.ARROW_DOWN)
+    def update_t16_telemetry(pos_mm, raw_adc, fault, md_handle):
+        t16_shaft.position = (0.1, 0.0, pos_mm / 1000.0)
+        status = "FAULT" if fault else "OK"
+        md_handle.content = f"**Pos:** {pos_mm:.2f} mm | **ADC:** {raw_adc} | {status}"
 
-        # MOCK MODE CONTROLS
-        # Only show this slider if we are NOT connected to hardware
-        if ser is None:
-            server.gui.add_markdown("---")  # Divider
-            server.gui.add_markdown("**Mock Simulation:**")
-            mock_slider = server.gui.add_slider(
-                "Position (mm)", min=0.0, max=150.0, step=1.0, initial_value=0.0
-            )
-
-            @mock_slider.on_update
-            def _(_):
-                pos_mm = mock_slider.value
-
-                # Update 3D Model
-                extension_meters = pos_mm / 1000.0
-                p16_shaft.position = (0.0, 0.0, extension_meters)
-
-                # Update Telemetry Text to simulate firmware response
-                telemetry_md.content = (
-                    f"**Position:** {pos_mm:.2f} mm\n\n" f"**Raw ADC:** SIM\n\n" f"**Status:** MOCK"
-                )
-
-    # Helper to send commands
-    def send_command(cmd_id, name):
+    def send_msg(msg_id):
         if ser:
-            packet = create_packet(cmd_id)
-            ser.write(packet)
-        else:
-            print(f"[MOCK] Sending {name} command ({hex(cmd_id)})")
+            ser.write(create_packet(msg_id))
 
-    # Bind buttons
-    @btn_extend.on_click
-    def _(_):
-        send_command(MSG_P16_EXTEND, "Extend")
+    # P16 Controls
+    with server.gui.add_folder("P16 Linear Actuator"):
+        p16_md = server.gui.add_markdown("Waiting...")
+        server.gui.add_button("Extend", color="green").on_click(lambda _: send_msg(MSG_P16_EXTEND))
+        server.gui.add_button("Brake", color="red").on_click(lambda _: send_msg(MSG_P16_BRAKE))
+        server.gui.add_button("Retract", color="yellow").on_click(
+            lambda _: send_msg(MSG_P16_RETRACT)
+        )
 
-    @btn_stop.on_click
-    def _(_):
-        send_command(MSG_P16_BRAKE, "Brake")
+    # T16 Controls
+    with server.gui.add_folder("T16 Track Actuator"):
+        t16_md = server.gui.add_markdown("Waiting...")
+        server.gui.add_button("Extend", color="green").on_click(lambda _: send_msg(MSG_T16_EXTEND))
+        server.gui.add_button("Brake", color="red").on_click(lambda _: send_msg(MSG_T16_BRAKE))
+        server.gui.add_button("Retract", color="yellow").on_click(
+            lambda _: send_msg(MSG_T16_RETRACT)
+        )
 
-    @btn_retract.on_click
-    def _(_):
-        send_command(MSG_P16_RETRACT, "Retract")
+    # Mock Controls
+    if ser is None:
+        with server.gui.add_folder("Mock Simulation"):
+            server.gui.add_markdown("Hardware disconnected. Use sliders to sim.")
 
-    # Serial read loop
-    def read_serial_loop():
+            p16_slider = server.gui.add_slider("Lift (mm)", 0, 150, 1, 0)
+
+            @p16_slider.on_update
+            def _(_):
+                update_p16_telemetry(p16_slider.value, "SIM", False, p16_md)
+
+            t16_slider = server.gui.add_slider("Tilt (mm)", 0, 100, 1, 0)
+
+            @t16_slider.on_update
+            def _(_):
+                update_t16_telemetry(t16_slider.value, "SIM", False, t16_md)
+
+    def read_loop():
         while True:
             if ser and ser.in_waiting:
                 try:
                     line = ser.readline().decode("utf-8", errors="ignore").strip()
-                    if line.startswith("STATUS"):
-                        # "STATUS <Pos_mm> <Raw_ADC> <Fault>"
-                        parts = line.split()
-                        if len(parts) >= 4:
-                            pos_mm = float(parts[1])
-                            raw_adc = parts[2]
-                            fault_bool = parts[3]
+                    parts = line.split()
 
-                            fault_status = "FAULT" if fault_bool == "true" else "OK"
-                            color = "red" if fault_status == "FAULT" else "green"
+                    if line.startswith("STATUS_P16") and len(parts) >= 4:
+                        update_p16_telemetry(float(parts[1]), parts[2], parts[3] == "true", p16_md)
 
-                            # Update Text
-                            telemetry_md.content = (
-                                f"**Position:** {pos_mm:.2f} mm\n\n"
-                                f"**Raw ADC:** {raw_adc}\n\n"
-                                f"**Status:** <span style='color:{color}'>{fault_status}</span>"
-                            )
-
-                            # Update 3D Model
-                            extension_meters = pos_mm / 1000.0  # convert mm to meters
-                            p16_shaft.position = (0.0, 0.0, extension_meters)
+                    elif line.startswith("STATUS_T16") and len(parts) >= 4:
+                        update_t16_telemetry(float(parts[1]), parts[2], parts[3] == "true", t16_md)
 
                     elif line:
                         print(f"[FW] {line}")
-                except ValueError:
-                    pass  # Handle float conversion errors
                 except Exception as e:
-                    print(f"Serial Error: {e}")
-
+                    print(f"Rx Error: {e}")
             time.sleep(0.01)
 
     # Start the reader thread
-    t = threading.Thread(target=read_serial_loop, daemon=True)
+    t = threading.Thread(target=read_loop, daemon=True)
     t.start()
 
     # Keep the main thread alive to serve the GUI
