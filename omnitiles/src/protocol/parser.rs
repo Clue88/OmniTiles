@@ -40,7 +40,7 @@ impl Parser {
                 self.checksum = self.checksum.wrapping_add(byte);
 
                 match byte {
-                    MSG_FIT0185_FORWARD | MSG_FIT0185_REVERSE | MSG_FIT0185_BRAKE => {
+                    MSG_P16_EXTEND | MSG_P16_RETRACT | MSG_P16_BRAKE => {
                         self.state = State::WaitChecksum { id: byte };
                     }
                     _ => {
@@ -56,9 +56,9 @@ impl Parser {
 
                 if valid {
                     return match id {
-                        MSG_FIT0185_FORWARD => Some(Command::Fit0185Forward),
-                        MSG_FIT0185_REVERSE => Some(Command::Fit0185Reverse),
-                        MSG_FIT0185_BRAKE => Some(Command::Fit0185Brake),
+                        MSG_P16_EXTEND => Some(Command::P16Extend),
+                        MSG_P16_RETRACT => Some(Command::P16Retract),
+                        MSG_P16_BRAKE => Some(Command::P16Brake),
                         _ => None,
                     };
                 }

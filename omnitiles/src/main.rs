@@ -22,7 +22,7 @@ use hal::{
 use stm32f7xx_hal as hal;
 
 use omnitiles::{
-    drivers::{Drv8873, Fit0185},
+    drivers::{Drv8873, Fit0185, P16P},
     hw::{adc::volts_from_adc, Adc, BoardPins, CanBus, ChipSelect, Encoder, Led, SpiBus, Usart},
     protocol::{Command, Parser},
 };
@@ -30,22 +30,16 @@ use omnitiles::{
 #[entry]
 fn main() -> ! {
     // ================================
-    // Peripherals
+    // Peripherals + Clocks + SysTick
     // ================================
     let dp = pac::Peripherals::take().unwrap();
     let cp = cortex_m::Peripherals::take().unwrap();
 
-    // ================================
-    // Clocks
-    // ================================
     let rcc = dp.RCC.constrain();
     let clocks = rcc.cfgr.freeze();
     let mut apb1 = rcc.apb1;
     let mut apb2 = rcc.apb2;
 
-    // ================================
-    // SysTick Delay
-    // ================================
     let mut delay = Delay::new(cp.SYST, clocks.sysclk().raw());
 
     // ================================
@@ -87,7 +81,7 @@ fn main() -> ! {
         let spi4_enabled = spi4_raw.enable::<u8>(spi_mode, 10.kHz(), &clocks, &mut apb2);
         SpiBus::new(spi4_enabled)
     };
-    let cs1 = ChipSelect::active_low(pins.drv8873.m1_cs);
+    let cs1 = ChipSelect::active_low(pins.spi4.cs1);
 
     // ================================
     // CAN2 (Loopback)
@@ -108,15 +102,6 @@ fn main() -> ! {
     let mut can_bus = CanBus::new(can2_hal, CAN_BTR, true, false); // loopback mode
 
     // ================================
-    // TIM2 Encoder
-    // ================================
-    let enc = {
-        let rcc_regs = unsafe { &*pac::RCC::ptr() };
-        rcc_regs.apb1enr.modify(|_, w| w.tim2en().set_bit());
-        Encoder::tim2(dp.TIM2)
-    };
-
-    // ================================
     // ADC1 Current Sense
     // ================================
     let adc1 = RefCell::new(Adc::adc1(dp.ADC1));
@@ -125,55 +110,45 @@ fn main() -> ! {
     let mut read_m1_iprop2 = Adc::make_reader(&adc1, 15);
 
     // ================================
-    // FIT0185 Motor
+    // P16 Linear Actuator
     // ================================
-    let mut fit0185 = {
-        let cpr = 2803;
-        Fit0185::new(
-            Drv8873::new(cs1),
-            enc,
-            pins.m1.in1,
-            pins.m1.in2,
-            pins.m1.nsleep,
-            pins.m1.disable,
-            cpr,
-        )
-    };
-    fit0185.enable_outputs();
+    let mut p16 = P16P::new(
+        Drv8873::new(cs1),
+        pins.m1.in1,
+        pins.m1.in2,
+        pins.m1.nsleep,
+        pins.m1.disable,
+        Adc::make_reader(&adc1, 8), // ADC1_IN8, update based on actual wiring
+        150.0,                      // stroke length in mm
+    );
+    p16.enable_outputs();
 
     // ================================
-    // Protocol Parser
+    // Parser + Telemetry Ticker
     // ================================
     let mut parser = Parser::new();
-
-    // ================================
-    // Main Program
-    // ================================
-    usart.println("System Ready. Waiting for UART commands...");
-
-    // Telemetry ticker counter
     let mut ticker = 0u32;
 
+    usart.println("System Ready. Waiting for commands over USART...");
+
     loop {
-        // Poll UART for incoming bytes
+        // Poll USART for incoming bytes
         if let Some(byte) = usart.read_byte() {
             if let Some(command) = parser.push(byte) {
                 match command {
-                    Command::Fit0185Forward => {
-                        usart.println("CMD: Motor Forward");
-                        fit0185.forward();
+                    Command::P16Extend => {
+                        usart.println("CMD: Extend");
+                        p16.extend();
                         led_green.on();
-                        led_yellow.off();
                     }
-                    Command::Fit0185Reverse => {
-                        usart.println("CMD: Motor Reverse");
-                        fit0185.reverse();
-                        led_green.off();
+                    Command::P16Retract => {
+                        usart.println("CMD: Retract");
+                        p16.retract();
                         led_yellow.on();
                     }
-                    Command::Fit0185Brake => {
-                        usart.println("CMD: Motor Brake");
-                        fit0185.brake();
+                    Command::P16Brake => {
+                        usart.println("CMD: Brake");
+                        p16.brake();
                         led_green.off();
                         led_yellow.off();
                     }
@@ -188,14 +163,10 @@ fn main() -> ! {
         if ticker >= 20 {
             ticker = 0;
 
-            let revs = fit0185.position_revs();
-            let iprop1_amps = {
-                let volts = volts_from_adc(read_m1_iprop1(), 3.3);
-                (volts / 680.) * 1100.
-            };
-            let nfault = pins.m1.nfault.is_high();
+            let pos_mm = p16.position_mm();
+            let raw_adc = p16.position_raw();
 
-            writeln!(usart, "STATUS {:.3} {:.2} {}\r", revs, iprop1_amps, nfault).ok();
+            writeln!(usart, "STATUS {:.2} {} false\r", pos_mm, raw_adc).ok();
         }
     }
 }
