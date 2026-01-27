@@ -6,5 +6,6 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "pyserial>=3.5",
+    "trimesh>=4.11.1",
     "viser>=1.0.19",
 ]

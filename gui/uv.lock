@@ -138,12 +138,14 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "pyserial" },
+    { name = "trimesh" },
     { name = "viser" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "pyserial", specifier = ">=3.5" },
+    { name = "trimesh", specifier = ">=4.11.1" },
     { name = "viser", specifier = ">=1.0.19" },
 ]
 

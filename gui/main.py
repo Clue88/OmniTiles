@@ -1,8 +1,13 @@
 import argparse
-import time
-import serial
+import os
 import threading
+import time
+
+import serial
+import trimesh
 import viser
+from trimesh.visual import to_rgba
+from trimesh.visual.color import ColorVisuals
 
 # Protocol Constants
 START_BYTE = 0xA5
@@ -44,6 +49,43 @@ def main():
     # Start Viser Server
     server = viser.ViserServer(label="OmniTiles Debugger")
 
+    # Add grid for context
+    server.scene.add_grid("Ground Grid", width=0.5, height=0.5, cell_size=0.05)
+
+    # Helper to load mesh safely
+    def load_mesh(name, filename, color, pos=(0, 0, 0)):
+        # Check file existence
+        if not os.path.exists(filename):
+            print(f"Warning: {filename} not found. Using placeholder.")
+            if "shaft" in name:
+                return server.scene.add_cylinder(name, 0.005, 0.1, color=color, position=pos)
+            else:
+                return server.scene.add_box(
+                    name, dimensions=(0.04, 0.04, 0.1), color=color, position=pos
+                )
+
+        # Load mesh
+        try:
+            mesh = trimesh.load_mesh(filename)
+        except Exception as e:
+            print(f"Failed to load {filename}: {e}")
+            return server.scene.add_box(
+                name, dimensions=(0.04, 0.04, 0.1), color=color, position=pos
+            )
+
+        # Apply scale and color
+        mesh.apply_scale(0.001)
+        mesh.visual = ColorVisuals(mesh=mesh, face_colors=to_rgba(color))
+
+        # Add to Viser
+        return server.scene.add_mesh_trimesh(name, mesh, position=pos)
+
+    # Load P16 models
+    load_mesh("p16_base", "p16_base.stl", color=(50, 50, 50), pos=(0, 0, 0))  # Dark Grey
+    p16_shaft = load_mesh(
+        "p16_shaft", "p16_shaft.stl", color=(200, 200, 200), pos=(0, 0, 0)  # Silver
+    )
+
     # Define GUI Layout
     with server.gui.add_folder("P16 Linear Actuator"):
 
@@ -81,32 +123,36 @@ def main():
         while True:
             if ser and ser.in_waiting:
                 try:
-                    # Read line and decode
                     line = ser.readline().decode("utf-8", errors="ignore").strip()
-
                     if line.startswith("STATUS"):
-                        # Firmware sends: "STATUS <Pos_mm> <Raw_ADC> <Fault>"
+                        # "STATUS <Pos_mm> <Raw_ADC> <Fault>"
                         parts = line.split()
                         if len(parts) >= 4:
-                            pos_mm = parts[1]
+                            pos_mm = float(parts[1])
                             raw_adc = parts[2]
                             fault_bool = parts[3]
 
                             fault_status = "FAULT" if fault_bool == "true" else "OK"
                             color = "red" if fault_status == "FAULT" else "green"
 
-                            # Update Viser Markdown
+                            # Update Text
                             telemetry_md.content = (
                                 f"### Telemetry\n"
-                                f"**Position:** {pos_mm} mm\n\n"
+                                f"**Position:** {pos_mm:.2f} mm\n\n"
                                 f"**Raw ADC:** {raw_adc}\n\n"
                                 f"**Status:** <span style='color:{color}'>{fault_status}</span>"
                             )
+
+                            # Update 3D Model
+                            extension_meters = pos_mm / 1000.0  # convert mm to meters
+                            p16_shaft.position = (0.0, 0.0, extension_meters)
+
                     elif line:
                         print(f"[FW] {line}")
-
+                except ValueError:
+                    pass  # Handle float conversion errors
                 except Exception as e:
-                    print(f"Serial Read Error: {e}")
+                    print(f"Serial Error: {e}")
 
             time.sleep(0.01)
 
