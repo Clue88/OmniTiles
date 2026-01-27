@@ -21,7 +21,6 @@ pub struct BoardPins {
     pub leds: LedPins,
     pub usart1: Usart1Pins,
     pub spi4: Spi4Pins,
-    pub drv8873: DrvPins,
     pub m1: Motor1Pins,
     pub m2: Motor2Pins,
     pub encoder: EncoderPins,
@@ -40,17 +39,13 @@ pub struct Usart1Pins {
     pub rx: gpioa::PA10<Alternate<7>>,
 }
 
-/// SPI4 SCK/MISO/MOSI
+/// SPI4 SCK/MISO/MOSI and CS
 pub struct Spi4Pins {
     pub sck: gpioe::PE12<Alternate<5>>,
     pub miso: gpioe::PE13<Alternate<5>>,
     pub mosi: gpioe::PE14<Alternate<5>>,
-}
-
-/// Chip-select and digital I/O for DRV8873 drivers
-pub struct DrvPins {
-    pub m1_cs: gpioe::PE4<Output<PushPull>>,
-    pub m2_cs: gpioe::PE11<Output<PushPull>>,
+    pub cs1: gpioe::PE4<Output<PushPull>>,
+    pub cs2: gpioe::PE11<Output<PushPull>>,
 }
 
 /// TIM2/TIM3 Quadrature Encoder Inputs
@@ -129,11 +124,8 @@ impl BoardPins {
                 sck: gpioe.pe12.into_alternate::<5>(),
                 miso: gpioe.pe13.into_alternate::<5>(),
                 mosi: gpioe.pe14.into_alternate::<5>(),
-            },
-
-            drv8873: DrvPins {
-                m1_cs: gpioe.pe4.into_push_pull_output(),
-                m2_cs: gpioe.pe11.into_push_pull_output(),
+                cs1: gpioe.pe4.into_push_pull_output(),
+                cs2: gpioe.pe11.into_push_pull_output(),
             },
 
             encoder: EncoderPins {
