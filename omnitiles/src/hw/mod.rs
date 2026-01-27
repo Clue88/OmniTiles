@@ -9,7 +9,6 @@
 //! ## Modules
 //!
 //! - [`pins`] - OmniTiles STM32F777 pin assignments
-//!     - [`pins_f767zi`] - NUCLEO-F767ZI devboard pin assignments
 //! - [`led`] – Active-high / active-low LED wrapper
 //! - [`usart`] – Blocking TX helpers with `core::fmt::Write` impl
 //! - [`spi`] – Blocking byte-level SPI and reusable CS abstraction
@@ -23,7 +22,6 @@ pub mod encoder;
 pub mod led;
 pub mod pins;
 pub mod pins_devboard;
-pub mod pins_f767zi;
 pub mod spi;
 pub mod usart;
 
