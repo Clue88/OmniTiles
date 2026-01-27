@@ -70,8 +70,8 @@ def main():
     p16_shaft = load_mesh("p16_shaft", "p16_shaft.stl", color=(200, 200, 200), pos=(0, 0, 0))
 
     # Load T16 models with P16 mesh for now as placeholder
-    load_mesh("t16_base", "p16_base.stl", (50, 50, 80), (0.1, 0, 0))
-    t16_shaft = load_mesh("t16_shaft", "p16_shaft.stl", (200, 200, 200), (0.1, 0, 0))
+    load_mesh("t16_base", "t16_base.stl", (50, 50, 80), (0.1, 0, 0))
+    t16_carriage = load_mesh("t16_carriage", "t16_carriage.stl", (200, 200, 200), (0.1, 0, 0))
 
     # Telemetry helpers
     def update_p16_telemetry(pos_mm, raw_adc, fault, md_handle):
@@ -80,7 +80,7 @@ def main():
         md_handle.content = f"**Pos:** {pos_mm:.2f} mm | **ADC:** {raw_adc} | {status}"
 
     def update_t16_telemetry(pos_mm, raw_adc, fault, md_handle):
-        t16_shaft.position = (0.1, 0.0, pos_mm / 1000.0)
+        t16_carriage.position = (0.1, 0.0, pos_mm / 1000.0)
         status = "FAULT" if fault else "OK"
         md_handle.content = f"**Pos:** {pos_mm:.2f} mm | **ADC:** {raw_adc} | {status}"
 
@@ -111,13 +111,13 @@ def main():
         with server.gui.add_folder("Mock Simulation"):
             server.gui.add_markdown("Hardware disconnected. Use sliders to sim.")
 
-            p16_slider = server.gui.add_slider("Lift (mm)", 0, 150, 1, 0)
+            p16_slider = server.gui.add_slider("P16 (mm)", 0, 150, 1, 0)
 
             @p16_slider.on_update
             def _(_):
                 update_p16_telemetry(p16_slider.value, "SIM", False, p16_md)
 
-            t16_slider = server.gui.add_slider("Tilt (mm)", 0, 100, 1, 0)
+            t16_slider = server.gui.add_slider("T16 (mm)", 0, 100, 1, 0)
 
             @t16_slider.on_update
             def _(_):
