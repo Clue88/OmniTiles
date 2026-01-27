@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: MIT
 // © 2025–2026 Christopher Liu
 
-//! Motor abstraction for Actuonix P16-150-256-12-P linear actuator with potentiometer position
-//! feedback.
+//! Generic driver for Actuonix 16-series (P16, T16) Linear Actuators with potentiometer control.
 //!
 //! Wraps a DRV8873 H-Bridge for motor control and an ADC channel for position feedback.
 //!
@@ -30,10 +29,10 @@ pub enum Direction {
     Coast,
 }
 
-/// Driver for the P16-P linear actuator.
+/// Generic driver for Actuonix linear actuators (P16, T16).
 ///
 /// `ReadPos` is a closure that returns the raw 12-bit ADC reading (0..4095).
-pub struct P16P<
+pub struct ActuonixLinear<
     const CS_P: char,
     const CS_N: u8,
     const IN1_P: char,
@@ -67,7 +66,7 @@ impl<
         const DIS_P: char,
         const DIS_N: u8,
         ReadPos,
-    > P16P<CS_P, CS_N, IN1_P, IN1_N, IN2_P, IN2_N, SLP_P, SLP_N, DIS_P, DIS_N, ReadPos>
+    > ActuonixLinear<CS_P, CS_N, IN1_P, IN1_N, IN2_P, IN2_N, SLP_P, SLP_N, DIS_P, DIS_N, ReadPos>
 where
     ReadPos: FnMut() -> u16,
 {

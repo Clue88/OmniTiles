@@ -22,7 +22,7 @@ use hal::{
 use stm32f7xx_hal as hal;
 
 use omnitiles::{
-    drivers::{Drv8873, Fit0185, P16P},
+    drivers::{ActuonixLinear, Drv8873, Fit0185},
     hw::{adc::volts_from_adc, Adc, BoardPins, CanBus, ChipSelect, Encoder, Led, SpiBus, Usart},
     protocol::{Command, Parser},
 };
@@ -112,7 +112,7 @@ fn main() -> ! {
     // ================================
     // P16 Linear Actuator
     // ================================
-    let mut p16 = P16P::new(
+    let mut p16 = ActuonixLinear::new(
         Drv8873::new(cs1),
         pins.m1.in1,
         pins.m1.in2,
