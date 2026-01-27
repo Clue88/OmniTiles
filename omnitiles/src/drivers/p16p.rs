@@ -49,6 +49,8 @@ pub struct P16P<
     drv: Drv8873<CS_P, CS_N>,
     in1: gpio::Pin<IN1_P, IN1_N, Output<PushPull>>,
     in2: gpio::Pin<IN2_P, IN2_N, Output<PushPull>>,
+    nsleep: gpio::Pin<SLP_P, SLP_N, Output<PushPull>>,
+    disable: gpio::Pin<DIS_P, DIS_N, Output<PushPull>>,
     read_position: ReadPos,
     stroke_len_mm: f32,
 }
@@ -94,6 +96,8 @@ where
             drv,
             in1,
             in2,
+            nsleep,
+            disable,
             read_position,
             stroke_len_mm,
         }
@@ -171,6 +175,34 @@ where
     /// Access the inner DRV8873 for fault reading.
     pub fn drv(&mut self) -> &mut Drv8873<CS_P, CS_N> {
         &mut self.drv
+    }
+
+    /// Put the driver into sleep mode.
+    ///
+    /// This shuts down most of the internal circuitry to reduce power consumption.
+    #[inline]
+    pub fn sleep(&mut self) {
+        self.nsleep.set_low();
+    }
+
+    /// Wake the driver from sleep mode.
+    #[inline]
+    pub fn wake(&mut self) {
+        self.nsleep.set_high();
+    }
+
+    /// Enable the motor and wake the driver if in sleep.
+    #[inline]
+    pub fn enable_outputs(&mut self) {
+        self.wake();
+        self.disable.set_low();
+    }
+
+    /// Disable the motor and coast.
+    #[inline]
+    pub fn disable_outputs(&mut self) {
+        self.coast();
+        self.disable.set_high();
     }
 
     /// Read the FAULT status register from the DRV8873.
