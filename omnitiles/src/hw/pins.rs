@@ -5,8 +5,7 @@
 
 use stm32f7xx_hal::{
     gpio::{
-        gpioa, gpiob, gpioc, gpiod, gpioe, gpioh, Alternate, Analog, Floating, Input, Output,
-        PushPull,
+        gpioa, gpiob, gpioc, gpiod, gpioe, Alternate, Analog, Floating, Input, Output, PushPull,
     },
     pac,
     prelude::*,
@@ -99,14 +98,12 @@ impl BoardPins {
         gpioc: pac::GPIOC,
         gpiod: pac::GPIOD,
         gpioe: pac::GPIOE,
-        gpioh: pac::GPIOH,
     ) -> Self {
         let gpioa = gpioa.split();
         let gpiob = gpiob.split();
         let gpioc = gpioc.split();
         let gpiod = gpiod.split();
         let gpioe = gpioe.split();
-        let gpioh = gpioh.split();
 
         Self {
             leds: LedPins {

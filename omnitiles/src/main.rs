@@ -45,7 +45,7 @@ fn main() -> ! {
     // ================================
     // Board Pins
     // ================================
-    let pins = BoardPins::new(dp.GPIOA, dp.GPIOB, dp.GPIOC, dp.GPIOD, dp.GPIOE, dp.GPIOH);
+    let pins = BoardPins::new(dp.GPIOA, dp.GPIOB, dp.GPIOC, dp.GPIOD, dp.GPIOE);
 
     // ================================
     // LEDs
