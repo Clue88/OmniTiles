@@ -59,8 +59,8 @@ pub struct EncoderPins {
 
 /// Motor 1 control pins
 pub struct Motor1Pins {
-    pub in1: gpioh::PH1<Output<PushPull>>,
-    pub in2: gpioc::PC0<Output<PushPull>>,
+    pub in1: gpiod::PD12<Alternate<2>>, // TIM4_CH1 (PWM)
+    pub in2: gpiod::PD13<Alternate<2>>, // TIM4_CH2 (PWM)
     pub nsleep: gpioa::PA4<Output<PushPull>>,
     pub disable: gpioa::PA3<Output<PushPull>>,
     pub nfault: gpioa::PA2<Input<Floating>>,
@@ -70,8 +70,8 @@ pub struct Motor1Pins {
 
 /// Motor 2 control pins
 pub struct Motor2Pins {
-    pub in1: gpiod::PD3<Output<PushPull>>,
-    pub in2: gpiod::PD4<Output<PushPull>>,
+    pub in1: gpiod::PD14<Alternate<2>>, // TIM4_CH3 (PWM)
+    pub in2: gpiod::PD15<Alternate<2>>, // TIM4_CH4 (PWM)
     pub nsleep: gpiod::PD2<Output<PushPull>>,
     pub disable: gpiod::PD1<Output<PushPull>>,
     pub nfault: gpiod::PD0<Input<Floating>>,
@@ -136,8 +136,8 @@ impl BoardPins {
             },
 
             m1: Motor1Pins {
-                in1: gpioh.ph1.into_push_pull_output(),
-                in2: gpioc.pc0.into_push_pull_output(),
+                in1: gpiod.pd12.into_alternate::<2>(),
+                in2: gpiod.pd13.into_alternate::<2>(),
                 nsleep: gpioa.pa4.into_push_pull_output(),
                 disable: gpioa.pa3.into_push_pull_output(),
                 nfault: gpioa.pa2.into_floating_input(),
@@ -146,8 +146,8 @@ impl BoardPins {
             },
 
             m2: Motor2Pins {
-                in1: gpiod.pd3.into_push_pull_output(),
-                in2: gpiod.pd4.into_push_pull_output(),
+                in1: gpiod.pd14.into_alternate::<2>(),
+                in2: gpiod.pd15.into_alternate::<2>(),
                 nsleep: gpiod.pd2.into_push_pull_output(),
                 disable: gpiod.pd1.into_push_pull_output(),
                 nfault: gpiod.pd0.into_floating_input(),
