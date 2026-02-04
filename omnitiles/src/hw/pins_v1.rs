@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // © 2025–2026 Christopher Liu
 
-//! Pin definitions for STM32F777 MCU for OmniTiles.
+//! Pin definitions for STM32F777 MCU for OmniTiles PCB v1.
 
 use stm32f7xx_hal::{
     gpio::{

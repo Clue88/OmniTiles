@@ -8,7 +8,7 @@
 //!
 //! ## Modules
 //!
-//! - [`pins`] - OmniTiles STM32F777 pin assignments
+//! - [`pins_v1`] - OmniTiles STM32F777 pin assignments for PCB v1
 //! - [`led`] – Active-high / active-low LED wrapper
 //! - [`usart`] – Blocking TX helpers with `core::fmt::Write` impl
 //! - [`spi`] – Blocking byte-level SPI and reusable CS abstraction
@@ -20,8 +20,8 @@ pub mod adc;
 pub mod can;
 pub mod encoder;
 pub mod led;
-pub mod pins;
 pub mod pins_devboard;
+pub mod pins_v1;
 pub mod spi;
 pub mod usart;
 
@@ -29,7 +29,7 @@ pub use adc::Adc;
 pub use can::CanBus;
 pub use encoder::Encoder;
 pub use led::Led;
-pub use pins::BoardPins;
+pub use pins_v1::BoardPins;
 pub use spi::ChipSelect;
 pub use spi::SpiBus;
 pub use usart::Usart;
