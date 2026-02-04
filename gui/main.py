@@ -18,6 +18,16 @@ MSG_T16_EXTEND = 0x40
 MSG_T16_RETRACT = 0x41
 MSG_T16_BRAKE = 0x42
 
+# Command lookup for debug printing
+CMD_NAMES = {
+    MSG_P16_EXTEND: "P16_EXTEND",
+    MSG_P16_RETRACT: "P16_RETRACT",
+    MSG_P16_BRAKE: "P16_BRAKE",
+    MSG_T16_EXTEND: "T16_EXTEND",
+    MSG_T16_RETRACT: "T16_RETRACT",
+    MSG_T16_BRAKE: "T16_BRAKE",
+}
+
 
 def create_packet(msg_id):
     """
@@ -53,17 +63,23 @@ def main():
     server = viser.ViserServer(label="OmniTiles Debugger")
 
     # Add grid for context
-    server.scene.add_grid("Ground Grid", width=0.5, height=0.5, cell_size=0.05)
+    server.scene.add_grid("ground", width=0.5, height=0.5, cell_size=0.05)
 
     def load_mesh(name, filename, color, pos):
         if not os.path.exists(filename):
             return server.scene.add_box(
                 name, dimensions=(0.04, 0.04, 0.1), color=color, position=pos
             )
-        mesh = trimesh.load_mesh(filename)
-        mesh.apply_scale(0.001)
-        mesh.visual = ColorVisuals(mesh=mesh, face_colors=to_rgba(color))
-        return server.scene.add_mesh_trimesh(name, mesh, position=pos)
+        try:
+            mesh = trimesh.load_mesh(filename)
+            mesh.apply_scale(0.001)
+            mesh.visual = ColorVisuals(mesh=mesh, face_colors=to_rgba(color))
+            return server.scene.add_mesh_trimesh(name, mesh, position=pos)
+        except Exception as e:
+            print(f"Load error {name}: {e}")
+            return server.scene.add_box(
+                name, dimensions=(0.04, 0.04, 0.1), color=color, position=pos
+            )
 
     # Load P16 models
     load_mesh("p16_base", "p16_base.stl", color=(50, 50, 50), pos=(0, 0, 0))
@@ -84,26 +100,29 @@ def main():
         status = "FAULT" if fault else "OK"
         md_handle.content = f"**Pos:** {pos_mm:.2f} mm | **ADC:** {raw_adc} | {status}"
 
-    def send_msg(msg_id):
+    def send_cmd(cmd_id):
         if ser:
-            ser.write(create_packet(msg_id))
+            ser.write(create_packet(cmd_id))
+        else:
+            cmd_name = CMD_NAMES.get(cmd_id, f"UNKNOWN_CMD_{cmd_id:02X}")
+            print(f"[MOCK TX] {cmd_name}")
 
     # P16 Controls
     with server.gui.add_folder("P16 Linear Actuator"):
         p16_md = server.gui.add_markdown("Waiting...")
-        server.gui.add_button("Extend", color="green").on_click(lambda _: send_msg(MSG_P16_EXTEND))
-        server.gui.add_button("Brake", color="red").on_click(lambda _: send_msg(MSG_P16_BRAKE))
+        server.gui.add_button("Extend", color="green").on_click(lambda _: send_cmd(MSG_P16_EXTEND))
+        server.gui.add_button("Brake", color="red").on_click(lambda _: send_cmd(MSG_P16_BRAKE))
         server.gui.add_button("Retract", color="yellow").on_click(
-            lambda _: send_msg(MSG_P16_RETRACT)
+            lambda _: send_cmd(MSG_P16_RETRACT)
         )
 
     # T16 Controls
     with server.gui.add_folder("T16 Track Actuator"):
         t16_md = server.gui.add_markdown("Waiting...")
-        server.gui.add_button("Extend", color="green").on_click(lambda _: send_msg(MSG_T16_EXTEND))
-        server.gui.add_button("Brake", color="red").on_click(lambda _: send_msg(MSG_T16_BRAKE))
+        server.gui.add_button("Extend", color="green").on_click(lambda _: send_cmd(MSG_T16_EXTEND))
+        server.gui.add_button("Brake", color="red").on_click(lambda _: send_cmd(MSG_T16_BRAKE))
         server.gui.add_button("Retract", color="yellow").on_click(
-            lambda _: send_msg(MSG_T16_RETRACT)
+            lambda _: send_cmd(MSG_T16_RETRACT)
         )
 
     # Mock Controls
