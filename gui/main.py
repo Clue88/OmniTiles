@@ -69,9 +69,9 @@ def main():
     load_mesh("p16_base", "p16_base.stl", color=(50, 50, 50), pos=(0, 0, 0))
     p16_shaft = load_mesh("p16_shaft", "p16_shaft.stl", color=(200, 200, 200), pos=(0, 0, 0))
 
-    # Load T16 models with P16 mesh for now as placeholder
+    # Load T16 models (carriage offset by 13 mm)
     load_mesh("t16_base", "t16_base.stl", (50, 50, 80), (0.1, 0, 0))
-    t16_carriage = load_mesh("t16_carriage", "t16_carriage.stl", (200, 200, 200), (0.1, 0, 0))
+    t16_carriage = load_mesh("t16_carriage", "t16_carriage.stl", (200, 200, 200), (0.1, 0, -0.013))
 
     # Telemetry helpers
     def update_p16_telemetry(pos_mm, raw_adc, fault, md_handle):
@@ -80,7 +80,7 @@ def main():
         md_handle.content = f"**Pos:** {pos_mm:.2f} mm | **ADC:** {raw_adc} | {status}"
 
     def update_t16_telemetry(pos_mm, raw_adc, fault, md_handle):
-        t16_carriage.position = (0.1, 0.0, pos_mm / 1000.0)
+        t16_carriage.position = (0.1, 0.0, (pos_mm - 13) / 1000.0)  # Carriage offset 13 mm
         status = "FAULT" if fault else "OK"
         md_handle.content = f"**Pos:** {pos_mm:.2f} mm | **ADC:** {raw_adc} | {status}"
 
