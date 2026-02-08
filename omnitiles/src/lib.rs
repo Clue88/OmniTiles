@@ -29,13 +29,6 @@
 //! cargo run --release
 //! ```
 //!
-//! ## Hardware Notes
-//!
-//! * **MCU:** STM32F777VI
-//! * **Debug UART:** USART1 @ 115200 baud
-//! * **Lift Motor:** FIT0185 with DRV8873 driver over SPI4 and TIM2 32-bit quadrature encoder
-//! * **Tilt Motor:** GIM6010-48 over CAN2 with built-in GDZ468 encoder
-//!
 //! ## License
 //!
 //! Licensed under the **MIT License**.
