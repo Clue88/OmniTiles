@@ -13,7 +13,6 @@ use core::cell::RefCell;
 use core::fmt::Write;
 
 use hal::{
-    can::Can,
     pac,
     prelude::*,
     serial::{Config, Serial},
@@ -22,8 +21,8 @@ use hal::{
 use stm32f7xx_hal as hal;
 
 use omnitiles::{
-    drivers::{ActuonixLinear, Drv8873, Fit0185},
-    hw::{adc::volts_from_adc, Adc, BoardPins, CanBus, ChipSelect, Encoder, Led, SpiBus, Usart},
+    drivers::{ActuonixLinear, Drv8873},
+    hw::{Adc, BoardPins, ChipSelect, Led, SpiBus, Usart},
     protocol::{Command, Parser},
 };
 
@@ -72,7 +71,7 @@ fn main() -> ! {
     // ================================
     // SPI4 + Chip Selects
     // ================================
-    let mut spi_bus = {
+    let spi_bus = {
         let spi_mode = Mode {
             polarity: Polarity::IdleLow,
             phase: Phase::CaptureOnSecondTransition,
@@ -85,30 +84,9 @@ fn main() -> ! {
     let cs2 = ChipSelect::active_low(pins.spi4.cs2);
 
     // ================================
-    // CAN2 (Loopback)
-    // ================================
-    let pclk1_hz = clocks.pclk1().to_Hz();
-    writeln!(usart, "PCLK1 = {} Hz\r", pclk1_hz).ok();
-    const CAN_BTR: u32 = 0x001C_0003; // 250 kbps @ 16 MHz
-
-    let mut can2_hal = Can::new(dp.CAN2, &mut apb1, (pins.can2.tx, pins.can2.rx));
-
-    // For dual CAN filter setup, we need to configure filters on CAN1
-    {
-        let can1_hal = Can::new(dp.CAN1, &mut apb1, (pins.can1.tx, pins.can1.rx));
-        let mut can1_bus = CanBus::new(can1_hal, CAN_BTR, false, false);
-        can1_bus.configure_accept_all_filters_for_dual_can(&mut can2_hal);
-    }
-
-    let mut can_bus = CanBus::new(can2_hal, CAN_BTR, true, false); // loopback mode
-
-    // ================================
     // ADC1 Current Sense
     // ================================
     let adc1 = RefCell::new(Adc::adc1(dp.ADC1));
-
-    let mut read_m1_iprop1 = Adc::make_reader(&adc1, 14);
-    let mut read_m1_iprop2 = Adc::make_reader(&adc1, 15);
 
     // ================================
     // P16 Linear Actuator
