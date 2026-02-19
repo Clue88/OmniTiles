@@ -4,8 +4,6 @@
 #include <bluetooth/services/nus.h>
 #include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/conn.h>
-#include <zephyr/bluetooth/gatt.h>
-#include <zephyr/bluetooth/uuid.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/spi.h>
 #include <zephyr/kernel.h>
@@ -31,8 +29,6 @@ static uint8_t rx_buffer[SPI_BUF_SIZE];
 
 static const struct spi_config spi_cfg = {
     .operation = SPI_WORD_SET(8) | SPI_TRANSFER_MSB | SPI_OP_MODE_SLAVE,
-    .frequency = 4000000,
-    .slave = 0,
 };
 
 static void set_drdy(bool active) {
@@ -79,7 +75,7 @@ static void bt_ready(int err) {
   // Primary Advertising Data (Flags + Name)
   const struct bt_data ad[] = {
       BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
-      BT_DATA(BT_DATA_NAME_COMPLETE, "OmniTile_1", 10),
+      BT_DATA(BT_DATA_NAME_COMPLETE, CONFIG_BT_DEVICE_NAME, sizeof(CONFIG_BT_DEVICE_NAME) - 1),
   };
 
   // Scan Response Data (UUID)
