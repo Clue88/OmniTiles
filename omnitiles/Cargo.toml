@@ -1,21 +1,21 @@
 [package]
-name = "omnitiles"
+name    = "omnitiles"
 version = "0.1.0"
-authors = ["Christopher Liu <liuchris@seas.upenn.edu>"]
+authors = [ "Christopher Liu <liuchris@seas.upenn.edu>" ]
 edition = "2021"
 
 [dependencies]
-cortex-m = "0.7"
-cortex-m-rt = { version = "0.7", features = ["device"] }
-panic-halt = "0.2.0"
-nb = "1"
-bxcan = "0.7.0"
-micromath = "2.1.0"
+cortex-m    = "0.7"
+cortex-m-rt = { version = "0.7", features = [ "device" ] }
+panic-halt  = "0.2.0"
+nb          = "1"
+bxcan       = "0.7.0"
+micromath   = "2.1.0"
 
 
 [dependencies.stm32f7xx-hal]
-version = "0.8.0"
-features = ["stm32f777", "rt", "has-can"]
+version  = "0.8.0"
+features = [ "stm32f767", "rt", "has-can" ]
 
 
 # Set the default for dependencies.
@@ -24,7 +24,7 @@ opt-level = "s"
 
 [profile.release]
 codegen-units = 1
-incremental = false
-debug = true
-lto = true
-opt-level = "s"
+incremental   = false
+debug         = true
+lto           = true
+opt-level     = "s"

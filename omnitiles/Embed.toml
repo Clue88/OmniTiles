@@ -33,9 +33,9 @@ halt_afterwards = false
 
 [default.general]
 # The chip name of the chip to be debugged.
-chip = "STM32F777VITx"
+chip = "STM32F767ZITx"
 # A list of chip descriptions to be loaded during runtime.
-chip_descriptions = []
+chip_descriptions = [  ]
 # The default log level to be used. Possible values are one of:
 #   "OFF", "ERROR", "WARN", "INFO", "DEBUG", "TRACE"
 log_level = "WARN"

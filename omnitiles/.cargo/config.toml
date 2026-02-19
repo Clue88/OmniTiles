@@ -1,9 +1,10 @@
 [target.'cfg(all(target_arch = "arm", target_os = "none"))']
-runner = "probe-rs run --chip STM32F777VITx"
+runner = "probe-rs run --chip STM32F767ZITx"
 
 rustflags = [
   # LLD (shipped with the Rust toolchain) is used as the default linker
-  "-C", "link-arg=-Tlink.x",
+  "-C",
+  "link-arg=-Tlink.x",
   # "-C", "link-arg=-Tdefmt.x",
   # "-C", "link-arg=-Tstlog.x",
 
@@ -24,4 +25,4 @@ target = "thumbv7em-none-eabihf"
 
 [env]
 # DEFMT_LOG = "info"
-CHIPSERIE = "stm32f777"
+CHIPSERIE = "stm32f767"
