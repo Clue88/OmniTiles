@@ -17,6 +17,10 @@ LOG_MODULE_REGISTER(main);
 #define DRDY_GPIO_NODE DT_ALIAS(spis_drdy_gpios)
 #define SPI_BUF_SIZE   128
 
+#define NUS_UUID_Service_Val                                                             \
+  0x9E, 0xCA, 0xDC, 0x24, 0x0E, 0xE5, 0xA9, 0xE0, 0x93, 0xF3, 0xA3, 0xB5, 0x01, 0x00,    \
+      0x40, 0x6E
+
 static const struct device* const spi_dev = DEVICE_DT_GET(SPI_SLAVE_NODE);
 static const struct gpio_dt_spec drdy_pin = GPIO_DT_SPEC_GET(DRDY_GPIO_NODE, gpios);
 
@@ -72,8 +76,19 @@ static void bt_ready(int err) {
     return;
   }
 
-  // Use generic fast advertising.
-  err = bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, NULL, 0, NULL, 0);
+  // Primary Advertising Data (Flags + Name)
+  const struct bt_data ad[] = {
+      BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
+      BT_DATA(BT_DATA_NAME_COMPLETE, "OmniTile_1", 10),
+  };
+
+  // Scan Response Data (UUID)
+  const struct bt_data sd[] = {
+      BT_DATA_BYTES(BT_DATA_UUID128_ALL, NUS_UUID_Service_Val),
+  };
+
+  // Pass BOTH ad and sd to the advertising macro
+  err = bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
   if (err) {
     LOG_ERR("Advertising failed (err %d)", err);
   } else {
