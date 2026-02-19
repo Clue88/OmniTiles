@@ -97,14 +97,9 @@ fn main() -> ! {
         cs.deselect();
 
         let len = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
-        if len > 0 {
-            if let Ok(text) = core::str::from_utf8(&buf[..len]) {
-                writeln!(usart, "RX: {}\r", text).ok();
-            } else {
-                writeln!(usart, "RX: {:02x?}\r", &buf[..8.min(len)]).ok();
-            }
-        } else {
-            writeln!(usart, "RX: Empty (All 0s)\r").ok();
+        let payload = &buf[..len];
+        if let Ok(text) = core::str::from_utf8(payload) {
+            writeln!(usart, "BLE RX: {}\r", text).ok();
         }
 
         while drdy.is_high() {}
