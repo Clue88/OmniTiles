@@ -44,7 +44,7 @@ fn main() -> ! {
     // ================================
     // Board Pins
     // ================================
-    let pins = BoardPins::new(dp.GPIOA, dp.GPIOB, dp.GPIOD);
+    let pins = BoardPins::new(dp.GPIOA, dp.GPIOB, dp.GPIOC, dp.GPIOD);
 
     // ================================
     // LEDs
@@ -77,30 +77,32 @@ fn main() -> ! {
             phase: Phase::CaptureOnFirstTransition,
         };
         let spi1_raw = Spi::new(dp.SPI1, (pins.spi1.sck, pins.spi1.miso, pins.spi1.mosi));
-        let spi1_enabled = spi1_raw.enable::<u8>(spi_mode, 10.kHz(), &clocks, &mut apb2);
+        let spi1_enabled = spi1_raw.enable::<u8>(spi_mode, 100.kHz(), &clocks, &mut apb2);
         SpiBus::new(spi1_enabled)
     };
     let mut cs = ChipSelect::active_low(pins.spi1.cs);
-    let mut drdy = pins.spi1.drdy;
+
+    cs.deselect();
 
     loop {
-        if drdy.is_high() {
-            cs.select();
-            let mut buf = [0u8; 128];
-            spi_bus.transfer_in_place(&mut buf).unwrap();
-            cs.deselect();
+        let mut buf = [0u8; 128];
+        cs.select();
+        delay.delay_us(50_u32);
+        spi_bus.transfer_in_place(&mut buf).unwrap_or_default();
+        delay.delay_us(50_u32);
+        cs.deselect();
 
-            // Parse bytes to UTF-8 string, stripping null bytes
-            let len = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
+        let len = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
+        if len > 0 {
             if let Ok(text) = core::str::from_utf8(&buf[..len]) {
-                writeln!(usart, "{}\r", text).unwrap();
+                writeln!(usart, "RX: {}\r", text).ok();
+            } else {
+                writeln!(usart, "RX: {:02x?}\r", &buf[..8.min(len)]).ok();
             }
-
-            // Wait for DRDY to go low
-            while drdy.is_high() {
-                delay.delay_us(10);
-            }
+        } else {
+            writeln!(usart, "RX: Empty (All 0s)\r").ok();
         }
-        delay.delay_ms(1_u32);
+
+        delay.delay_ms(1000_u32);
     }
 }

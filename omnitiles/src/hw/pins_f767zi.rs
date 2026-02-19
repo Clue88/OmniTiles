@@ -4,7 +4,7 @@
 //! Pin definitions for STM32F767ZI devboard.
 
 use stm32f7xx_hal::{
-    gpio::{gpioa, gpiob, gpiod, Alternate, Floating, Input, Output, PushPull},
+    gpio::{gpioa, gpiob, gpioc, gpiod, Alternate, Floating, Input, Output, PushPull},
     pac,
     prelude::*,
 };
@@ -30,7 +30,7 @@ pub struct Spi1Pins {
     pub sck: gpioa::PA5<Alternate<5>>,
     pub miso: gpioa::PA6<Alternate<5>>,
     pub mosi: gpioa::PA7<Alternate<5>>,
-    pub cs: gpioa::PA4<Output<PushPull>>,
+    pub cs: gpioc::PC3<Output<PushPull>>,
     pub drdy: gpioa::PA3<Input<Floating>>,
 }
 
@@ -45,9 +45,10 @@ pub struct EncoderPins {
 }
 
 impl BoardPins {
-    pub fn new(gpioa: pac::GPIOA, gpiob: pac::GPIOB, gpiod: pac::GPIOD) -> Self {
+    pub fn new(gpioa: pac::GPIOA, gpiob: pac::GPIOB, gpioc: pac::GPIOC, gpiod: pac::GPIOD) -> Self {
         let gpioa = gpioa.split();
         let gpiob = gpiob.split();
+        let gpioc = gpioc.split();
         let gpiod = gpiod.split();
 
         Self {
@@ -66,7 +67,7 @@ impl BoardPins {
                 sck: gpioa.pa5.into_alternate::<5>(),
                 miso: gpioa.pa6.into_alternate::<5>(),
                 mosi: gpioa.pa7.into_alternate::<5>(),
-                cs: gpioa.pa4.into_push_pull_output(),
+                cs: gpioc.pc3.into_push_pull_output(),
                 drdy: gpioa.pa3.into_floating_input(),
             },
         }
