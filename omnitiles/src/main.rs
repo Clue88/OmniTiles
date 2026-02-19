@@ -28,9 +28,6 @@ use omnitiles::{
 
 #[entry]
 fn main() -> ! {
-    // ================================
-    // Peripherals + Clocks + SysTick
-    // ================================
     let dp = pac::Peripherals::take().unwrap();
     let cp = cortex_m::Peripherals::take().unwrap();
 
@@ -41,20 +38,11 @@ fn main() -> ! {
 
     let mut delay = Delay::new(cp.SYST, clocks.sysclk().raw());
 
-    // ================================
-    // Board Pins
-    // ================================
     let pins = BoardPins::new(dp.GPIOA, dp.GPIOB, dp.GPIOC, dp.GPIOD);
 
-    // ================================
-    // LEDs
-    // ================================
     let mut led_blue = Led::active_low(pins.leds.blue);
     let mut led_green = Led::active_low(pins.leds.green);
 
-    // ================================
-    // USART3 Debug
-    // ================================
     let serial = Serial::new(
         dp.USART3,
         (pins.usart3.tx, pins.usart3.rx),
@@ -68,9 +56,6 @@ fn main() -> ! {
 
     usart.println("Booting OmniTiles firmware...");
 
-    // ================================
-    // SPI1 + Chip Selects
-    // ================================
     let mut spi_bus = {
         let spi_mode = Mode {
             polarity: Polarity::IdleLow,

@@ -1,6 +1,15 @@
 // SPDX-License-Identifier: MIT
 // © 2025–2026 Christopher Liu
 
+/*
+ * DWM tag (nRF52) application: BLE-to-SPI bridge.
+ *
+ * Runs as a BLE peripheral (Nordic UART Service), advertising as OmniTile_1.
+ * Data received from a device is queued and then sent to the STM32 over SPI when
+ * the master asserts CS. A DRDY GPIO is driven high when a payload is ready and
+ * cleared after the SPI transaction completes.
+ */
+
 #include <bluetooth/services/nus.h>
 #include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/conn.h>
@@ -38,7 +47,7 @@ static void set_drdy(bool active) {
   gpio_pin_set_dt(&drdy_pin, active ? 1 : 0);
 }
 
-/* --- BLE Callbacks --- */
+/* BLE callbacks */
 
 static void bt_receive_cb(struct bt_conn* conn, const uint8_t* const data, uint16_t len) {
   uint8_t temp_buf[SPI_BUF_SIZE];
@@ -74,13 +83,11 @@ static void bt_ready(int err) {
     return;
   }
 
-  // Primary Advertising Data (Flags + Name)
   const struct bt_data ad[] = {
       BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
       BT_DATA(BT_DATA_NAME_COMPLETE, "OmniTile_1", 10),
   };
 
-  // Scan Response Data (UUID)
   const struct bt_data sd[] = {
       BT_DATA_BYTES(BT_DATA_UUID128_ALL, NUS_UUID_Service_Val),
   };
@@ -93,19 +100,15 @@ static void bt_ready(int err) {
   }
 }
 
-/* --- Main --- */
-
 int main(void) {
   int ret;
 
-  // Init Hardware.
   if (!gpio_is_ready_dt(&drdy_pin) || !device_is_ready(spi_dev)) {
     LOG_ERR("Hardware init failed");
     return -1;
   }
   gpio_pin_configure_dt(&drdy_pin, GPIO_OUTPUT_INACTIVE);
 
-  // Init Bluetooth.
   ret = bt_enable(bt_ready);
   if (ret) {
     LOG_ERR("Bluetooth enable failed");
@@ -115,7 +118,6 @@ int main(void) {
   LOG_INF("System Ready. Waiting for BLE data...");
 
   while (1) {
-    // Block until BLE data arrives from the phone.
     ret = k_msgq_get(&ble_msgq, tx_buffer, K_FOREVER);
 
     if (ret == 0) {
@@ -125,7 +127,6 @@ int main(void) {
       struct spi_buf rx_buf = {.buf = rx_buffer, .len = SPI_BUF_SIZE};
       struct spi_buf_set rx = {.buffers = &rx_buf, .count = 1};
 
-      // Handshake with STM32.
       set_drdy(true);
       ret = spi_transceive(spi_dev, &spi_cfg, &tx, &rx);
       set_drdy(false);
