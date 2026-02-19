@@ -71,16 +71,36 @@ fn main() -> ! {
     // ================================
     // SPI1 + Chip Selects
     // ================================
-    let spi_bus = {
+    let mut spi_bus = {
         let spi_mode = Mode {
             polarity: Polarity::IdleLow,
-            phase: Phase::CaptureOnSecondTransition,
+            phase: Phase::CaptureOnFirstTransition,
         };
         let spi1_raw = Spi::new(dp.SPI1, (pins.spi1.sck, pins.spi1.miso, pins.spi1.mosi));
         let spi1_enabled = spi1_raw.enable::<u8>(spi_mode, 10.kHz(), &clocks, &mut apb2);
         SpiBus::new(spi1_enabled)
     };
-    let cs = ChipSelect::active_low(pins.spi1.cs);
+    let mut cs = ChipSelect::active_low(pins.spi1.cs);
+    let mut drdy = pins.spi1.drdy;
 
-    loop {}
+    loop {
+        if drdy.is_high() {
+            cs.select();
+            let mut buf = [0u8; 128];
+            spi_bus.transfer_in_place(&mut buf).unwrap();
+            cs.deselect();
+
+            // Parse bytes to UTF-8 string, stripping null bytes
+            let len = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
+            if let Ok(text) = core::str::from_utf8(&buf[..len]) {
+                writeln!(usart, "{}", text).unwrap();
+            }
+
+            // Wait for DRDY to go low
+            while drdy.is_high() {
+                delay.delay_us(10);
+            }
+        }
+        delay.delay_ms(1_u32);
+    }
 }

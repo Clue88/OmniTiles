@@ -4,7 +4,7 @@
 //! Pin definitions for STM32F767ZI devboard.
 
 use stm32f7xx_hal::{
-    gpio::{gpioa, gpiob, gpiod, Alternate, Output, PushPull},
+    gpio::{gpioa, gpiob, gpiod, Alternate, Floating, Input, Output, PushPull},
     pac,
     prelude::*,
 };
@@ -31,6 +31,7 @@ pub struct Spi1Pins {
     pub miso: gpioa::PA6<Alternate<5>>,
     pub mosi: gpioa::PA7<Alternate<5>>,
     pub cs: gpioa::PA4<Output<PushPull>>,
+    pub drdy: gpioa::PA3<Input<Floating>>,
 }
 
 pub struct Can1Pins {
@@ -66,6 +67,7 @@ impl BoardPins {
                 miso: gpioa.pa6.into_alternate::<5>(),
                 mosi: gpioa.pa7.into_alternate::<5>(),
                 cs: gpioa.pa4.into_push_pull_output(),
+                drdy: gpioa.pa3.into_floating_input(),
             },
         }
     }
