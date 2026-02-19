@@ -93,7 +93,7 @@ fn main() -> ! {
             // Parse bytes to UTF-8 string, stripping null bytes
             let len = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
             if let Ok(text) = core::str::from_utf8(&buf[..len]) {
-                writeln!(usart, "{}", text).unwrap();
+                writeln!(usart, "{}\r", text).unwrap();
             }
 
             // Wait for DRDY to go low
