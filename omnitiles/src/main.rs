@@ -81,10 +81,14 @@ fn main() -> ! {
         SpiBus::new(spi1_enabled)
     };
     let mut cs = ChipSelect::active_low(pins.spi1.cs);
+    let drdy = pins.spi1.drdy;
 
     cs.deselect();
 
     loop {
+        while drdy.is_low() {}
+        delay.delay_ms(2_u32);
+
         let mut buf = [0u8; 128];
         cs.select();
         delay.delay_us(50_u32);
@@ -103,6 +107,6 @@ fn main() -> ! {
             writeln!(usart, "RX: Empty (All 0s)\r").ok();
         }
 
-        delay.delay_ms(1000_u32);
+        while drdy.is_high() {}
     }
 }
