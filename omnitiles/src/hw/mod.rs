@@ -21,6 +21,7 @@ pub mod can;
 pub mod encoder;
 pub mod led;
 pub mod pins_devboard;
+pub mod pins_f767zi;
 pub mod pins_v1;
 pub mod spi;
 pub mod usart;
