@@ -26,17 +26,6 @@ use omnitiles::{
     protocol::{Command, Parser},
 };
 
-fn execute_command<U: Instance>(cmd: Command, usart: &mut Usart<U>) {
-    match cmd {
-        Command::Ping => {
-            writeln!(usart, "Command Received: PING! System is alive.\r").ok();
-        }
-        _ => {
-            writeln!(usart, "Executing: {:?}\r", cmd).ok();
-        }
-    }
-}
-
 #[entry]
 fn main() -> ! {
     let dp = pac::Peripherals::take().unwrap();
@@ -51,8 +40,9 @@ fn main() -> ! {
 
     let pins = BoardPins::new(dp.GPIOA, dp.GPIOB, dp.GPIOC, dp.GPIOD);
 
-    let mut led_blue = Led::active_low(pins.leds.blue);
-    let mut led_green = Led::active_low(pins.leds.green);
+    // LEDs are active-high on the F767ZI devboard but active-low on PCB v1
+    let mut led_blue = Led::active_high(pins.leds.blue);
+    let mut led_green = Led::active_high(pins.leds.green);
 
     let serial = Serial::new(
         dp.USART3,
@@ -129,7 +119,35 @@ fn main() -> ! {
             let payload = &buf[..len];
             for &byte in payload {
                 if let Some(cmd) = parser.push(byte) {
-                    execute_command(cmd, &mut usart);
+                    match cmd {
+                        Command::Ping => {
+                            writeln!(usart, "Command Received: PING! System is alive.\r").ok();
+                        }
+                        Command::P16Extend => {
+                            m1.set_speed(1.0);
+                            led_green.on();
+                        }
+                        Command::P16Retract => {
+                            m1.set_speed(-1.0);
+                            led_green.on();
+                        }
+                        Command::P16Brake => {
+                            m1.brake();
+                            led_green.off();
+                        }
+                        Command::T16Extend => {
+                            m2.set_speed(1.0);
+                            led_blue.on();
+                        }
+                        Command::T16Retract => {
+                            m2.set_speed(-1.0);
+                            led_blue.on();
+                        }
+                        Command::T16Brake => {
+                            m2.brake();
+                            led_blue.off();
+                        }
+                    }
                 }
             }
 
@@ -138,7 +156,35 @@ fn main() -> ! {
 
         if let Some(byte) = usart.read_byte() {
             if let Some(cmd) = parser.push(byte) {
-                execute_command(cmd, &mut usart);
+                match cmd {
+                    Command::Ping => {
+                        writeln!(usart, "Command Received: PING! System is alive.\r").ok();
+                    }
+                    Command::P16Extend => {
+                        m1.set_speed(1.0);
+                        led_green.on();
+                    }
+                    Command::P16Retract => {
+                        m1.set_speed(-1.0);
+                        led_green.on();
+                    }
+                    Command::P16Brake => {
+                        m1.brake();
+                        led_green.off();
+                    }
+                    Command::T16Extend => {
+                        m2.set_speed(1.0);
+                        led_blue.on();
+                    }
+                    Command::T16Retract => {
+                        m2.set_speed(-1.0);
+                        led_blue.on();
+                    }
+                    Command::T16Brake => {
+                        m2.brake();
+                        led_blue.off();
+                    }
+                }
             }
         }
     }
