@@ -126,33 +126,39 @@ fn main() -> ! {
                 if let Some(cmd) = parser.push(byte) {
                     match cmd {
                         Command::Ping => {
-                            writeln!(usart, "Command Received: PING! System is alive.\r").ok();
+                            writeln!(usart, "cmd: PING — System is alive.\r").ok();
                         }
                         Command::P16Extend(speed) => {
+                            writeln!(usart, "cmd: P16Extend speed={}\r", speed).ok();
                             let s = speed_to_float(speed);
                             m1.set_speed(s);
                             led_green.on();
                         }
                         Command::P16Retract(speed) => {
+                            writeln!(usart, "cmd: P16Retract speed={}\r", speed).ok();
                             let s = speed_to_float(speed);
                             m1.set_speed(-s);
                             led_green.on();
                         }
                         Command::P16Brake => {
+                            writeln!(usart, "cmd: P16Brake\r").ok();
                             m1.brake();
                             led_green.off();
                         }
                         Command::T16Extend(speed) => {
+                            writeln!(usart, "cmd: T16Extend speed={}\r", speed).ok();
                             let s = speed_to_float(speed);
                             m2.set_speed(s);
                             led_blue.on();
                         }
                         Command::T16Retract(speed) => {
+                            writeln!(usart, "cmd: T16Retract speed={}\r", speed).ok();
                             let s = speed_to_float(speed);
                             m2.set_speed(-s);
                             led_blue.on();
                         }
                         Command::T16Brake => {
+                            writeln!(usart, "cmd: T16Brake\r").ok();
                             m2.brake();
                             led_blue.off();
                         }
@@ -167,33 +173,39 @@ fn main() -> ! {
             if let Some(cmd) = parser.push(byte) {
                 match cmd {
                     Command::Ping => {
-                        writeln!(usart, "Command Received: PING! System is alive.\r").ok();
+                        writeln!(usart, "cmd: PING — System is alive.\r").ok();
                     }
                     Command::P16Extend(speed) => {
+                        writeln!(usart, "cmd: P16Extend speed={}\r", speed).ok();
                         let s = speed_to_float(speed);
                         m1.set_speed(s);
                         led_green.on();
                     }
                     Command::P16Retract(speed) => {
+                        writeln!(usart, "cmd: P16Retract speed={}\r", speed).ok();
                         let s = speed_to_float(speed);
                         m1.set_speed(-s);
                         led_green.on();
                     }
                     Command::P16Brake => {
+                        writeln!(usart, "cmd: P16Brake\r").ok();
                         m1.brake();
                         led_green.off();
                     }
                     Command::T16Extend(speed) => {
+                        writeln!(usart, "cmd: T16Extend speed={}\r", speed).ok();
                         let s = speed_to_float(speed);
                         m2.set_speed(s);
                         led_blue.on();
                     }
                     Command::T16Retract(speed) => {
+                        writeln!(usart, "cmd: T16Retract speed={}\r", speed).ok();
                         let s = speed_to_float(speed);
                         m2.set_speed(-s);
                         led_blue.on();
                     }
                     Command::T16Brake => {
+                        writeln!(usart, "cmd: T16Brake\r").ok();
                         m2.brake();
                         led_blue.off();
                     }
