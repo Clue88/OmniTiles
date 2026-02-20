@@ -17,6 +17,7 @@ use crate::hw::SpiBus;
 
 use stm32f7xx_hal::{
     gpio::{self, Output, PushPull},
+    prelude::*,
     spi,
 };
 
@@ -26,7 +27,6 @@ pub enum Direction {
     Extend,
     Retract,
     Brake,
-    Coast,
 }
 
 /// Generic driver for Actuonix linear actuators (P16, T16).
@@ -35,19 +35,17 @@ pub enum Direction {
 pub struct ActuonixLinear<
     const CS_P: char,
     const CS_N: u8,
-    const IN1_P: char,
-    const IN1_N: u8,
-    const IN2_P: char,
-    const IN2_N: u8,
     const SLP_P: char,
     const SLP_N: u8,
     const DIS_P: char,
     const DIS_N: u8,
+    Pwm1,
+    Pwm2,
     ReadPos,
 > {
     drv: Drv8873<CS_P, CS_N>,
-    in1: gpio::Pin<IN1_P, IN1_N, Output<PushPull>>,
-    in2: gpio::Pin<IN2_P, IN2_N, Output<PushPull>>,
+    pwm1: Pwm1,
+    pwm2: Pwm2,
     nsleep: gpio::Pin<SLP_P, SLP_N, Output<PushPull>>,
     disable: gpio::Pin<DIS_P, DIS_N, Output<PushPull>>,
     read_position: ReadPos,
@@ -57,44 +55,40 @@ pub struct ActuonixLinear<
 impl<
         const CS_P: char,
         const CS_N: u8,
-        const IN1_P: char,
-        const IN1_N: u8,
-        const IN2_P: char,
-        const IN2_N: u8,
         const SLP_P: char,
         const SLP_N: u8,
         const DIS_P: char,
         const DIS_N: u8,
+        Pwm1,
+        Pwm2,
         ReadPos,
-    > ActuonixLinear<CS_P, CS_N, IN1_P, IN1_N, IN2_P, IN2_N, SLP_P, SLP_N, DIS_P, DIS_N, ReadPos>
+    > ActuonixLinear<CS_P, CS_N, SLP_P, SLP_N, DIS_P, DIS_N, Pwm1, Pwm2, ReadPos>
 where
+    Pwm1: _embedded_hal_PwmPin<Duty = u16>,
+    Pwm2: _embedded_hal_PwmPin<Duty = u16>,
     ReadPos: FnMut() -> u16,
 {
-    /// Construct a new P16 driver.
-    pub fn new<In1Mode, In2Mode, SlpMode, DisMode>(
+    /// Construct a new Actuonix driver with Hardware PWM.
+    pub fn new<SlpMode, DisMode>(
         drv: Drv8873<CS_P, CS_N>,
-        in1: gpio::Pin<IN1_P, IN1_N, In1Mode>,
-        in2: gpio::Pin<IN2_P, IN2_N, In2Mode>,
+        pwm1: Pwm1,
+        pwm2: Pwm2,
         nsleep: gpio::Pin<SLP_P, SLP_N, SlpMode>,
         disable: gpio::Pin<DIS_P, DIS_N, DisMode>,
         read_position: ReadPos,
         stroke_len_mm: f32,
     ) -> Self {
-        let mut in1 = in1.into_push_pull_output();
-        let mut in2 = in2.into_push_pull_output();
         let mut nsleep = nsleep.into_push_pull_output();
         let mut disable = disable.into_push_pull_output();
 
-        // Default: Coast, Awake, Enabled
-        in1.set_low();
-        in2.set_low();
+        // Default: Awake, Enabled
         nsleep.set_high();
         disable.set_low();
 
         Self {
             drv,
-            in1,
-            in2,
+            pwm1,
+            pwm2,
             nsleep,
             disable,
             read_position,
@@ -102,54 +96,54 @@ where
         }
     }
 
-    /// Set the manual drive direction.
-    pub fn set_direction(&mut self, dir: Direction) {
-        match dir {
-            Direction::Extend => {
-                // Polarity: IN1 High, IN2 Low
-                self.in1.set_high();
-                self.in2.set_low();
-            }
-            Direction::Retract => {
-                // Polarity: IN1 Low, IN2 High
-                self.in1.set_low();
-                self.in2.set_high();
-            }
-            Direction::Brake => {
-                // Short motor terminals: IN1 High, IN2 High
-                self.in1.set_high();
-                self.in2.set_high();
-            }
-            Direction::Coast => {
-                // Open motor terminals: IN1 Low, IN2 Low
-                self.in1.set_low();
-                self.in2.set_low();
-            }
+    /// Set the motor speed and direction.
+    ///
+    /// `speed` - A float from -1.0 (Full Retract) to 1.0 (Full Extend).
+    pub fn set_speed(&mut self, speed: f32) {
+        // Clamp speed to valid range
+        let speed = speed.clamp(-1.0, 1.0);
+        let max_duty = self.pwm1.get_max_duty(); // Assuming Pwm1/Pwm2 have same resolution
+
+        // Calculate target duty cycle
+        let duty = (speed.abs() * max_duty as f32) as u16;
+
+        if speed > 0.001 {
+            // Extend: IN1 PWM, IN2 Low
+            self.pwm1.set_duty(duty);
+            self.pwm2.set_duty(0);
+            self.pwm1.enable();
+            self.pwm2.enable();
+        } else if speed < -0.001 {
+            // Retract: IN1 Low, IN2 PWM
+            self.pwm1.set_duty(0);
+            self.pwm2.set_duty(duty);
+            self.pwm1.enable();
+            self.pwm2.enable();
+        } else {
+            self.brake();
         }
     }
 
-    /// Extend the actuator.
+    /// Extend the actuator at full speed.
     #[inline]
     pub fn extend(&mut self) {
-        self.set_direction(Direction::Extend);
+        self.set_speed(1.0);
     }
 
-    /// Retract the actuator.
+    /// Retract the actuator at full speed.
     #[inline]
     pub fn retract(&mut self) {
-        self.set_direction(Direction::Retract);
+        self.set_speed(-1.0);
     }
 
-    /// Brake (stops quickly).
+    /// Brake (stops quickly by shorting motor terminals).
     #[inline]
     pub fn brake(&mut self) {
-        self.set_direction(Direction::Brake);
-    }
-
-    /// Coast (stops slowly).
-    #[inline]
-    pub fn coast(&mut self) {
-        self.set_direction(Direction::Coast);
+        let max = self.pwm1.get_max_duty();
+        self.pwm1.set_duty(max);
+        self.pwm2.set_duty(max);
+        self.pwm1.enable();
+        self.pwm2.enable();
     }
 
     /// Read raw 12-bit ADC value (0-4095).
@@ -162,13 +156,17 @@ where
     pub fn position_percent(&mut self) -> f32 {
         let raw = self.position_raw();
         // 12-bit ADC = 4095 max.
-        // We assume 0V = 0 ticks, 3.3V = 4095 ticks.
         (raw as f32) / 4095.0
     }
 
     /// Read position in millimeters.
     pub fn position_mm(&mut self) -> f32 {
         self.position_percent() * self.stroke_len_mm
+    }
+
+    /// Get the max stroke length.
+    pub fn stroke_len_mm(&self) -> f32 {
+        self.stroke_len_mm
     }
 
     /// Access the inner DRV8873 for fault reading.
@@ -197,10 +195,10 @@ where
         self.disable.set_low();
     }
 
-    /// Disable the motor and coast.
+    /// Disable the motor and brake.
     #[inline]
     pub fn disable_outputs(&mut self) {
-        self.coast();
+        self.brake();
         self.disable.set_high();
     }
 

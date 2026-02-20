@@ -81,6 +81,37 @@ fn main() -> ! {
 
     cs.deselect();
 
+    let adc1 = RefCell::new(Adc::adc1(dp.ADC1));
+
+    let pwm = dp.TIM3.pwm::<_, _, 1_000_000>(
+        (pins.m1.in1, pins.m1.in2, pins.m2.in1, pins.m2.in2),
+        50.micros(), // 20 kHz
+        &clocks,
+    );
+    let (mut m1_in1, mut m1_in2, mut m2_in1, mut m2_in2) = pwm.split();
+
+    let mut m1 = ActuonixLinear::new(
+        Drv8873::new(ChipSelect::active_low(pins.m1.cs)),
+        m1_in1,
+        m1_in2,
+        pins.m1.nsleep,
+        pins.m1.disable,
+        Adc::make_reader(&adc1, 8), // ADC1_IN8, TODO: update based on actual wiring
+        150.0,                      // P16 has 150 mm stroke length
+    );
+    m1.enable_outputs();
+
+    let mut m2 = ActuonixLinear::new(
+        Drv8873::new(ChipSelect::active_low(pins.m2.cs)),
+        m2_in1,
+        m2_in2,
+        pins.m2.nsleep,
+        pins.m2.disable,
+        Adc::make_reader(&adc1, 9), // ADC1_IN9, TODO: update based on actual wiring
+        100.0,                      // T16 has 100 mm stroke length
+    );
+    m2.enable_outputs();
+
     let mut parser = Parser::new();
 
     loop {
