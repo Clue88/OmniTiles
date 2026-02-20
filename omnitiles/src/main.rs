@@ -26,6 +26,11 @@ use omnitiles::{
     protocol::{Command, Parser},
 };
 
+/// Map protocol speed byte (0–255) to motor set_speed magnitude in [0.0, 1.0].
+fn speed_to_float(speed: u8) -> f32 {
+    (speed as f32) / 255.0
+}
+
 #[entry]
 fn main() -> ! {
     let dp = pac::Peripherals::take().unwrap();
@@ -123,24 +128,28 @@ fn main() -> ! {
                         Command::Ping => {
                             writeln!(usart, "Command Received: PING! System is alive.\r").ok();
                         }
-                        Command::P16Extend => {
-                            m1.set_speed(1.0);
+                        Command::P16Extend(speed) => {
+                            let s = speed_to_float(speed);
+                            m1.set_speed(s);
                             led_green.on();
                         }
-                        Command::P16Retract => {
-                            m1.set_speed(-1.0);
+                        Command::P16Retract(speed) => {
+                            let s = speed_to_float(speed);
+                            m1.set_speed(-s);
                             led_green.on();
                         }
                         Command::P16Brake => {
                             m1.brake();
                             led_green.off();
                         }
-                        Command::T16Extend => {
-                            m2.set_speed(1.0);
+                        Command::T16Extend(speed) => {
+                            let s = speed_to_float(speed);
+                            m2.set_speed(s);
                             led_blue.on();
                         }
-                        Command::T16Retract => {
-                            m2.set_speed(-1.0);
+                        Command::T16Retract(speed) => {
+                            let s = speed_to_float(speed);
+                            m2.set_speed(-s);
                             led_blue.on();
                         }
                         Command::T16Brake => {
@@ -160,24 +169,28 @@ fn main() -> ! {
                     Command::Ping => {
                         writeln!(usart, "Command Received: PING! System is alive.\r").ok();
                     }
-                    Command::P16Extend => {
-                        m1.set_speed(1.0);
+                    Command::P16Extend(speed) => {
+                        let s = speed_to_float(speed);
+                        m1.set_speed(s);
                         led_green.on();
                     }
-                    Command::P16Retract => {
-                        m1.set_speed(-1.0);
+                    Command::P16Retract(speed) => {
+                        let s = speed_to_float(speed);
+                        m1.set_speed(-s);
                         led_green.on();
                     }
                     Command::P16Brake => {
                         m1.brake();
                         led_green.off();
                     }
-                    Command::T16Extend => {
-                        m2.set_speed(1.0);
+                    Command::T16Extend(speed) => {
+                        let s = speed_to_float(speed);
+                        m2.set_speed(s);
                         led_blue.on();
                     }
-                    Command::T16Retract => {
-                        m2.set_speed(-1.0);
+                    Command::T16Retract(speed) => {
+                        let s = speed_to_float(speed);
+                        m2.set_speed(-s);
                         led_blue.on();
                     }
                     Command::T16Brake => {

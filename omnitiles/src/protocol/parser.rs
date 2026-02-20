@@ -11,7 +11,8 @@ use crate::protocol::messages::*;
 enum State {
     WaitStart,
     WaitId,
-    WaitChecksum { id: u8 },
+    WaitPayload { id: u8 },
+    WaitChecksum { id: u8, payload: Option<u8> },
 }
 
 pub struct Parser {
@@ -40,12 +41,16 @@ impl Parser {
                 self.checksum = self.checksum.wrapping_add(byte);
 
                 match byte {
-                    // P16
-                    MSG_P16_EXTEND | MSG_P16_RETRACT | MSG_P16_BRAKE |
-                    // T16
-                    MSG_T16_EXTEND | MSG_T16_RETRACT | MSG_T16_BRAKE |
-                    MSG_PING => {
-                        self.state = State::WaitChecksum { id: byte };
+                    // Messages with payload
+                    MSG_P16_EXTEND | MSG_P16_RETRACT | MSG_T16_EXTEND | MSG_T16_RETRACT => {
+                        self.state = State::WaitPayload { id: byte };
+                    }
+                    // Messages with no payload
+                    MSG_P16_BRAKE | MSG_T16_BRAKE | MSG_PING => {
+                        self.state = State::WaitChecksum {
+                            id: byte,
+                            payload: None,
+                        };
                     }
                     _ => {
                         // Unknown message ID, reset state
@@ -53,20 +58,27 @@ impl Parser {
                     }
                 }
             }
-            State::WaitChecksum { id } => {
+            State::WaitPayload { id } => {
+                self.checksum = self.checksum.wrapping_add(byte);
+                self.state = State::WaitChecksum {
+                    id,
+                    payload: Some(byte),
+                };
+            }
+            State::WaitChecksum { id, payload } => {
                 // Verify checksum
                 let valid = byte == self.checksum;
                 self.state = State::WaitStart; // Reset for next message
 
                 if valid {
-                    return match id {
-                        MSG_P16_EXTEND => Some(Command::P16Extend),
-                        MSG_P16_RETRACT => Some(Command::P16Retract),
-                        MSG_P16_BRAKE => Some(Command::P16Brake),
-                        MSG_T16_EXTEND => Some(Command::T16Extend),
-                        MSG_T16_RETRACT => Some(Command::T16Retract),
-                        MSG_T16_BRAKE => Some(Command::T16Brake),
-                        MSG_PING => Some(Command::Ping),
+                    return match (id, payload) {
+                        (MSG_P16_EXTEND, Some(p)) => Some(Command::P16Extend(p)),
+                        (MSG_P16_RETRACT, Some(p)) => Some(Command::P16Retract(p)),
+                        (MSG_P16_BRAKE, None) => Some(Command::P16Brake),
+                        (MSG_T16_EXTEND, Some(p)) => Some(Command::T16Extend(p)),
+                        (MSG_T16_RETRACT, Some(p)) => Some(Command::T16Retract(p)),
+                        (MSG_T16_BRAKE, None) => Some(Command::T16Brake),
+                        (MSG_PING, None) => Some(Command::Ping),
                         _ => None,
                     };
                 }

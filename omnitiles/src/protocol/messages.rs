@@ -21,10 +21,10 @@ pub const MSG_PING: u8 = 0x50;
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Command {
     Ping,
-    P16Extend,
-    P16Retract,
+    P16Extend(u8),
+    P16Retract(u8),
     P16Brake,
-    T16Extend,
-    T16Retract,
+    T16Extend(u8),
+    T16Retract(u8),
     T16Brake,
 }
