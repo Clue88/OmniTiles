@@ -40,10 +40,17 @@ ble_client = None
 ble_loop = None
 
 
-def create_packet(msg_id):
-    """Creates a binary packet: [START_BYTE, MSG_ID, CHECKSUM]"""
-    checksum = msg_id
-    return bytes([START_BYTE, msg_id, checksum])
+def create_packet(msg_id, payload=None):
+    """
+    Creates a binary packet.
+    No payload (Ping, Brake): [START_BYTE, MSG_ID, CHECKSUM] — checksum = ID.
+    With payload (Extend, Retract): [START_BYTE, MSG_ID, PAYLOAD, CHECKSUM] — checksum = (ID + PAYLOAD) & 0xFF.
+    """
+    if payload is None:
+        return bytes([START_BYTE, msg_id, msg_id & 0xFF])
+    payload = max(0, min(255, int(payload)))
+    checksum = (msg_id + payload) & 0xFF
+    return bytes([START_BYTE, msg_id, payload, checksum])
 
 
 async def connect_ble():
@@ -111,10 +118,11 @@ def main():
     server = viser.ViserServer(label="OmniTiles Debugger")
     server.scene.add_grid("ground", width=0.5, height=0.5, cell_size=0.05)
 
-    def send_cmd(cmd_id):
+    def send_cmd(cmd_id, payload=None):
         global ble_client, ble_loop
-        packet = create_packet(cmd_id)
+        packet = create_packet(cmd_id, payload)
         cmd_name = CMD_NAMES.get(cmd_id, f"UNKNOWN_{cmd_id:02X}")
+        payload_str = f" speed={payload}" if payload is not None else ""
 
         # Try BLE First
         if ble_client and ble_client.is_connected and ble_loop is not None:
@@ -122,35 +130,54 @@ def main():
                 ble_client.write_gatt_char(NUS_RX_UUID, packet, response=False),
                 ble_loop,
             )
-            print(f"[BLE TX] {cmd_name}")
+            print(f"[BLE TX] {cmd_name}{payload_str}")
         # Fallback to UART
         elif ser:
             ser.write(packet)
-            print(f"[UART TX] {cmd_name}")
+            print(f"[UART TX] {cmd_name}{payload_str}")
         # Mock Mode
         else:
-            print(f"[MOCK TX] {cmd_name}")
+            print(f"[MOCK TX] {cmd_name}{payload_str}")
 
     # GUI: System Controls
     with server.gui.add_folder("System Controls"):
         server.gui.add_button("Send Ping", color="blue").on_click(lambda _: send_cmd(MSG_PING))
 
+    # Shared state for speed (0–255); sliders show 10–100%
+    state = {"speed_p16": 255, "speed_t16": 255}
+
     # GUI: P16 Controls
     with server.gui.add_folder("P16 Linear Actuator"):
         p16_md = server.gui.add_markdown("Waiting...")
-        server.gui.add_button("Extend", color="green").on_click(lambda _: send_cmd(MSG_P16_EXTEND))
+        speed_p16 = server.gui.add_slider("Speed %", min=10, max=100, step=1, initial_value=100)
+
+        @speed_p16.on_update
+        def _(_):
+            state["speed_p16"] = int(speed_p16.value * 2.55)
+
+        server.gui.add_button("Extend", color="green").on_click(
+            lambda _: send_cmd(MSG_P16_EXTEND, state["speed_p16"])
+        )
         server.gui.add_button("Brake", color="red").on_click(lambda _: send_cmd(MSG_P16_BRAKE))
         server.gui.add_button("Retract", color="yellow").on_click(
-            lambda _: send_cmd(MSG_P16_RETRACT)
+            lambda _: send_cmd(MSG_P16_RETRACT, state["speed_p16"])
         )
 
     # GUI: T16 Controls
     with server.gui.add_folder("T16 Track Actuator"):
         t16_md = server.gui.add_markdown("Waiting...")
-        server.gui.add_button("Extend", color="green").on_click(lambda _: send_cmd(MSG_T16_EXTEND))
+        speed_t16 = server.gui.add_slider("Speed %", min=10, max=100, step=1, initial_value=100)
+
+        @speed_t16.on_update
+        def _(_):
+            state["speed_t16"] = int(speed_t16.value * 2.55)
+
+        server.gui.add_button("Extend", color="green").on_click(
+            lambda _: send_cmd(MSG_T16_EXTEND, state["speed_t16"])
+        )
         server.gui.add_button("Brake", color="red").on_click(lambda _: send_cmd(MSG_T16_BRAKE))
         server.gui.add_button("Retract", color="yellow").on_click(
-            lambda _: send_cmd(MSG_T16_RETRACT)
+            lambda _: send_cmd(MSG_T16_RETRACT, state["speed_t16"])
         )
 
     def read_loop():
