@@ -3,7 +3,6 @@
 
 #![no_main]
 #![no_std]
-#![allow(unused)]
 
 use cortex_m::delay::Delay;
 use cortex_m_rt::entry;
@@ -15,7 +14,7 @@ use core::fmt::Write;
 use hal::{
     pac,
     prelude::*,
-    serial::{Config, Instance, Serial},
+    serial::{Config, Serial},
     spi::{Mode, Phase, Polarity, Spi},
 };
 use stm32f7xx_hal as hal;
@@ -38,7 +37,6 @@ fn main() -> ! {
 
     let rcc = dp.RCC.constrain();
     let clocks = rcc.cfgr.freeze();
-    let mut apb1 = rcc.apb1;
     let mut apb2 = rcc.apb2;
 
     let mut delay = Delay::new(cp.SYST, clocks.sysclk().raw());
@@ -83,7 +81,7 @@ fn main() -> ! {
         50.micros(), // 20 kHz
         &clocks,
     );
-    let (mut m1_in1, mut m1_in2, mut m2_in1, mut m2_in2) = pwm.split();
+    let (m1_in1, m1_in2, m2_in1, m2_in2) = pwm.split();
 
     let mut m1 = ActuonixLinear::new(
         Drv8873::new(ChipSelect::active_low(pins.m1.cs)),
