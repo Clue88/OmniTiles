@@ -13,22 +13,22 @@ from trimesh.visual.color import ColorVisuals
 
 # Protocol Constants
 START_BYTE = 0xA5
-MSG_P16_EXTEND = 0x30
-MSG_P16_RETRACT = 0x31
-MSG_P16_BRAKE = 0x32
-MSG_T16_EXTEND = 0x40
-MSG_T16_RETRACT = 0x41
-MSG_T16_BRAKE = 0x42
+MSG_M1_EXTEND = 0x30
+MSG_M1_RETRACT = 0x31
+MSG_M1_BRAKE = 0x32
+MSG_M2_EXTEND = 0x40
+MSG_M2_RETRACT = 0x41
+MSG_M2_BRAKE = 0x42
 MSG_PING = 0x50
 
 # Command lookup for debug printing
 CMD_NAMES = {
-    MSG_P16_EXTEND: "P16_EXTEND",
-    MSG_P16_RETRACT: "P16_RETRACT",
-    MSG_P16_BRAKE: "P16_BRAKE",
-    MSG_T16_EXTEND: "T16_EXTEND",
-    MSG_T16_RETRACT: "T16_RETRACT",
-    MSG_T16_BRAKE: "T16_BRAKE",
+    MSG_M1_EXTEND: "M1_EXTEND",
+    MSG_M1_RETRACT: "M1_RETRACT",
+    MSG_M1_BRAKE: "M1_BRAKE",
+    MSG_M2_EXTEND: "M2_EXTEND",
+    MSG_M2_RETRACT: "M2_RETRACT",
+    MSG_M2_BRAKE: "M2_BRAKE",
     MSG_PING: "PING",
 }
 
@@ -144,40 +144,40 @@ def main():
         server.gui.add_button("Send Ping", color="blue").on_click(lambda _: send_cmd(MSG_PING))
 
     # Shared state for speed (0–255); sliders show 10–100%
-    state = {"speed_p16": 255, "speed_t16": 255}
+    state = {"speed_m1": 255, "speed_m2": 255}
 
-    # GUI: P16 Controls
-    with server.gui.add_folder("P16 Linear Actuator"):
-        p16_md = server.gui.add_markdown("Waiting...")
-        speed_p16 = server.gui.add_slider("Speed %", min=10, max=100, step=1, initial_value=100)
+    # GUI: Motor 1
+    with server.gui.add_folder("M1 — Linear Actuator"):
+        m1_md = server.gui.add_markdown("Waiting...")
+        speed_m1 = server.gui.add_slider("Speed %", min=10, max=100, step=1, initial_value=100)
 
-        @speed_p16.on_update
+        @speed_m1.on_update
         def _(_):
-            state["speed_p16"] = int(speed_p16.value * 2.55)
+            state["speed_m1"] = int(speed_m1.value * 2.55)
 
         server.gui.add_button("Extend", color="green").on_click(
-            lambda _: send_cmd(MSG_P16_EXTEND, state["speed_p16"])
+            lambda _: send_cmd(MSG_M1_EXTEND, state["speed_m1"])
         )
-        server.gui.add_button("Brake", color="red").on_click(lambda _: send_cmd(MSG_P16_BRAKE))
+        server.gui.add_button("Brake", color="red").on_click(lambda _: send_cmd(MSG_M1_BRAKE))
         server.gui.add_button("Retract", color="yellow").on_click(
-            lambda _: send_cmd(MSG_P16_RETRACT, state["speed_p16"])
+            lambda _: send_cmd(MSG_M1_RETRACT, state["speed_m1"])
         )
 
-    # GUI: T16 Controls
-    with server.gui.add_folder("T16 Track Actuator"):
-        t16_md = server.gui.add_markdown("Waiting...")
-        speed_t16 = server.gui.add_slider("Speed %", min=10, max=100, step=1, initial_value=100)
+    # GUI: Motor 2
+    with server.gui.add_folder("M2 — Track Actuator"):
+        m2_md = server.gui.add_markdown("Waiting...")
+        speed_m2 = server.gui.add_slider("Speed %", min=10, max=100, step=1, initial_value=100)
 
-        @speed_t16.on_update
+        @speed_m2.on_update
         def _(_):
-            state["speed_t16"] = int(speed_t16.value * 2.55)
+            state["speed_m2"] = int(speed_m2.value * 2.55)
 
         server.gui.add_button("Extend", color="green").on_click(
-            lambda _: send_cmd(MSG_T16_EXTEND, state["speed_t16"])
+            lambda _: send_cmd(MSG_M2_EXTEND, state["speed_m2"])
         )
-        server.gui.add_button("Brake", color="red").on_click(lambda _: send_cmd(MSG_T16_BRAKE))
+        server.gui.add_button("Brake", color="red").on_click(lambda _: send_cmd(MSG_M2_BRAKE))
         server.gui.add_button("Retract", color="yellow").on_click(
-            lambda _: send_cmd(MSG_T16_RETRACT, state["speed_t16"])
+            lambda _: send_cmd(MSG_M2_RETRACT, state["speed_m2"])
         )
 
     def read_loop():

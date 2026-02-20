@@ -42,11 +42,11 @@ impl Parser {
 
                 match byte {
                     // Messages with payload
-                    MSG_P16_EXTEND | MSG_P16_RETRACT | MSG_T16_EXTEND | MSG_T16_RETRACT => {
+                    MSG_M1_EXTEND | MSG_M1_RETRACT | MSG_M2_EXTEND | MSG_M2_RETRACT => {
                         self.state = State::WaitPayload { id: byte };
                     }
                     // Messages with no payload
-                    MSG_P16_BRAKE | MSG_T16_BRAKE | MSG_PING => {
+                    MSG_M1_BRAKE | MSG_M2_BRAKE | MSG_PING => {
                         self.state = State::WaitChecksum {
                             id: byte,
                             payload: None,
@@ -72,12 +72,12 @@ impl Parser {
 
                 if valid {
                     return match (id, payload) {
-                        (MSG_P16_EXTEND, Some(p)) => Some(Command::P16Extend(p)),
-                        (MSG_P16_RETRACT, Some(p)) => Some(Command::P16Retract(p)),
-                        (MSG_P16_BRAKE, None) => Some(Command::P16Brake),
-                        (MSG_T16_EXTEND, Some(p)) => Some(Command::T16Extend(p)),
-                        (MSG_T16_RETRACT, Some(p)) => Some(Command::T16Retract(p)),
-                        (MSG_T16_BRAKE, None) => Some(Command::T16Brake),
+                        (MSG_M1_EXTEND, Some(p)) => Some(Command::M1Extend(p)),
+                        (MSG_M1_RETRACT, Some(p)) => Some(Command::M1Retract(p)),
+                        (MSG_M1_BRAKE, None) => Some(Command::M1Brake),
+                        (MSG_M2_EXTEND, Some(p)) => Some(Command::M2Extend(p)),
+                        (MSG_M2_RETRACT, Some(p)) => Some(Command::M2Retract(p)),
+                        (MSG_M2_BRAKE, None) => Some(Command::M2Brake),
                         (MSG_PING, None) => Some(Command::Ping),
                         _ => None,
                     };

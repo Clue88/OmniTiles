@@ -7,13 +7,13 @@
 pub const START_BYTE: u8 = 0xA5;
 
 // Message IDs
-pub const MSG_P16_EXTEND: u8 = 0x30;
-pub const MSG_P16_RETRACT: u8 = 0x31;
-pub const MSG_P16_BRAKE: u8 = 0x32;
+pub const MSG_M1_EXTEND: u8 = 0x30;
+pub const MSG_M1_RETRACT: u8 = 0x31;
+pub const MSG_M1_BRAKE: u8 = 0x32;
 
-pub const MSG_T16_EXTEND: u8 = 0x40;
-pub const MSG_T16_RETRACT: u8 = 0x41;
-pub const MSG_T16_BRAKE: u8 = 0x42;
+pub const MSG_M2_EXTEND: u8 = 0x40;
+pub const MSG_M2_RETRACT: u8 = 0x41;
+pub const MSG_M2_BRAKE: u8 = 0x42;
 
 pub const MSG_PING: u8 = 0x50;
 
@@ -21,10 +21,10 @@ pub const MSG_PING: u8 = 0x50;
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Command {
     Ping,
-    P16Extend(u8),
-    P16Retract(u8),
-    P16Brake,
-    T16Extend(u8),
-    T16Retract(u8),
-    T16Brake,
+    M1Extend(u8),
+    M1Retract(u8),
+    M1Brake,
+    M2Extend(u8),
+    M2Retract(u8),
+    M2Brake,
 }
