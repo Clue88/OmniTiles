@@ -1,43 +1,19 @@
 # DWM tag — BLE-to-SPI bridge
 
-Firmware for the **DWM tag** (nRF52) used on the OmniTiles PCB. It runs as a **BLE peripheral** using the Nordic UART Service (NUS), advertises as **OmniTile_1**, and forwards data to the main STM32 over **SPI slave**. This is the wireless link between the [debug GUI](../gui/) and the [OmniTiles firmware](../omnitiles/).
+This folder is the firmware for the DWM tag (nRF52) on the OmniTiles PCB. The tag runs as a BLE peripheral using the Nordic UART Service (NUS) and advertises as **OmniTile_1**. Whatever it receives over BLE it forwards to the STM32 over SPI, with the nRF52 as SPI slave. So the [GUI](../gui/) (or any NUS client) can send command packets over the air, and the [OmniTiles firmware](../omnitiles/) on the STM32 reads them via SPI.
 
-## Role in the project
+On the PCB the STM32 has no BLE; it polls a DRDY line and does SPI reads. The tag receives a packet from the host, enqueues it (up to 128 bytes), then in its main loop waits for that message, drives DRDY high, and blocks on an SPI transaction. The STM32 sees DRDY high, asserts chip-select, reads 128 bytes from the slave, then deasserts CS. When the transfer finishes, the tag drives DRDY low and goes back to waiting for the next BLE packet. The protocol (sync byte, message ID, checksum) is defined in the omnitiles crate; the tag just shuttles bytes.
 
-On the PCB, the host (phone or PC running the GUI) connects over BLE to the nRF52. The STM32 does not have BLE; it talks to the nRF52 over SPI as **master**. The flow is:
+**Hardware / devicetree:** SPI slave is under `DT_NODELABEL(my_spis)` (see your board overlay or `app.overlay`). The DRDY pin is the GPIO alias `spis_drdy_gpios`—output, high when a payload is ready and low after the SPI transaction. [prj.conf](prj.conf) enables BLE peripheral, NUS, device name, SPI slave, and logging (e.g. RTT), and sets MTU/buffer sizes for the packets we use.
 
-1. Host sends a command packet over BLE (NUS) to the nRF52.
-2. The nRF52 enqueues the payload (up to 128 bytes) in a message queue.
-3. In its main loop, the nRF52 waits for a message, then drives **DRDY** high and blocks on an SPI transaction.
-4. The STM32 firmware polls DRDY; when high, it asserts SPI chip-select, reads 128 bytes from the slave, then deasserts CS.
-5. The nRF52 SPI transfer completes; it drives DRDY low and loops back to wait for the next BLE packet.
+## Building and flashing (nRF Connect for VS Code)
 
-So the DWM tag is a **bridge**: BLE in, SPI out, with DRDY signaling “data ready for the STM32.” The protocol (sync byte, message ID, checksum) is defined in the [omnitiles protocol](../omnitiles/src/protocol/messages.rs); this app only forwards opaque bytes.
+We use the **nRF Connect for VS Code** extension for building and flashing the DWM tag.
 
-## Hardware / devicetree
+1. Install the [nRF Connect for VS Code](https://marketplace.visualstudio.com/items?itemName=nordic-semiconductor.nrf-connect-for-vscode) extension if you haven’t already.
+2. Open the `dwm_tag` folder in VS Code (or open the repo and have `dwm_tag` as the active folder for the nRF extension).
+3. In the nRF Connect sidebar, choose the correct board (e.g. nRF52832 or nRF52840, depending on your DWM tag hardware).
+4. Use **Build** to compile the application.
+5. Connect the DWM tag and use **Flash** to program it. The extension will use the configured board and probe.
 
-- **SPI:** Runs as **slave**; the node is `DT_NODELABEL(my_spis)` (configure in your board overlay or `app.overlay`).
-- **DRDY:** GPIO alias `spis_drdy_gpios` — output driven high when a payload is ready and low after the SPI transaction completes.
-
-## Building and flashing
-
-This is a **Zephyr** application. Use a Zephyr SDK and the appropriate board target (e.g. nRF52832/nRF52840, depending on your DWM tag hardware).
-
-Example (adjust board and path to Zephyr as needed):
-
-```bash
-west build -b <your_nrf52_board> --pristine
-west flash
-```
-
-Configuration is in [prj.conf](prj.conf): BLE peripheral, NUS, device name `OmniTile_1`, SPI slave, and logging (e.g. RTT). MTU and buffer sizes are set to support the expected packet sizes.
-
-## Summary
-
-| What | Detail |
-|------|--------|
-| **Platform** | Zephyr on nRF52 |
-| **BLE** | Peripheral, NUS, advertises as `OmniTile_1` |
-| **SPI** | Slave; 128-byte buffer; DRDY GPIO signals “data ready” |
-| **Upstream** | [OmniTiles firmware](../omnitiles/) (STM32) reads via SPI when DRDY is high |
-| **Downstream** | [GUI](../gui/) or any NUS client sends command packets over BLE |
+If you need to change the board target or build configuration, use the extension’s configuration UI rather than editing things by hand so the extension and Zephyr stay in sync.
