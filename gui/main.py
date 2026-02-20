@@ -19,7 +19,7 @@ MSG_P16_BRAKE = 0x32
 MSG_T16_EXTEND = 0x40
 MSG_T16_RETRACT = 0x41
 MSG_T16_BRAKE = 0x42
-MSG_PING = 0x50  # New Ping Command
+MSG_PING = 0x50
 
 # Command lookup for debug printing
 CMD_NAMES = {

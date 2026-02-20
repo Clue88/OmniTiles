@@ -13,6 +13,8 @@ pub struct BoardPins {
     pub leds: Leds,
     pub usart3: Usart3Pins,
     pub spi1: Spi1Pins,
+    pub m1: Motor1Pins,
+    pub m2: Motor2Pins,
 }
 
 pub struct Leds {
@@ -34,14 +36,20 @@ pub struct Spi1Pins {
     pub drdy: gpioa::PA3<Input<Floating>>,
 }
 
-pub struct Can1Pins {
-    pub tx: gpioa::PA12<Alternate<9>>,
-    pub rx: gpioa::PA11<Alternate<9>>,
+pub struct Motor1Pins {
+    pub in1: gpioc::PC6<Alternate<2>>, // TIM3_CH1 (PWM)
+    pub in2: gpioc::PC7<Alternate<2>>, // TIM3_CH2 (PWM)
+    pub cs: gpiod::PD0<Output<PushPull>>,
+    pub nsleep: gpiod::PD1<Output<PushPull>>,
+    pub disable: gpiod::PD2<Output<PushPull>>,
 }
 
-pub struct EncoderPins {
-    pub ch1: gpioa::PA0<Alternate<1>>,
-    pub ch2: gpioa::PA1<Alternate<1>>,
+pub struct Motor2Pins {
+    pub in1: gpioc::PC8<Alternate<2>>, // TIM3_CH3 (PWM)
+    pub in2: gpioc::PC9<Alternate<2>>, // TIM3_CH4 (PWM)
+    pub cs: gpiod::PD3<Output<PushPull>>,
+    pub nsleep: gpiod::PD4<Output<PushPull>>,
+    pub disable: gpiod::PD5<Output<PushPull>>,
 }
 
 impl BoardPins {
@@ -69,6 +77,22 @@ impl BoardPins {
                 mosi: gpioa.pa7.into_alternate::<5>(),
                 cs: gpioc.pc3.into_push_pull_output(),
                 drdy: gpioa.pa3.into_floating_input(),
+            },
+
+            m1: Motor1Pins {
+                in1: gpioc.pc6.into_alternate::<2>(),
+                in2: gpioc.pc7.into_alternate::<2>(),
+                cs: gpiod.pd0.into_push_pull_output(),
+                nsleep: gpiod.pd1.into_push_pull_output(),
+                disable: gpiod.pd2.into_push_pull_output(),
+            },
+
+            m2: Motor2Pins {
+                in1: gpioc.pc8.into_alternate::<2>(),
+                in2: gpioc.pc9.into_alternate::<2>(),
+                cs: gpiod.pd3.into_push_pull_output(),
+                nsleep: gpiod.pd4.into_push_pull_output(),
+                disable: gpiod.pd5.into_push_pull_output(),
             },
         }
     }
