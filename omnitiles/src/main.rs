@@ -15,7 +15,7 @@ use core::fmt::Write;
 use hal::{
     pac,
     prelude::*,
-    serial::{Config, Serial},
+    serial::{Config, Instance, Serial},
     spi::{Mode, Phase, Polarity, Spi},
 };
 use stm32f7xx_hal as hal;
@@ -25,6 +25,17 @@ use omnitiles::{
     hw::{pins_f767zi::BoardPins, Adc, ChipSelect, Led, SpiBus, Usart},
     protocol::{Command, Parser},
 };
+
+fn execute_command<U: Instance>(cmd: Command, usart: &mut Usart<U>) {
+    match cmd {
+        Command::Ping => {
+            writeln!(usart, "Command Received: PING! System is alive.\r").ok();
+        }
+        _ => {
+            writeln!(usart, "Executing: {:?}\r", cmd).ok();
+        }
+    }
+}
 
 #[entry]
 fn main() -> ! {
@@ -70,23 +81,34 @@ fn main() -> ! {
 
     cs.deselect();
 
+    let mut parser = Parser::new();
+
     loop {
-        while drdy.is_low() {}
-        delay.delay_ms(2_u32);
+        if drdy.is_high() {
+            delay.delay_ms(2_u32);
 
-        let mut buf = [0u8; 128];
-        cs.select();
-        delay.delay_us(50_u32);
-        spi_bus.transfer_in_place(&mut buf).unwrap_or_default();
-        delay.delay_us(50_u32);
-        cs.deselect();
+            let mut buf = [0u8; 128];
+            cs.select();
+            delay.delay_us(50_u32);
+            spi_bus.transfer_in_place(&mut buf).unwrap_or_default();
+            delay.delay_us(50_u32);
+            cs.deselect();
 
-        let len = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
-        let payload = &buf[..len];
-        if let Ok(text) = core::str::from_utf8(payload) {
-            writeln!(usart, "BLE RX: {}\r", text).ok();
+            let len = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
+            let payload = &buf[..len];
+            for &byte in payload {
+                if let Some(cmd) = parser.push(byte) {
+                    execute_command(cmd, &mut usart);
+                }
+            }
+
+            while drdy.is_high() {}
         }
 
-        while drdy.is_high() {}
+        if let Some(byte) = usart.read_byte() {
+            if let Some(cmd) = parser.push(byte) {
+                execute_command(cmd, &mut usart);
+            }
+        }
     }
 }

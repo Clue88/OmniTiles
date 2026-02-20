@@ -43,7 +43,8 @@ impl Parser {
                     // P16
                     MSG_P16_EXTEND | MSG_P16_RETRACT | MSG_P16_BRAKE |
                     // T16
-                    MSG_T16_EXTEND | MSG_T16_RETRACT | MSG_T16_BRAKE => {
+                    MSG_T16_EXTEND | MSG_T16_RETRACT | MSG_T16_BRAKE |
+                    MSG_PING => {
                         self.state = State::WaitChecksum { id: byte };
                     }
                     _ => {
@@ -65,6 +66,7 @@ impl Parser {
                         MSG_T16_EXTEND => Some(Command::T16Extend),
                         MSG_T16_RETRACT => Some(Command::T16Retract),
                         MSG_T16_BRAKE => Some(Command::T16Brake),
+                        MSG_PING => Some(Command::Ping),
                         _ => None,
                     };
                 }
