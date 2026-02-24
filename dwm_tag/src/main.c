@@ -187,26 +187,22 @@ int main(void) {
             checksum);
       }
 
-      int err = 0;
-
-      if (current_conn != NULL) {
-        err = bt_nus_send(current_conn, rx_buffer, 5);
+      if (current_conn == NULL) {
+        LOG_DBG("Skipping telemetry TX; no active BLE connection");
       } else {
-        LOG_WRN("No active BLE connection for telemetry");
-        err = -ENOTCONN;
-      }
-
-      if (err) {
-        LOG_WRN("bt_nus_send failed: %d", err);
-      } else {
-        LOG_INF("Telemetry TX: P16=%d, T16=%d", rx_buffer[2], rx_buffer[3]);
+        int err = bt_nus_send(current_conn, rx_buffer, 5);
+        if (err) {
+          LOG_WRN("bt_nus_send failed: %d", err);
+        } else {
+          LOG_INF("Telemetry TX: P16=%d, T16=%d", rx_buffer[2], rx_buffer[3]);
+        }
       }
     }
 
-    if (ret == 0) {
-      LOG_INF("SPI Transaction Complete - Payload Sent");
-    } else {
+    if (ret < 0) {
       LOG_WRN("spi_transceive failed: %d", ret);
+    } else {
+      LOG_INF("SPI Transaction Complete - Payload Sent (%d bytes)", ret);
     }
   }
   return 0;
