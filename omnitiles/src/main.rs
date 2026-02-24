@@ -89,7 +89,7 @@ fn main() -> ! {
         m1_in2,
         pins.m1.nsleep,
         pins.m1.disable,
-        Adc::make_reader(&adc1, 8), // ADC1_IN8, TODO: update based on actual wiring
+        Adc::make_reader(&adc1, 9), // ADC1_IN9
         150.0,                      // P16 has 150 mm stroke length
         5.0,                        // 5 mm software buffer at each end
     );
@@ -101,9 +101,9 @@ fn main() -> ! {
         m2_in2,
         pins.m2.nsleep,
         pins.m2.disable,
-        Adc::make_reader(&adc1, 9), // ADC1_IN9, TODO: update based on actual wiring
-        100.0,                      // T16 has 100 mm stroke length
-        5.0,                        // 5 mm software buffer at each end
+        Adc::make_reader(&adc1, 12), // ADC1_IN12
+        100.0,                       // T16 has 100 mm stroke length
+        5.0,                         // 5 mm software buffer at each end
     );
     m2.enable_outputs();
 
