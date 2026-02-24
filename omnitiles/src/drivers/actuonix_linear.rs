@@ -50,6 +50,8 @@ pub struct ActuonixLinear<
     disable: gpio::Pin<DIS_P, DIS_N, Output<PushPull>>,
     read_position: ReadPos,
     stroke_len_mm: f32,
+    buffer_mm: f32,
+    current_speed: f32,
 }
 
 impl<
@@ -77,6 +79,7 @@ where
         disable: gpio::Pin<DIS_P, DIS_N, DisMode>,
         read_position: ReadPos,
         stroke_len_mm: f32,
+        buffer_mm: f32,
     ) -> Self {
         let mut nsleep = nsleep.into_push_pull_output();
         let mut disable = disable.into_push_pull_output();
@@ -93,6 +96,8 @@ where
             disable,
             read_position,
             stroke_len_mm,
+            buffer_mm,
+            current_speed: 0.0,
         }
     }
 
@@ -101,7 +106,21 @@ where
     /// `speed` - A float from -1.0 (Full Retract) to 1.0 (Full Extend).
     pub fn set_speed(&mut self, speed: f32) {
         // Clamp speed to valid range
-        let speed = speed.clamp(-1.0, 1.0);
+        let mut speed = speed.clamp(-1.0, 1.0);
+
+        let pos = self.position_mm();
+        let max_pos = self.stroke_len_mm - self.buffer_mm;
+        let min_pos = self.buffer_mm;
+
+        // Prevent starting a movement that goes deeper into the out-of-bounds area
+        if speed > 0.0 && pos >= max_pos {
+            speed = 0.0;
+        } else if speed < 0.0 && pos <= min_pos {
+            speed = 0.0;
+        }
+
+        self.current_speed = speed;
+
         let max_duty = self.pwm1.get_max_duty(); // Assuming Pwm1/Pwm2 have same resolution
 
         // Calculate target duty cycle
@@ -121,6 +140,27 @@ where
             self.pwm2.enable();
         } else {
             self.brake();
+        }
+    }
+
+    /// Continuously check the ADC position and brake if the actuator exceeds the software limits.
+    /// This should be called regularly in the main application loop.
+    pub fn enforce_limits(&mut self) {
+        // If we aren't moving, no need to check
+        if self.current_speed.abs() < 0.001 {
+            return;
+        }
+
+        let pos = self.position_mm();
+        let max_pos = self.stroke_len_mm - self.buffer_mm;
+        let min_pos = self.buffer_mm;
+
+        if self.current_speed > 0.0 && pos >= max_pos {
+            self.brake();
+            self.current_speed = 0.0; // Reset state
+        } else if self.current_speed < 0.0 && pos <= min_pos {
+            self.brake();
+            self.current_speed = 0.0; // Reset state
         }
     }
 

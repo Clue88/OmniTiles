@@ -91,6 +91,7 @@ fn main() -> ! {
         pins.m1.disable,
         Adc::make_reader(&adc1, 8), // ADC1_IN8, TODO: update based on actual wiring
         150.0,                      // P16 has 150 mm stroke length
+        5.0,                        // 5 mm software buffer at each end
     );
     m1.enable_outputs();
 
@@ -102,12 +103,16 @@ fn main() -> ! {
         pins.m2.disable,
         Adc::make_reader(&adc1, 9), // ADC1_IN9, TODO: update based on actual wiring
         100.0,                      // T16 has 100 mm stroke length
+        5.0,                        // 5 mm software buffer at each end
     );
     m2.enable_outputs();
 
     let mut parser = Parser::new();
 
     loop {
+        m1.enforce_limits();
+        m2.enforce_limits();
+
         if drdy.is_high() {
             delay.delay_ms(2_u32);
 
