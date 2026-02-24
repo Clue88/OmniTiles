@@ -155,6 +155,20 @@ int main(void) {
       set_drdy(false);
 
       if (ret == 0) {
+        // Check for incoming telemetry packet and forward over BLE
+        if (rx_buffer[0] == 0xA5 && rx_buffer[1] == 0x60) {
+          uint8_t checksum = (rx_buffer[1] + rx_buffer[2] + rx_buffer[3]) & 0xFF;
+          if (rx_buffer[4] == checksum) {
+            bt_nus_send(NULL, rx_buffer, 5);
+            LOG_INF("Telemetry TX: P16=%d, T16=%d", rx_buffer[2], rx_buffer[3]);
+          } else {
+            // Add this warning so we know if the STM32 calculated the checksum wrong
+            LOG_WRN("Telemetry Checksum Failed! Got %02X, Expected %02X",
+                rx_buffer[4],
+                checksum);
+          }
+        }
+
         LOG_INF("SPI Transaction Complete - Payload Sent");
       }
     }

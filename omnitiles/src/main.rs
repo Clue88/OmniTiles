@@ -112,6 +112,21 @@ fn main() -> ! {
             delay.delay_ms(2_u32);
 
             let mut buf = [0u8; 128];
+
+            // Prepare telemetry packet (P16 = m1, T16 = m2)
+            let p16_raw = m1.position_raw();
+            let t16_raw = m2.position_raw();
+
+            // Scale 12-bit ADC (0-4095) down to 8-bit (0-255)
+            let p16_pos = (p16_raw >> 4) as u8;
+            let t16_pos = (t16_raw >> 4) as u8;
+
+            buf[0] = omnitiles::protocol::messages::START_BYTE;
+            buf[1] = omnitiles::protocol::messages::MSG_TELEMETRY;
+            buf[2] = p16_pos;
+            buf[3] = t16_pos;
+            buf[4] = buf[1].wrapping_add(buf[2]).wrapping_add(buf[3]);
+
             cs.select();
             delay.delay_us(50_u32);
             spi_bus.transfer_in_place(&mut buf).unwrap_or_default();

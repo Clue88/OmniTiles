@@ -17,6 +17,8 @@ pub const MSG_M2_BRAKE: u8 = 0x42;
 
 pub const MSG_PING: u8 = 0x50;
 
+pub const MSG_TELEMETRY: u8 = 0x60;
+
 /// Direct motor commands.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Command {

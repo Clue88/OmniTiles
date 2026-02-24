@@ -32,8 +32,9 @@ CMD_NAMES = {
     MSG_PING: "PING",
 }
 
-# Nordic UART Service (NUS) RX Characteristic UUID
+# Nordic UART Service (NUS) RX/TX Characteristic UUIDs
 NUS_RX_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"
+NUS_TX_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
 
 # Global BLE State
 ble_client = None
@@ -155,7 +156,7 @@ def main():
 
     # GUI: Motor 1
     with server.gui.add_folder("Motor 1"):
-        m1_md = server.gui.add_markdown("Waiting...")
+        p16_md = server.gui.add_markdown("Waiting...")
         speed_m1 = server.gui.add_slider("Speed %", min=10, max=100, step=1, initial_value=100)
 
         @speed_m1.on_update
@@ -172,7 +173,7 @@ def main():
 
     # GUI: Motor 2
     with server.gui.add_folder("Motor 2"):
-        m2_md = server.gui.add_markdown("Waiting...")
+        t16_md = server.gui.add_markdown("Waiting...")
         speed_m2 = server.gui.add_slider("Speed %", min=10, max=100, step=1, initial_value=100)
 
         @speed_m2.on_update
@@ -186,6 +187,31 @@ def main():
         server.gui.add_button("Retract", color="yellow").on_click(
             lambda _: send_cmd(MSG_M2_RETRACT, state["speed_m2"])
         )
+
+    def handle_telemetry(sender, data: bytearray):
+        if len(data) >= 5 and data[0] == START_BYTE and data[1] == 0x60:  # MSG_TELEMETRY
+            p16_pos = data[2]
+            t16_pos = data[3]
+            checksum = (data[1] + data[2] + data[3]) & 0xFF
+            if data[4] == checksum:
+                p16_md.content = f"**Current Position (ADC):** {p16_pos}"
+                t16_md.content = f"**Current Position (ADC):** {t16_pos}"
+
+    async def subscribe_telemetry():
+        global ble_client
+        while True:
+            if ble_client is not None and ble_client.is_connected:
+                try:
+                    await ble_client.start_notify(NUS_TX_UUID, handle_telemetry)
+                except Exception as e:
+                    print(f"[BLE] Failed to start telemetry notifications: {e}")
+                # Stay subscribed while connected
+                while ble_client is not None and ble_client.is_connected:
+                    await asyncio.sleep(1.0)
+            await asyncio.sleep(1.0)
+
+    if ble_loop is not None:
+        asyncio.run_coroutine_threadsafe(subscribe_telemetry(), ble_loop)
 
     def read_loop():
         while True:
