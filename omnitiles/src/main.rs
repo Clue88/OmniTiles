@@ -138,9 +138,7 @@ fn main() -> ! {
             delay.delay_us(50_u32);
             cs.deselect();
 
-            let len = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
-            let payload = &buf[..len];
-            for &byte in payload {
+            for &byte in &buf {
                 if let Some(cmd) = parser.push(byte) {
                     match cmd {
                         Command::Ping => {
