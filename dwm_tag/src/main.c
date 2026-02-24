@@ -41,6 +41,7 @@ static const struct bt_data sd[] = {
 };
 
 static struct k_work adv_work;
+static struct bt_conn* current_conn;
 
 static void adv_work_handler(struct k_work* work) {
   int err =
@@ -91,12 +92,31 @@ static struct bt_nus_cb nus_cb = {
     .received = bt_receive_cb,
 };
 
+static void connected(struct bt_conn* conn, uint8_t err) {
+  if (err) {
+    LOG_ERR("Connection failed (err 0x%02x)", err);
+    return;
+  }
+
+  LOG_INF("Connected");
+
+  /* Track the current connection for NUS TX */
+  current_conn = bt_conn_ref(conn);
+}
+
 static void disconnected(struct bt_conn* conn, uint8_t reason) {
   LOG_INF("Disconnected (reason 0x%02x). Restarting advertising...", reason);
+
+  if (current_conn == conn) {
+    bt_conn_unref(current_conn);
+    current_conn = NULL;
+  }
+
   k_work_submit(&adv_work);
 }
 
 BT_CONN_CB_DEFINE(conn_callbacks) = {
+    .connected = connected,
     .disconnected = disconnected,
 };
 
@@ -154,22 +174,36 @@ int main(void) {
       ret = spi_transceive(spi_dev, &spi_cfg, &tx, &rx);
       set_drdy(false);
 
-      if (ret == 0) {
-        // Check for incoming telemetry packet and forward over BLE
-        if (rx_buffer[0] == 0xA5 && rx_buffer[1] == 0x60) {
-          uint8_t checksum = (rx_buffer[1] + rx_buffer[2] + rx_buffer[3]) & 0xFF;
-          if (rx_buffer[4] == checksum) {
-            bt_nus_send(NULL, rx_buffer, 5);
-            LOG_INF("Telemetry TX: P16=%d, T16=%d", rx_buffer[2], rx_buffer[3]);
-          } else {
-            // Add this warning so we know if the STM32 calculated the checksum wrong
-            LOG_WRN("Telemetry Checksum Failed! Got %02X, Expected %02X",
-                rx_buffer[4],
-                checksum);
-          }
+      // Check for incoming telemetry packet and forward over BLE
+      if (rx_buffer[0] == 0xA5 && rx_buffer[1] == 0x60) {
+        uint8_t checksum = (rx_buffer[1] + rx_buffer[2] + rx_buffer[3]) & 0xFF;
+        if (rx_buffer[4] != checksum) {
+          LOG_WRN(
+              "Telemetry checksum mismatch (got %02X, expected %02X) — forwarding anyway",
+              rx_buffer[4],
+              checksum);
         }
 
+        int err = 0;
+
+        if (current_conn != NULL) {
+          err = bt_nus_send(current_conn, rx_buffer, 5);
+        } else {
+          LOG_WRN("No active BLE connection for telemetry");
+          err = -ENOTCONN;
+        }
+
+        if (err) {
+          LOG_WRN("bt_nus_send failed: %d", err);
+        } else {
+          LOG_INF("Telemetry TX: P16=%d, T16=%d", rx_buffer[2], rx_buffer[3]);
+        }
+      }
+
+      if (ret == 0) {
         LOG_INF("SPI Transaction Complete - Payload Sent");
+      } else {
+        LOG_WRN("spi_transceive failed: %d", ret);
       }
     }
   }
