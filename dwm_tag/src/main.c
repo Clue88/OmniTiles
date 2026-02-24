@@ -26,6 +26,11 @@ LOG_MODULE_REGISTER(main);
 #define DRDY_GPIO_NODE DT_ALIAS(spis_drdy_gpios)
 #define SPI_BUF_SIZE   128
 
+/* Protocol: same as STM32/omnitiles (START_BYTE, msg_id, checksum). No payload => checksum = msg_id */
+#define CMD_START_BYTE  0xA5
+#define CMD_M1_BRAKE    0x32
+#define CMD_M2_BRAKE    0x42
+
 /* Define NUS UUID so scanners can see us in Scan Response */
 #define NUS_UUID_Service_Val                                                             \
   0x9E, 0xCA, 0xDC, 0x24, 0x0E, 0xE5, 0xA9, 0xE0, 0x93, 0xF3, 0xA3, 0xB5, 0x01, 0x00,    \
@@ -48,6 +53,9 @@ static struct bt_conn* current_conn;
 #define NUS_SEND_BACKOFF_MS   3000
 static uint32_t last_nus_send_ms;
 static uint32_t nus_send_backoff_until_ms;
+
+/* Set in disconnected(); main loop sends M1+M2 brake to STM32 on next SPI transaction */
+static volatile bool send_brake_on_disconnect;
 
 static void adv_work_handler(struct k_work* work) {
   int err =
@@ -110,6 +118,7 @@ static void disconnected(struct bt_conn* conn, uint8_t reason) {
   LOG_INF("Disconnected (reason 0x%02x). Restarting advertising...", reason);
 
   if (current_conn == conn) {
+    send_brake_on_disconnect = true;
     bt_conn_unref(current_conn);
     current_conn = NULL;
     nus_send_backoff_until_ms = 0;
@@ -168,6 +177,18 @@ int main(void) {
 
     if (ret != 0) {
       memset(tx_buffer, 0, SPI_BUF_SIZE);
+    }
+
+    /* On BLE disconnect, send brake to STM32 so motors stop when link is lost */
+    if (send_brake_on_disconnect) {
+      send_brake_on_disconnect = false;
+      tx_buffer[0] = CMD_START_BYTE;
+      tx_buffer[1] = CMD_M1_BRAKE;
+      tx_buffer[2] = CMD_M1_BRAKE;
+      tx_buffer[3] = CMD_START_BYTE;
+      tx_buffer[4] = CMD_M2_BRAKE;
+      tx_buffer[5] = CMD_M2_BRAKE;
+      memset(tx_buffer + 6, 0, SPI_BUF_SIZE - 6);
     }
 
     struct spi_buf tx_buf = {.buf = tx_buffer, .len = SPI_BUF_SIZE};
