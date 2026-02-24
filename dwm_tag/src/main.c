@@ -48,8 +48,6 @@ static void adv_work_handler(struct k_work* work) {
       bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
   if (err) {
     LOG_ERR("Advertising failed to restart (err %d)", err);
-  } else {
-    LOG_INF("Advertising successfully restarted.");
   }
 }
 
@@ -83,8 +81,6 @@ static void bt_receive_cb(struct bt_conn* conn, const uint8_t* const data, uint1
 
   if (k_msgq_put(&ble_msgq, temp_buf, K_NO_WAIT) != 0) {
     LOG_WRN("BLE Queue Full");
-  } else {
-    LOG_INF("BLE RX: %d bytes -> Queue", copy_len);
   }
 }
 
@@ -161,7 +157,7 @@ int main(void) {
   LOG_INF("System Ready. Waiting for BLE data...");
 
   while (1) {
-    ret = k_msgq_get(&ble_msgq, tx_buffer, K_MSEC(1000));
+    ret = k_msgq_get(&ble_msgq, tx_buffer, K_MSEC(100));
 
     if (ret != 0) {
       memset(tx_buffer, 0, SPI_BUF_SIZE);
@@ -188,21 +184,16 @@ int main(void) {
       }
 
       if (current_conn == NULL) {
-        LOG_DBG("Skipping telemetry TX; no active BLE connection");
       } else {
         int err = bt_nus_send(current_conn, rx_buffer, 5);
         if (err) {
           LOG_WRN("bt_nus_send failed: %d", err);
-        } else {
-          LOG_INF("Telemetry TX: P16=%d, T16=%d", rx_buffer[2], rx_buffer[3]);
         }
       }
     }
 
     if (ret < 0) {
       LOG_WRN("spi_transceive failed: %d", ret);
-    } else {
-      LOG_INF("SPI Transaction Complete - Payload Sent (%d bytes)", ret);
     }
   }
   return 0;
