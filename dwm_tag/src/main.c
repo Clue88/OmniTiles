@@ -43,6 +43,12 @@ static const struct bt_data sd[] = {
 static struct k_work adv_work;
 static struct bt_conn* current_conn;
 
+/* Avoid flooding BLE and stressing stack: rate-limit NUS send and back off on failure */
+#define NUS_SEND_INTERVAL_MS  50
+#define NUS_SEND_BACKOFF_MS   3000
+static uint32_t last_nus_send_ms;
+static uint32_t nus_send_backoff_until_ms;
+
 static void adv_work_handler(struct k_work* work) {
   int err =
       bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
@@ -106,6 +112,7 @@ static void disconnected(struct bt_conn* conn, uint8_t reason) {
   if (current_conn == conn) {
     bt_conn_unref(current_conn);
     current_conn = NULL;
+    nus_send_backoff_until_ms = 0;
   }
 
   k_work_submit(&adv_work);
@@ -185,9 +192,22 @@ int main(void) {
 
       if (current_conn == NULL) {
       } else {
-        int err = bt_nus_send(current_conn, rx_buffer, 5);
-        if (err) {
-          LOG_WRN("bt_nus_send failed: %d", err);
+        uint32_t now = k_uptime_get_32();
+        bool in_backoff = (now < nus_send_backoff_until_ms);
+        bool rate_ok = (now - last_nus_send_ms >= NUS_SEND_INTERVAL_MS);
+
+        if (!in_backoff && rate_ok) {
+          int err = bt_nus_send(current_conn, rx_buffer, 5);
+          if (err == 0) {
+            last_nus_send_ms = now;
+            nus_send_backoff_until_ms = 0;
+          } else {
+            /* -22 EINVAL: notifications not enabled; -128 ENOTCONN: link down.
+             * Back off to avoid hammering the stack and contributing to drops. */
+            nus_send_backoff_until_ms = now + NUS_SEND_BACKOFF_MS;
+            LOG_WRN("bt_nus_send failed: %d (backing off %d ms)", err,
+                    (int)NUS_SEND_BACKOFF_MS);
+          }
         }
       }
     }
