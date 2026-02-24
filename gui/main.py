@@ -147,7 +147,7 @@ def main():
     state = {"speed_m1": 255, "speed_m2": 255}
 
     # GUI: Motor 1
-    with server.gui.add_folder("M1 — Linear Actuator"):
+    with server.gui.add_folder("Motor 1"):
         m1_md = server.gui.add_markdown("Waiting...")
         speed_m1 = server.gui.add_slider("Speed %", min=10, max=100, step=1, initial_value=100)
 
@@ -164,7 +164,7 @@ def main():
         )
 
     # GUI: Motor 2
-    with server.gui.add_folder("M2 — Track Actuator"):
+    with server.gui.add_folder("Motor 2"):
         m2_md = server.gui.add_markdown("Waiting...")
         speed_m2 = server.gui.add_slider("Speed %", min=10, max=100, step=1, initial_value=100)
 
@@ -187,7 +187,7 @@ def main():
                     line = ser.readline().decode("utf-8", errors="ignore").strip()
                     if line:
                         print(f"[STM32] {line}")
-                except Exception as e:
+                except Exception:
                     pass
             time.sleep(0.01)
 
