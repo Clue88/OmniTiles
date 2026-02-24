@@ -31,6 +31,27 @@ LOG_MODULE_REGISTER(main);
   0x9E, 0xCA, 0xDC, 0x24, 0x0E, 0xE5, 0xA9, 0xE0, 0x93, 0xF3, 0xA3, 0xB5, 0x01, 0x00,    \
       0x40, 0x6E
 
+static const struct bt_data ad[] = {
+    BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
+    BT_DATA(BT_DATA_NAME_COMPLETE, "OmniTile_1", 10),
+};
+
+static const struct bt_data sd[] = {
+    BT_DATA_BYTES(BT_DATA_UUID128_ALL, NUS_UUID_Service_Val),
+};
+
+static struct k_work adv_work;
+
+static void adv_work_handler(struct k_work* work) {
+  int err =
+      bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
+  if (err) {
+    LOG_ERR("Advertising failed to restart (err %d)", err);
+  } else {
+    LOG_INF("Advertising successfully restarted.");
+  }
+}
+
 static const struct device* const spi_dev = DEVICE_DT_GET(SPI_SLAVE_NODE);
 static const struct gpio_dt_spec drdy_pin = GPIO_DT_SPEC_GET(DRDY_GPIO_NODE, gpios);
 
@@ -70,6 +91,15 @@ static struct bt_nus_cb nus_cb = {
     .received = bt_receive_cb,
 };
 
+static void disconnected(struct bt_conn* conn, uint8_t reason) {
+  LOG_INF("Disconnected (reason 0x%02x). Restarting advertising...", reason);
+  k_work_submit(&adv_work);
+}
+
+BT_CONN_CB_DEFINE(conn_callbacks) = {
+    .disconnected = disconnected,
+};
+
 static void bt_ready(int err) {
   if (err) {
     LOG_ERR("BLE init failed (err %d)", err);
@@ -82,15 +112,6 @@ static void bt_ready(int err) {
     LOG_ERR("Failed to init NUS (err %d)", err);
     return;
   }
-
-  const struct bt_data ad[] = {
-      BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
-      BT_DATA(BT_DATA_NAME_COMPLETE, "OmniTile_1", 10),
-  };
-
-  const struct bt_data sd[] = {
-      BT_DATA_BYTES(BT_DATA_UUID128_ALL, NUS_UUID_Service_Val),
-  };
 
   err = bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
   if (err) {
@@ -108,6 +129,8 @@ int main(void) {
     return -1;
   }
   gpio_pin_configure_dt(&drdy_pin, GPIO_OUTPUT_INACTIVE);
+
+  k_work_init(&adv_work, adv_work_handler);
 
   ret = bt_enable(bt_ready);
   if (ret) {

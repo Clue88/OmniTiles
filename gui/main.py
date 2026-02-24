@@ -55,26 +55,33 @@ def create_packet(msg_id, payload=None):
 
 async def connect_ble():
     global ble_client
-    print("[BLE] Scanning for OmniTile_1 (or NUS UUID)...")
 
     def match_device(device, adv):
         has_name = (device.name == "OmniTile_1") or (adv.local_name == "OmniTile_1")
         has_uuid = "6e400001-b5a3-f393-e0a9-e50e24dcca9e" in adv.service_uuids
         return has_name or has_uuid
 
-    target = await BleakScanner.find_device_by_filter(match_device, timeout=10.0)
+    while True:
+        # If we don't have a client, or the client disconnected, try to connect
+        if ble_client is None or not ble_client.is_connected:
+            print("[BLE] Scanning for OmniTile_1 (or NUS UUID)...")
+            target = await BleakScanner.find_device_by_filter(match_device, timeout=5.0)
 
-    if target:
-        print(f"[BLE] Found {target.name or 'Device'}! Connecting...")
-        client = BleakClient(target.address)
-        try:
-            await client.connect()
-            print("[BLE] Connected successfully!")
-            ble_client = client
-        except Exception as e:
-            print(f"[BLE] Failed to connect: {e}")
-    else:
-        print("[BLE] OmniTile_1 not found. Ensure it is powered on and advertising.")
+            if target:
+                print(f"[BLE] Found {target.name or 'Device'}! Connecting...")
+                client = BleakClient(target.address)
+                try:
+                    await client.connect()
+                    print("[BLE] Connected successfully!")
+                    ble_client = client
+                except Exception as e:
+                    print(f"[BLE] Failed to connect: {e}")
+            else:
+                # Silently pass to avoid spamming the terminal too much
+                pass
+
+        # Wait a couple of seconds before checking the status again or retrying
+        await asyncio.sleep(2.0)
 
 
 def start_ble_thread():
