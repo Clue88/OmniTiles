@@ -91,7 +91,8 @@ fn main() -> ! {
         pins.m1.disable,
         Adc::make_reader(&adc1, 9), // ADC1_IN9
         150.0,                      // P16 has 150 mm stroke length
-        5.0,                        // 5 mm software buffer at each end
+        25.0,                       // 25 mm buffer at bottom (retracted)
+        25.0,                       // 25 mm buffer at top (extended)
     );
     m1.enable_outputs();
 
@@ -103,7 +104,8 @@ fn main() -> ! {
         pins.m2.disable,
         Adc::make_reader(&adc1, 12), // ADC1_IN12
         100.0,                       // T16 has 100 mm stroke length
-        5.0,                         // 5 mm software buffer at each end
+        15.0,                        // 15 mm buffer at bottom (retracted)
+        15.0,                        // 15 mm buffer at top (extended)
     );
     m2.enable_outputs();
 

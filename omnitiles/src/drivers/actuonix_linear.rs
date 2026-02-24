@@ -53,7 +53,8 @@ pub struct ActuonixLinear<
     adc_idx: usize,
     ema_pos: f32,
     stroke_len_mm: f32,
-    buffer_mm: f32,
+    buffer_bottom_mm: f32,
+    buffer_top_mm: f32,
     current_speed: f32,
 }
 
@@ -82,7 +83,8 @@ where
         disable: gpio::Pin<DIS_P, DIS_N, DisMode>,
         mut read_position: ReadPos,
         stroke_len_mm: f32,
-        buffer_mm: f32,
+        buffer_bottom_mm: f32,
+        buffer_top_mm: f32,
     ) -> Self {
         let mut nsleep = nsleep.into_push_pull_output();
         let mut disable = disable.into_push_pull_output();
@@ -104,7 +106,8 @@ where
             adc_idx: 0,
             ema_pos: initial_pos as f32,
             stroke_len_mm,
-            buffer_mm,
+            buffer_bottom_mm,
+            buffer_top_mm,
             current_speed: 0.0,
         }
     }
@@ -117,8 +120,8 @@ where
         let mut speed = speed.clamp(-1.0, 1.0);
 
         let pos = self.position_mm();
-        let max_pos = self.stroke_len_mm - self.buffer_mm;
-        let min_pos = self.buffer_mm;
+        let max_pos = self.stroke_len_mm - self.buffer_top_mm;
+        let min_pos = self.buffer_bottom_mm;
 
         // Prevent starting a movement that goes deeper into the out-of-bounds area
         if speed > 0.0 && pos >= max_pos {
@@ -160,8 +163,8 @@ where
         }
 
         let pos = self.position_mm();
-        let max_pos = self.stroke_len_mm - self.buffer_mm;
-        let min_pos = self.buffer_mm;
+        let max_pos = self.stroke_len_mm - self.buffer_top_mm;
+        let min_pos = self.buffer_bottom_mm;
 
         if self.current_speed > 0.0 && pos >= max_pos {
             self.brake();
