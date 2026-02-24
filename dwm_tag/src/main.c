@@ -157,7 +157,7 @@ int main(void) {
   LOG_INF("System Ready. Waiting for BLE data...");
 
   while (1) {
-    ret = k_msgq_get(&ble_msgq, tx_buffer, K_MSEC(100));
+    ret = k_msgq_get(&ble_msgq, tx_buffer, K_MSEC(1000));
 
     if (ret != 0) {
       memset(tx_buffer, 0, SPI_BUF_SIZE);
