@@ -126,13 +126,20 @@ fn read_channel(adc: &pac::adc1::RegisterBlock, channel: u8) -> u16 {
     adc.sqr3
         .modify(|_, w| unsafe { w.sq1().bits(channel & 0x1F) });
 
-    // Start
-    adc.cr2.modify(|_, w| w.swstart().set_bit());
+    let mut sum: u32 = 0;
+    const SAMPLES: u32 = 16;
 
-    // Wait for completion
-    while adc.sr.read().eoc().bit_is_clear() {}
+    for _ in 0..SAMPLES {
+        // Start conversion
+        adc.cr2.modify(|_, w| w.swstart().set_bit());
 
-    adc.dr.read().data().bits() as u16
+        // Wait for completion
+        while adc.sr.read().eoc().bit_is_clear() {}
+
+        sum += adc.dr.read().data().bits() as u32;
+    }
+
+    (sum / SAMPLES) as u16
 }
 
 impl Adc<pac::ADC1> {

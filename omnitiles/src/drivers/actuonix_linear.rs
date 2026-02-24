@@ -51,7 +51,6 @@ pub struct ActuonixLinear<
     read_position: ReadPos,
     adc_history: [u16; 5],
     adc_idx: usize,
-    ema_pos: f32,
     stroke_len_mm: f32,
     buffer_bottom_mm: f32,
     buffer_top_mm: f32,
@@ -104,7 +103,6 @@ where
             read_position,
             adc_history: [initial_pos; 5],
             adc_idx: 0,
-            ema_pos: initial_pos as f32,
             stroke_len_mm,
             buffer_bottom_mm,
             buffer_top_mm,
@@ -197,25 +195,21 @@ where
         self.pwm2.enable();
     }
 
-    /// Read raw 12-bit ADC value (0-4095) with a median + EMA low-pass filter.
+    /// Read raw 12-bit ADC value (0-4095) with hardware oversampling and a median filter.
     #[inline]
     pub fn position_raw(&mut self) -> u16 {
-        // 1. Get fresh reading and update median ring buffer
+        // 1. Get fresh hardware-oversampled reading
         let raw = (self.read_position)();
 
+        // 2. Store in ring buffer
         self.adc_history[self.adc_idx] = raw;
         self.adc_idx = (self.adc_idx + 1) % 5;
 
-        // 2. Calculate Median (kills sharp, single-read spikes)
+        // 3. Calculate and return Median
         let mut sorted = self.adc_history;
         sorted.sort_unstable();
-        let median = sorted[2] as f32;
 
-        // 3. Calculate EMA (smooths out sustained high-frequency jitter)
-        // Uses 98% of the old value and 2% of the new value.
-        self.ema_pos = (self.ema_pos * 0.98) + (median * 0.02);
-
-        self.ema_pos as u16
+        sorted[2]
     }
 
     /// Read position as a fraction (0.0 = Retracted, 1.0 = Extended).
