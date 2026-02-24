@@ -49,6 +49,9 @@ pub struct ActuonixLinear<
     nsleep: gpio::Pin<SLP_P, SLP_N, Output<PushPull>>,
     disable: gpio::Pin<DIS_P, DIS_N, Output<PushPull>>,
     read_position: ReadPos,
+    adc_history: [u16; 5],
+    adc_idx: usize,
+    ema_pos: f32,
     stroke_len_mm: f32,
     buffer_mm: f32,
     current_speed: f32,
@@ -77,7 +80,7 @@ where
         pwm2: Pwm2,
         nsleep: gpio::Pin<SLP_P, SLP_N, SlpMode>,
         disable: gpio::Pin<DIS_P, DIS_N, DisMode>,
-        read_position: ReadPos,
+        mut read_position: ReadPos,
         stroke_len_mm: f32,
         buffer_mm: f32,
     ) -> Self {
@@ -88,6 +91,8 @@ where
         nsleep.set_high();
         disable.set_low();
 
+        let initial_pos = (read_position)();
+
         Self {
             drv,
             pwm1,
@@ -95,6 +100,9 @@ where
             nsleep,
             disable,
             read_position,
+            adc_history: [initial_pos; 5],
+            adc_idx: 0,
+            ema_pos: initial_pos as f32,
             stroke_len_mm,
             buffer_mm,
             current_speed: 0.0,
@@ -186,10 +194,25 @@ where
         self.pwm2.enable();
     }
 
-    /// Read raw 12-bit ADC value (0-4095).
+    /// Read raw 12-bit ADC value (0-4095) with a median + EMA low-pass filter.
     #[inline]
     pub fn position_raw(&mut self) -> u16 {
-        (self.read_position)()
+        // 1. Get fresh reading and update median ring buffer
+        let raw = (self.read_position)();
+
+        self.adc_history[self.adc_idx] = raw;
+        self.adc_idx = (self.adc_idx + 1) % 5;
+
+        // 2. Calculate Median (kills sharp, single-read spikes)
+        let mut sorted = self.adc_history;
+        sorted.sort_unstable();
+        let median = sorted[2] as f32;
+
+        // 3. Calculate EMA (smooths out sustained high-frequency jitter)
+        // Uses 98% of the old value and 2% of the new value.
+        self.ema_pos = (self.ema_pos * 0.98) + (median * 0.02);
+
+        self.ema_pos as u16
     }
 
     /// Read position as a fraction (0.0 = Retracted, 1.0 = Extended).
