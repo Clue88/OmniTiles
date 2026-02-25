@@ -20,6 +20,7 @@ use hal::{
 use stm32f7xx_hal as hal;
 
 use omnitiles::{
+    control::{LinearController, LinearMode, Pid},
     drivers::{ActuonixLinear, Drv8873},
     hw::{pins_f767zi::BoardPins, Adc, ChipSelect, Led, SpiBus, Usart},
     protocol::{Command, Parser},
@@ -84,7 +85,7 @@ fn main() -> ! {
     );
     let (m1_in1, m1_in2, m2_in1, m2_in2) = pwm.split();
 
-    let mut m1 = ActuonixLinear::new(
+    let mut m1_actuator = ActuonixLinear::new(
         Drv8873::new(ChipSelect::active_low(pins.m1.cs)),
         m1_in1,
         m1_in2,
@@ -95,9 +96,16 @@ fn main() -> ! {
         20.0,                       // 20 mm buffer at bottom (retracted)
         35.0,                       // 35 mm buffer at top (extended)
     );
-    m1.enable_outputs();
+    m1_actuator.enable_outputs();
+    let mut m1 = LinearController::new(
+        m1_actuator,
+        Pid::new(0.5, 0.01, 0.05),
+        35.0,  // min_position_mm (buffer at retracted end)
+        125.0, // max_position_mm (stroke 150 mm - buffer 25 mm at extended end)
+        2.0,   // on_target_tolerance_mm
+    );
 
-    let mut m2 = ActuonixLinear::new(
+    let mut m2_actuator = ActuonixLinear::new(
         Drv8873::new(ChipSelect::active_low(pins.m2.cs)),
         m2_in1,
         m2_in2,
@@ -108,13 +116,21 @@ fn main() -> ! {
         25.0,                        // 25 mm buffer at bottom (retracted)
         15.0,                        // 15 mm buffer at top (extended)
     );
-    m2.enable_outputs();
+    m2_actuator.enable_outputs();
+    let mut m2 = LinearController::new(
+        m2_actuator,
+        Pid::new(0.5, 0.01, 0.05),
+        15.0, // min_position_mm
+        85.0, // max_position_mm (stroke 100 mm - buffer 15 mm)
+        2.0,  // on_target_tolerance_mm
+    );
 
     let mut parser = Parser::new();
 
     loop {
-        m1.enforce_limits();
-        m2.enforce_limits();
+        const DT: f32 = 0.02;
+        m1.step(DT);
+        m2.step(DT);
 
         if m1.is_limit_braking() || m2.is_limit_braking() {
             led_red.on();
@@ -127,9 +143,8 @@ fn main() -> ! {
 
             let mut buf = [0u8; 128];
 
-            // Prepare telemetry packet (P16 = m1, T16 = m2)
-            let p16_raw = m1.position_raw();
-            let t16_raw = m2.position_raw();
+            let p16_raw = m1.actuator.position_raw();
+            let t16_raw = m2.actuator.position_raw();
 
             // Scale 12-bit ADC (0-4095) down to 8-bit (0-255)
             let p16_pos = (p16_raw >> 4) as u8;
@@ -156,35 +171,39 @@ fn main() -> ! {
                         Command::M1Extend(speed) => {
                             writeln!(usart, "cmd: M1Extend speed={}\r", speed).ok();
                             let s = speed_to_float(speed);
-                            m1.set_speed(s);
+                            m1.mode = LinearMode::Disabled;
+                            m1.actuator.set_speed(s);
                             led_green.on();
                         }
                         Command::M1Retract(speed) => {
                             writeln!(usart, "cmd: M1Retract speed={}\r", speed).ok();
                             let s = speed_to_float(speed);
-                            m1.set_speed(-s);
+                            m1.mode = LinearMode::Disabled;
+                            m1.actuator.set_speed(-s);
                             led_green.on();
                         }
                         Command::M1Brake => {
                             writeln!(usart, "cmd: M1Brake\r").ok();
-                            m1.brake();
+                            m1.actuator.brake();
                             led_green.off();
                         }
                         Command::M2Extend(speed) => {
                             writeln!(usart, "cmd: M2Extend speed={}\r", speed).ok();
                             let s = speed_to_float(speed);
-                            m2.set_speed(s);
+                            m2.mode = LinearMode::Disabled;
+                            m2.actuator.set_speed(s);
                             led_blue.on();
                         }
                         Command::M2Retract(speed) => {
                             writeln!(usart, "cmd: M2Retract speed={}\r", speed).ok();
                             let s = speed_to_float(speed);
-                            m2.set_speed(-s);
+                            m2.mode = LinearMode::Disabled;
+                            m2.actuator.set_speed(-s);
                             led_blue.on();
                         }
                         Command::M2Brake => {
                             writeln!(usart, "cmd: M2Brake\r").ok();
-                            m2.brake();
+                            m2.actuator.brake();
                             led_blue.off();
                         }
                     }
@@ -203,35 +222,39 @@ fn main() -> ! {
                     Command::M1Extend(speed) => {
                         writeln!(usart, "cmd: M1Extend speed={}\r", speed).ok();
                         let s = speed_to_float(speed);
-                        m1.set_speed(s);
+                        m1.mode = LinearMode::Disabled;
+                        m1.actuator.set_speed(s);
                         led_green.on();
                     }
                     Command::M1Retract(speed) => {
                         writeln!(usart, "cmd: M1Retract speed={}\r", speed).ok();
                         let s = speed_to_float(speed);
-                        m1.set_speed(-s);
+                        m1.mode = LinearMode::Disabled;
+                        m1.actuator.set_speed(-s);
                         led_green.on();
                     }
                     Command::M1Brake => {
                         writeln!(usart, "cmd: M1Brake\r").ok();
-                        m1.brake();
+                        m1.actuator.brake();
                         led_green.off();
                     }
                     Command::M2Extend(speed) => {
                         writeln!(usart, "cmd: M2Extend speed={}\r", speed).ok();
                         let s = speed_to_float(speed);
-                        m2.set_speed(s);
+                        m2.mode = LinearMode::Disabled;
+                        m2.actuator.set_speed(s);
                         led_blue.on();
                     }
                     Command::M2Retract(speed) => {
                         writeln!(usart, "cmd: M2Retract speed={}\r", speed).ok();
                         let s = speed_to_float(speed);
-                        m2.set_speed(-s);
+                        m2.mode = LinearMode::Disabled;
+                        m2.actuator.set_speed(-s);
                         led_blue.on();
                     }
                     Command::M2Brake => {
                         writeln!(usart, "cmd: M2Brake\r").ok();
-                        m2.brake();
+                        m2.actuator.brake();
                         led_blue.off();
                     }
                 }
