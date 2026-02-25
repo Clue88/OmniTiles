@@ -42,7 +42,8 @@ impl Parser {
 
                 match byte {
                     // Messages with payload
-                    MSG_M1_EXTEND | MSG_M1_RETRACT | MSG_M2_EXTEND | MSG_M2_RETRACT => {
+                    MSG_M1_EXTEND | MSG_M1_RETRACT | MSG_M1_SET_POSITION | MSG_M2_EXTEND
+                    | MSG_M2_RETRACT | MSG_M2_SET_POSITION => {
                         self.state = State::WaitPayload { id: byte };
                     }
                     // Messages with no payload
@@ -75,9 +76,11 @@ impl Parser {
                         (MSG_M1_EXTEND, Some(p)) => Some(Command::M1Extend(p)),
                         (MSG_M1_RETRACT, Some(p)) => Some(Command::M1Retract(p)),
                         (MSG_M1_BRAKE, None) => Some(Command::M1Brake),
+                        (MSG_M1_SET_POSITION, Some(p)) => Some(Command::M1SetPosition(p)),
                         (MSG_M2_EXTEND, Some(p)) => Some(Command::M2Extend(p)),
                         (MSG_M2_RETRACT, Some(p)) => Some(Command::M2Retract(p)),
                         (MSG_M2_BRAKE, None) => Some(Command::M2Brake),
+                        (MSG_M2_SET_POSITION, Some(p)) => Some(Command::M2SetPosition(p)),
                         (MSG_PING, None) => Some(Command::Ping),
                         _ => None,
                     };

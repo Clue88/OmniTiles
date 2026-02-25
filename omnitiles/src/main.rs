@@ -187,6 +187,11 @@ fn main() -> ! {
                             m1.actuator.brake();
                             led_green.off();
                         }
+                        Command::M1SetPosition(mm) => {
+                            m1.mode = LinearMode::PositionControl;
+                            m1.set_target_position_mm(mm as f32);
+                            led_green.on();
+                        }
                         Command::M2Extend(speed) => {
                             writeln!(usart, "cmd: M2Extend speed={}\r", speed).ok();
                             let s = speed_to_float(speed);
@@ -205,6 +210,11 @@ fn main() -> ! {
                             writeln!(usart, "cmd: M2Brake\r").ok();
                             m2.actuator.brake();
                             led_blue.off();
+                        }
+                        Command::M2SetPosition(mm) => {
+                            m2.mode = LinearMode::PositionControl;
+                            m2.set_target_position_mm(mm as f32);
+                            led_blue.on();
                         }
                     }
                 }
@@ -238,6 +248,11 @@ fn main() -> ! {
                         m1.actuator.brake();
                         led_green.off();
                     }
+                    Command::M1SetPosition(mm) => {
+                        m1.mode = LinearMode::PositionControl;
+                        m1.set_target_position_mm(mm as f32);
+                        led_green.on();
+                    }
                     Command::M2Extend(speed) => {
                         writeln!(usart, "cmd: M2Extend speed={}\r", speed).ok();
                         let s = speed_to_float(speed);
@@ -256,6 +271,11 @@ fn main() -> ! {
                         writeln!(usart, "cmd: M2Brake\r").ok();
                         m2.actuator.brake();
                         led_blue.off();
+                    }
+                    Command::M2SetPosition(mm) => {
+                        m2.mode = LinearMode::PositionControl;
+                        m2.set_target_position_mm(mm as f32);
+                        led_blue.on();
                     }
                 }
             }
