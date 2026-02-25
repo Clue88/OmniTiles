@@ -32,9 +32,11 @@ START_BYTE = 0xA5
 MSG_M1_EXTEND = 0x30
 MSG_M1_RETRACT = 0x31
 MSG_M1_BRAKE = 0x32
+MSG_M1_SET_POSITION = 0x33
 MSG_M2_EXTEND = 0x40
 MSG_M2_RETRACT = 0x41
 MSG_M2_BRAKE = 0x42
+MSG_M2_SET_POSITION = 0x43
 MSG_PING = 0x50
 MSG_TELEMETRY = 0x60
 
@@ -42,9 +44,11 @@ CMD_NAMES = {
     MSG_M1_EXTEND: f"{M1_CONFIG['name']}_EXTEND",
     MSG_M1_RETRACT: f"{M1_CONFIG['name']}_RETRACT",
     MSG_M1_BRAKE: f"{M1_CONFIG['name']}_BRAKE",
+    MSG_M1_SET_POSITION: f"{M1_CONFIG['name']}_SET_POSITION",
     MSG_M2_EXTEND: f"{M2_CONFIG['name']}_EXTEND",
     MSG_M2_RETRACT: f"{M2_CONFIG['name']}_RETRACT",
     MSG_M2_BRAKE: f"{M2_CONFIG['name']}_BRAKE",
+    MSG_M2_SET_POSITION: f"{M2_CONFIG['name']}_SET_POSITION",
     MSG_PING: "PING",
 }
 
@@ -290,6 +294,10 @@ def main():
         server.gui.add_button("Retract", color="yellow").on_click(
             lambda _: send_cmd(MSG_M1_RETRACT, state["speed_m1"])
         )
+        m1_slider = server.gui.add_slider(
+            "Target Position (mm)", min=35, max=125, step=1, initial_value=35
+        )
+        m1_slider.on_update(lambda event: send_cmd(MSG_M1_SET_POSITION, int(event.target.value)))
 
     with server.gui.add_folder(f"M2: {M2_CONFIG['name']}"):
         m2_md = server.gui.add_markdown("Waiting...")
@@ -306,6 +314,10 @@ def main():
         server.gui.add_button("Retract", color="yellow").on_click(
             lambda _: send_cmd(MSG_M2_RETRACT, state["speed_m2"])
         )
+        m2_slider = server.gui.add_slider(
+            "Target Position (mm)", min=15, max=85, step=1, initial_value=15
+        )
+        m2_slider.on_update(lambda event: send_cmd(MSG_M2_SET_POSITION, int(event.target.value)))
 
     def read_loop():
         while True:
