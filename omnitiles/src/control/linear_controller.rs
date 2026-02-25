@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// (c) 2025-2026 Christopher Liu
+// © 2025-2026 Christopher Liu
 
 //! PID position control for Actuonix linear actuators.
 
