@@ -104,7 +104,6 @@ fn main() -> ! {
         115.0, // max_position_mm (stroke 150 mm - buffer 35 mm at extended end)
         2.0,   // on_target_tolerance_mm
     );
-
     let mut m2_actuator = ActuonixLinear::new(
         Drv8873::new(ChipSelect::active_low(pins.m2.cs)),
         m2_in1,
@@ -131,8 +130,7 @@ fn main() -> ! {
         const DT: f32 = 0.02;
         m1.step(DT);
         m2.step(DT);
-
-        if m1.is_limit_braking() || m2.is_limit_braking() {
+        if m1.actuator.is_limit_braking() || m2.actuator.is_limit_braking() {
             led_red.on();
         } else {
             led_red.off();
