@@ -16,6 +16,8 @@ from trimesh.visual.color import ColorVisuals
 M1_CONFIG = {
     "name": "P16 Linear Actuator",
     "stroke_mm": 150.0,
+    "buffer_bottom_mm": 35.0,
+    "buffer_top_mm": 25.0,
     "base_stl": "p16_base.stl",
     "move_stl": "p16_shaft.stl",
 }
@@ -23,9 +25,20 @@ M1_CONFIG = {
 M2_CONFIG = {
     "name": "T16 Track Actuator",
     "stroke_mm": 100.0,
+    "buffer_bottom_mm": 15.0,
+    "buffer_top_mm": 15.0,
     "base_stl": "t16_base.stl",
     "move_stl": "t16_carriage.stl",
 }
+
+
+def _min_position_mm(config):
+    return config["buffer_bottom_mm"]
+
+
+def _max_position_mm(config):
+    return config["stroke_mm"] - config["buffer_top_mm"]
+
 
 # --- Protocol Constants ---
 START_BYTE = 0xA5
@@ -295,7 +308,11 @@ def main():
             lambda _: send_cmd(MSG_M1_RETRACT, state["speed_m1"])
         )
         m1_slider = server.gui.add_slider(
-            "Target Position (mm)", min=35, max=125, step=1, initial_value=35
+            "Target Position (mm)",
+            min=int(_min_position_mm(M1_CONFIG)),
+            max=int(_max_position_mm(M1_CONFIG)),
+            step=1,
+            initial_value=int(_min_position_mm(M1_CONFIG)),
         )
         m1_slider.on_update(lambda event: send_cmd(MSG_M1_SET_POSITION, int(event.target.value)))
 
@@ -315,7 +332,11 @@ def main():
             lambda _: send_cmd(MSG_M2_RETRACT, state["speed_m2"])
         )
         m2_slider = server.gui.add_slider(
-            "Target Position (mm)", min=15, max=85, step=1, initial_value=15
+            "Target Position (mm)",
+            min=int(_min_position_mm(M2_CONFIG)),
+            max=int(_max_position_mm(M2_CONFIG)),
+            step=1,
+            initial_value=int(_min_position_mm(M2_CONFIG)),
         )
         m2_slider.on_update(lambda event: send_cmd(MSG_M2_SET_POSITION, int(event.target.value)))
 
