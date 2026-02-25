@@ -12,7 +12,6 @@
 //! | ------ | -------- |
 //! | [`hw`] | MCU-level wrappers around USART, SPI, CAN, timers, etc. |
 //! | [`drivers`] | Device-level drivers (e.g., DRV8873, GDZ468) |
-//! | [`motors`]  | Actuator-level structures (lift, tilt) built on top of drivers |
 //! | [`control`]   | Control algorithms (PID, high-level control) |
 //!
 //! ## Getting Started
@@ -41,5 +40,4 @@
 pub mod control;
 pub mod drivers;
 pub mod hw;
-pub mod motors;
 pub mod protocol;
