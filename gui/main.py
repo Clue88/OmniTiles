@@ -31,6 +31,13 @@ M2_CONFIG = {
     "move_stl": "t16_carriage.stl",
 }
 
+# UWB anchor positions (X, Y) in meters. Anchor 1 origin, 2 on X-axis, 3 on Y-axis.
+ANCHORS_M = {
+    1: (0.0, 0.0),
+    2: (3.0, 0.0),
+    3: (0.0, 3.0),
+}
+
 
 def _min_position_mm(config):
     return config["buffer_bottom_mm"]
@@ -38,6 +45,15 @@ def _min_position_mm(config):
 
 def _max_position_mm(config):
     return config["stroke_mm"] - config["buffer_top_mm"]
+
+
+def trilaterate_2d(r1, r2, r3):
+    """2D trilateration from three distances (m) to anchors 1, 2, 3. Returns (X, Y) in meters."""
+    a = ANCHORS_M[2][0]
+    b = ANCHORS_M[3][1]
+    x = (r1**2 - r2**2 + a**2) / (2.0 * a)
+    y = (r1**2 - r3**2 + b**2) / (2.0 * b)
+    return (x, y)
 
 
 # --- Protocol Constants ---
@@ -240,19 +256,26 @@ def main():
 
     # 3. Telemetry Callback Logic
     def handle_telemetry(sender, data: bytearray):
-        if len(data) >= 5 and data[0] == START_BYTE and data[1] == MSG_TELEMETRY:
+        if len(data) >= 11 and data[0] == START_BYTE and data[1] == MSG_TELEMETRY:
             m1_pos_adc = data[2]
             m2_pos_adc = data[3]
-            checksum = (data[1] + data[2] + data[3]) & 0xFF
+            uwb1_mm = (data[4] << 8) | data[5]
+            uwb2_mm = (data[6] << 8) | data[7]
+            uwb3_mm = (data[8] << 8) | data[9]
+            checksum = sum(data[1:10]) & 0xFF
 
-            if data[4] == checksum:
-                # Convert 8-bit ADC (0-255) back into physical mm
+            if data[10] == checksum:
                 m1_mm = (m1_pos_adc / 255.0) * M1_CONFIG["stroke_mm"]
                 m2_mm = (m2_pos_adc / 255.0) * M2_CONFIG["stroke_mm"]
 
-                # Update Text
-                m1_md.content = f"**ADC:** {m1_pos_adc} | **Est. Pos:** {m1_mm:.1f} mm"
-                m2_md.content = f"**ADC:** {m2_pos_adc} | **Est. Pos:** {m2_mm:.1f} mm"
+                uwb1_m = uwb1_mm / 1000.0
+                uwb2_m = uwb2_mm / 1000.0
+                uwb3_m = uwb3_mm / 1000.0
+                pos_x, pos_y = trilaterate_2d(uwb1_m, uwb2_m, uwb3_m)
+
+                # Update markdown with ADC, position, and UWB
+                m1_md.content = f"**ADC:** {m1_pos_adc} | **Est. Pos:** {m1_mm:.1f} mm | **UWB (X, Y):** ({pos_x:.3f}, {pos_y:.3f}) m"
+                m2_md.content = f"**ADC:** {m2_pos_adc} | **Est. Pos:** {m2_mm:.1f} mm | **UWB (X, Y):** ({pos_x:.3f}, {pos_y:.3f}) m"
 
                 # Update 3D Models
                 m1_z = (m1_mm - 13) / 1000.0 if m1_is_t16 else m1_mm / 1000.0
