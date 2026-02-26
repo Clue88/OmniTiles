@@ -19,17 +19,29 @@
 #include <zephyr/drivers/spi.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/net/ieee802154_mgmt.h>
+#include <zephyr/net/net_if.h>
+#include <zephyr/net/net_ip.h>
+#include <zephyr/net/net_mgmt.h>
+#include <zephyr/net/socket.h>
 
 LOG_MODULE_REGISTER(main);
+
+#define UWB_THREAD_STACK_SIZE 2048
+#define UWB_THREAD_PRIORITY   10
+#define UWB_POLL_INTERVAL_MS  100
+#define UWB_ANCHOR_PORT       4242
+#define UWB_POLL_PAYLOAD      "Poll"
+#define UWB_POLL_LEN          4
 
 #define SPI_SLAVE_NODE DT_NODELABEL(my_spis)
 #define DRDY_GPIO_NODE DT_ALIAS(spis_drdy_gpios)
 #define SPI_BUF_SIZE   128
 
 /* Protocol: same as STM32/omnitiles (START_BYTE, msg_id, checksum). No payload => checksum = msg_id */
-#define CMD_START_BYTE  0xA5
-#define CMD_M1_BRAKE    0x32
-#define CMD_M2_BRAKE    0x42
+#define CMD_START_BYTE 0xA5
+#define CMD_M1_BRAKE   0x32
+#define CMD_M2_BRAKE   0x42
 
 /* Define NUS UUID so scanners can see us in Scan Response */
 #define NUS_UUID_Service_Val                                                             \
@@ -49,8 +61,8 @@ static struct k_work adv_work;
 static struct bt_conn* current_conn;
 
 /* Avoid flooding BLE and stressing stack: rate-limit NUS send and back off on failure */
-#define NUS_SEND_INTERVAL_MS  50
-#define NUS_SEND_BACKOFF_MS   3000
+#define NUS_SEND_INTERVAL_MS 50
+#define NUS_SEND_BACKOFF_MS  3000
 static uint32_t last_nus_send_ms;
 static uint32_t nus_send_backoff_until_ms;
 
@@ -156,6 +168,70 @@ static void bt_ready(int err) {
   }
 }
 
+static struct net_if* uwb_iface_found;
+
+static void find_ieee802154_cb(struct net_if* iface, void* user_data) {
+  uint16_t ch;
+  if (uwb_iface_found != NULL) {
+    return;
+  }
+  if (net_mgmt(NET_REQUEST_IEEE802154_GET_CHANNEL, iface, &ch, sizeof(ch)) == 0) {
+    uwb_iface_found = iface;
+  }
+}
+
+static void uwb_thread_entry(void* p1, void* p2, void* p3) {
+  ARG_UNUSED(p1);
+  ARG_UNUSED(p2);
+  ARG_UNUSED(p3);
+
+  struct sockaddr_in6 dst;
+  int fd;
+  int ret;
+
+  uwb_iface_found = NULL;
+  net_if_foreach(find_ieee802154_cb, NULL);
+  if (uwb_iface_found == NULL || !net_if_is_up(uwb_iface_found)) {
+    LOG_ERR("UWB: no IEEE 802.15.4 interface or not up");
+    k_thread_suspend(k_current_get());
+    return;
+  }
+
+  fd = zsock_socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
+  if (fd < 0) {
+    LOG_ERR("UWB: socket create failed (%d)", fd);
+    k_thread_suspend(k_current_get());
+    return;
+  }
+
+  memset(&dst, 0, sizeof(dst));
+  dst.sin6_family = AF_INET6;
+  dst.sin6_port = htons(UWB_ANCHOR_PORT);
+  /* ff02::1 (all-nodes multicast) */
+  dst.sin6_addr.s6_addr[0] = 0xff;
+  dst.sin6_addr.s6_addr[1] = 0x02;
+  dst.sin6_addr.s6_addr[15] = 0x01;
+
+  for (;;) {
+    ret = zsock_sendto(
+        fd, UWB_POLL_PAYLOAD, UWB_POLL_LEN, 0, (struct sockaddr*)&dst, sizeof(dst));
+    if (ret < 0) {
+      LOG_WRN("UWB: sendto failed (%d)", ret);
+    }
+    k_msleep(UWB_POLL_INTERVAL_MS);
+  }
+}
+
+K_THREAD_DEFINE(uwb_thread,
+    UWB_THREAD_STACK_SIZE,
+    uwb_thread_entry,
+    NULL,
+    NULL,
+    NULL,
+    UWB_THREAD_PRIORITY,
+    0,
+    0);
+
 int main(void) {
   int ret;
 
@@ -240,8 +316,9 @@ int main(void) {
             /* -22 EINVAL: notifications not enabled; -128 ENOTCONN: link down.
              * Back off to avoid hammering the stack and contributing to drops. */
             nus_send_backoff_until_ms = now + NUS_SEND_BACKOFF_MS;
-            LOG_WRN("bt_nus_send failed: %d (backing off %d ms)", err,
-                    (int)NUS_SEND_BACKOFF_MS);
+            LOG_WRN("bt_nus_send failed: %d (backing off %d ms)",
+                err,
+                (int)NUS_SEND_BACKOFF_MS);
           }
         }
       }
