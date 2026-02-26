@@ -48,6 +48,9 @@ LOG_MODULE_REGISTER(main);
   0x9E, 0xCA, 0xDC, 0x24, 0x0E, 0xE5, 0xA9, 0xE0, 0x93, 0xF3, 0xA3, 0xB5, 0x01, 0x00,    \
       0x40, 0x6E
 
+/* Shared state: distances to three UWB anchors in mm (volatile ok for mock) */
+static volatile uint16_t uwb_distances_mm[3] = {0, 0, 0};
+
 static const struct bt_data ad[] = {
     BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
     BT_DATA(BT_DATA_NAME_COMPLETE, "OmniTile_1", 10),
@@ -218,6 +221,14 @@ static void uwb_thread_entry(void* p1, void* p2, void* p3) {
     if (ret < 0) {
       LOG_WRN("UWB: sendto failed (%d)", ret);
     }
+
+    /* Mock: update distances (base + small increment to simulate movement) */
+    static uint16_t tick;
+    tick++;
+    uwb_distances_mm[0] = 1000 + (tick % 200);
+    uwb_distances_mm[1] = 2000 + (tick % 200);
+    uwb_distances_mm[2] = 3000 + (tick % 200);
+
     k_msleep(UWB_POLL_INTERVAL_MS);
   }
 }
@@ -308,7 +319,26 @@ int main(void) {
         bool rate_ok = (now - last_nus_send_ms >= NUS_SEND_INTERVAL_MS);
 
         if (!in_backoff && rate_ok) {
-          int err = bt_nus_send(current_conn, rx_buffer, 5);
+          uint8_t nus_buf[11];
+          uint16_t d0 = uwb_distances_mm[0];
+          uint16_t d1 = uwb_distances_mm[1];
+          uint16_t d2 = uwb_distances_mm[2];
+
+          nus_buf[0] = rx_buffer[0];
+          nus_buf[1] = rx_buffer[1];
+          nus_buf[2] = rx_buffer[2];
+          nus_buf[3] = rx_buffer[3];
+          nus_buf[4] = (uint8_t)(d0 >> 8);
+          nus_buf[5] = (uint8_t)(d0 & 0xFF);
+          nus_buf[6] = (uint8_t)(d1 >> 8);
+          nus_buf[7] = (uint8_t)(d1 & 0xFF);
+          nus_buf[8] = (uint8_t)(d2 >> 8);
+          nus_buf[9] = (uint8_t)(d2 & 0xFF);
+          nus_buf[10] = (rx_buffer[1] + rx_buffer[2] + rx_buffer[3] +
+                         nus_buf[4] + nus_buf[5] + nus_buf[6] +
+                         nus_buf[7] + nus_buf[8] + nus_buf[9]) & 0xFF;
+
+          int err = bt_nus_send(current_conn, nus_buf, 11);
           if (err == 0) {
             last_nus_send_ms = now;
             nus_send_backoff_until_ms = 0;
