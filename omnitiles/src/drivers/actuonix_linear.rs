@@ -55,6 +55,7 @@ pub struct ActuonixLinear<
     buffer_bottom_mm: f32,
     buffer_top_mm: f32,
     current_speed: f32,
+    limit_brake_active: bool,
 }
 
 impl<
@@ -107,6 +108,7 @@ where
             buffer_bottom_mm,
             buffer_top_mm,
             current_speed: 0.0,
+            limit_brake_active: false,
         }
     }
 
@@ -114,6 +116,9 @@ where
     ///
     /// `speed` - A float from -1.0 (Full Retract) to 1.0 (Full Extend).
     pub fn set_speed(&mut self, speed: f32) {
+        // Any explicit speed command clears "limit brake" state.
+        self.limit_brake_active = false;
+
         // Clamp speed to valid range
         let mut speed = speed.clamp(-1.0, 1.0);
 
@@ -165,10 +170,10 @@ where
         let min_pos = self.buffer_bottom_mm;
 
         if self.current_speed > 0.0 && pos >= max_pos {
-            self.brake();
+            self.brake_due_to_limit();
             self.current_speed = 0.0; // Reset state
         } else if self.current_speed < 0.0 && pos <= min_pos {
-            self.brake();
+            self.brake_due_to_limit();
             self.current_speed = 0.0; // Reset state
         }
     }
@@ -188,11 +193,29 @@ where
     /// Brake (stops quickly by shorting motor terminals).
     #[inline]
     pub fn brake(&mut self) {
+        self.limit_brake_active = false;
+        self.brake_raw();
+    }
+
+    #[inline]
+    fn brake_due_to_limit(&mut self) {
+        self.limit_brake_active = true;
+        self.brake_raw();
+    }
+
+    #[inline]
+    fn brake_raw(&mut self) {
         let max = self.pwm1.get_max_duty();
         self.pwm1.set_duty(max);
         self.pwm2.set_duty(max);
         self.pwm1.enable();
         self.pwm2.enable();
+    }
+
+    /// True when we are currently braking due to software limit enforcement.
+    #[inline]
+    pub fn is_limit_braking(&self) -> bool {
+        self.limit_brake_active
     }
 
     /// Read raw 12-bit ADC value (0-4095) with hardware oversampling and a median filter.

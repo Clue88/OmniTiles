@@ -46,6 +46,7 @@ fn main() -> ! {
     // LEDs are active-high on the F767ZI devboard but active-low on PCB v1
     let mut led_blue = Led::active_high(pins.leds.blue);
     let mut led_green = Led::active_high(pins.leds.green);
+    let mut led_red = Led::active_high(pins.leds.red);
 
     let serial = Serial::new(
         dp.USART3,
@@ -114,6 +115,12 @@ fn main() -> ! {
     loop {
         m1.enforce_limits();
         m2.enforce_limits();
+
+        if m1.is_limit_braking() || m2.is_limit_braking() {
+            led_red.on();
+        } else {
+            led_red.off();
+        }
 
         if drdy.is_high() {
             delay.delay_ms(2_u32);
