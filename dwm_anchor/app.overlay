@@ -1,0 +1,42 @@
+/*
+ * SPI3 = nRF52833 ↔ DW3110 (DWM3001C). Pinout matches decawave_dwm3001cdk.
+ */
+
+&spi3 {
+	compatible = "nordic,nrf-spim";
+	status = "okay";
+	cs-gpios = <&gpio1 6 GPIO_ACTIVE_LOW>;
+
+	pinctrl-0 = <&spi3_default>;
+	pinctrl-1 = <&spi3_sleep>;
+	pinctrl-names = "default", "sleep";
+
+	dw3000: dw3000@0 {
+		compatible = "decawave,dw3000";
+		reg = <0>;
+		spi-max-frequency = <2000000>;
+		/* Adjust to board schematic if not DWM3001C default */
+		int-gpios = <&gpio0 12 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&gpio0 13 GPIO_ACTIVE_LOW>;
+	};
+};
+
+/* SPI3: SCK P0.03, MOSI P0.08, MISO P0.29 */
+&pinctrl {
+	spi3_default: spi3_default {
+		group1 {
+			psels = <NRF_PSEL(SPIM_SCK, 0, 3)>,
+				<NRF_PSEL(SPIM_MOSI, 0, 8)>,
+				<NRF_PSEL(SPIM_MISO, 0, 29)>;
+		};
+	};
+
+	spi3_sleep: spi3_sleep {
+		group1 {
+			psels = <NRF_PSEL(SPIM_SCK, 0, 3)>,
+				<NRF_PSEL(SPIM_MOSI, 0, 8)>,
+				<NRF_PSEL(SPIM_MISO, 0, 29)>;
+			low-power-enable;
+		};
+	};
+};
