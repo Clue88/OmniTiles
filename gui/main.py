@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+import math
 import os
 import threading
 import time
@@ -127,7 +128,7 @@ def main():
     server = viser.ViserServer(label="OmniTiles Debugger")
     server.scene.add_grid("ground", width=0.5, height=0.5, cell_size=0.05)
 
-    def load_mesh(name, filename, color, pos):
+    def load_mesh(name, filename, color, pos, rotation=None):
         if not os.path.exists(filename):
             return server.scene.add_box(
                 name, dimensions=(0.04, 0.04, 0.1), color=color, position=pos
@@ -136,6 +137,8 @@ def main():
             mesh = trimesh.load_mesh(filename)
             mesh.apply_scale(0.001)
             mesh.visual = ColorVisuals(mesh=mesh, face_colors=to_rgba(color))
+            if rotation is not None:
+                mesh.apply_transform(rotation)
             return server.scene.add_mesh_trimesh(name, mesh, position=pos)
         except Exception as e:
             print(f"Load error {name}: {e}")
@@ -146,21 +149,77 @@ def main():
     # Load M1 Models
     m1_is_t16 = "t16" in M1_CONFIG["move_stl"].lower()
     m1_carriage_offset_z = -0.013 if m1_is_t16 else 0.0
-    load_mesh("m1_base", M1_CONFIG["base_stl"], color=(50, 50, 50), pos=(0, 0, 0))
+
+    # Primary M1
+    load_mesh("m1_base", M1_CONFIG["base_stl"], color=(50, 50, 50), pos=(0.0, 0.0, 0.0))
     m1_shaft = load_mesh(
-        "m1_shaft", M1_CONFIG["move_stl"], color=(200, 200, 200), pos=(0, 0, m1_carriage_offset_z)
+        "m1_shaft",
+        M1_CONFIG["move_stl"],
+        color=(200, 200, 200),
+        pos=(0.0, 0.0, m1_carriage_offset_z),
     )
 
-    # Load M2 Models
+    # Secondary M1, mirrored in height (150 - x) and offset in X
+    load_mesh("m1b_base", M1_CONFIG["base_stl"], color=(50, 50, 50), pos=(-0.06, 0.0, 0.0))
+    m1b_shaft = load_mesh(
+        "m1b_shaft",
+        M1_CONFIG["move_stl"],
+        color=(200, 200, 200),
+        pos=(-0.06, 0.0, m1_carriage_offset_z),
+    )
+
+    # Load M2 Models (horizontal orientation along Y)
     m2_is_t16 = "t16" in M2_CONFIG["move_stl"].lower()
-    m2_carriage_offset_z = -0.013 if m2_is_t16 else 0.0
-    load_mesh("m2_base", M2_CONFIG["base_stl"], color=(50, 50, 80), pos=(0.1, 0, 0))
+    # For M2 T16, apply the 13 mm adjustment as a constant offset along the horizontal travel axis
+    m2_carriage_offset_y = -0.013 if m2_is_t16 else 0.0
+    m2_carriage_offset_z = 0.0
+    m2_rotation = trimesh.transformations.rotation_matrix(math.radians(-90.0), [1.0, 0.0, 0.0])
+
+    # First M2
+    load_mesh(
+        "m2_base",
+        M2_CONFIG["base_stl"],
+        color=(50, 50, 80),
+        pos=(0.1, 0.0, 0.0),
+        rotation=m2_rotation,
+    )
     m2_carriage = load_mesh(
         "m2_carriage",
         M2_CONFIG["move_stl"],
         color=(200, 200, 200),
-        pos=(0.1, 0, m2_carriage_offset_z),
+        pos=(0.1, m2_carriage_offset_y, m2_carriage_offset_z),
+        rotation=m2_rotation,
     )
+
+    # Second M2, mirrored in length
+    load_mesh(
+        "m2b_base",
+        M2_CONFIG["base_stl"],
+        color=(50, 50, 80),
+        pos=(0.16, 0.0, 0.0),
+        rotation=m2_rotation,
+    )
+    m2b_carriage = load_mesh(
+        "m2b_carriage",
+        M2_CONFIG["move_stl"],
+        color=(200, 200, 200),
+        pos=(0.16, m2_carriage_offset_y, m2_carriage_offset_z),
+        rotation=m2_rotation,
+    )
+
+    # Initialize actuators to known positions with no telemetry
+    m1_mm_init = 0.0
+    m1_z_init = (m1_mm_init - 13) / 1000.0 if m1_is_t16 else m1_mm_init / 1000.0
+    m1_shaft.position = (0.0, 0.0, m1_z_init)
+
+    m1b_mm_init = M1_CONFIG["stroke_mm"] - m1_mm_init
+    m1b_z_init = (m1b_mm_init - 13) / 1000.0 if m1_is_t16 else m1b_mm_init / 1000.0
+    m1b_shaft.position = (-0.06, 0.0, m1b_z_init)
+
+    m2_mm_init = 0.0
+    m2_y_init = m2_mm_init / 1000.0
+    m2_carriage.position = (0.1, m2_carriage_offset_y + m2_y_init, m2_carriage_offset_z)
+    m2b_carriage.position = (0.16, m2_carriage_offset_y + m2_y_init, m2_carriage_offset_z)
 
     # 3. Telemetry Callback Logic
     def handle_telemetry(sender, data: bytearray):
@@ -180,9 +239,14 @@ def main():
 
                 # Update 3D Models
                 m1_z = (m1_mm - 13) / 1000.0 if m1_is_t16 else m1_mm / 1000.0
-                m2_z = (m2_mm - 13) / 1000.0 if m2_is_t16 else m2_mm / 1000.0
+                # Mirrored M1: 150 - x mm
+                m1b_mm = M1_CONFIG["stroke_mm"] - m1_mm
+                m1b_z = (m1b_mm - 13) / 1000.0 if m1_is_t16 else m1b_mm / 1000.0
+                m2_y = m2_mm / 1000.0
                 m1_shaft.position = (0.0, 0.0, m1_z)
-                m2_carriage.position = (0.1, 0.0, m2_z)
+                m1b_shaft.position = (-0.06, 0.0, m1b_z)
+                m2_carriage.position = (0.1, m2_carriage_offset_y + m2_y, m2_carriage_offset_z)
+                m2b_carriage.position = (0.16, m2_carriage_offset_y + m2_y, m2_carriage_offset_z)
 
     # 4. Start BLE
     start_ble_thread(handle_telemetry)
