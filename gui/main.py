@@ -59,6 +59,7 @@ ble_loop = None
 def create_packet(msg_id, payload=None):
     """Creates a binary packet. 3 bytes if no payload, 4 bytes if payload."""
     if payload is not None:
+        payload = max(0, min(255, int(payload)))
         checksum = (msg_id + payload) & 0xFF
         return bytes([START_BYTE, msg_id, payload, checksum])
     checksum = msg_id & 0xFF
@@ -180,39 +181,55 @@ def main():
         global ble_client, ble_loop
         packet = create_packet(cmd_id, payload)
         cmd_name = CMD_NAMES.get(cmd_id, f"UNKNOWN_{cmd_id:02X}")
+        payload_str = f" speed={payload}" if payload is not None else ""
 
         if ble_client and ble_client.is_connected and ble_loop is not None:
             asyncio.run_coroutine_threadsafe(
                 ble_client.write_gatt_char(NUS_RX_UUID, packet, response=False), ble_loop
             )
-            print(f"[BLE TX] {cmd_name}")
+            print(f"[BLE TX] {cmd_name}{payload_str}")
         elif ser:
             ser.write(packet)
-            print(f"[UART TX] {cmd_name}")
+            print(f"[UART TX] {cmd_name}{payload_str}")
         else:
-            print(f"[MOCK TX] {cmd_name}")
+            print(f"[MOCK TX] {cmd_name}{payload_str}")
+
+    # Shared state for PWM speed (0–255); sliders show 10–100%
+    state = {"speed_m1": 255, "speed_m2": 255}
 
     with server.gui.add_folder("System Controls"):
         server.gui.add_button("Send Ping", color="blue").on_click(lambda _: send_cmd(MSG_PING))
 
     with server.gui.add_folder(f"M1: {M1_CONFIG['name']}"):
         m1_md = server.gui.add_markdown("Waiting...")
+        speed_m1 = server.gui.add_slider("Speed %", min=10, max=100, step=1, initial_value=100)
+
+        @speed_m1.on_update
+        def _(_):
+            state["speed_m1"] = int(speed_m1.value * 2.55)
+
         server.gui.add_button("Extend", color="green").on_click(
-            lambda _: send_cmd(MSG_M1_EXTEND, 255)
+            lambda _: send_cmd(MSG_M1_EXTEND, state["speed_m1"])
         )
         server.gui.add_button("Brake", color="red").on_click(lambda _: send_cmd(MSG_M1_BRAKE))
         server.gui.add_button("Retract", color="yellow").on_click(
-            lambda _: send_cmd(MSG_M1_RETRACT, 255)
+            lambda _: send_cmd(MSG_M1_RETRACT, state["speed_m1"])
         )
 
     with server.gui.add_folder(f"M2: {M2_CONFIG['name']}"):
         m2_md = server.gui.add_markdown("Waiting...")
+        speed_m2 = server.gui.add_slider("Speed %", min=10, max=100, step=1, initial_value=100)
+
+        @speed_m2.on_update
+        def _(_):
+            state["speed_m2"] = int(speed_m2.value * 2.55)
+
         server.gui.add_button("Extend", color="green").on_click(
-            lambda _: send_cmd(MSG_M2_EXTEND, 255)
+            lambda _: send_cmd(MSG_M2_EXTEND, state["speed_m2"])
         )
         server.gui.add_button("Brake", color="red").on_click(lambda _: send_cmd(MSG_M2_BRAKE))
         server.gui.add_button("Retract", color="yellow").on_click(
-            lambda _: send_cmd(MSG_M2_RETRACT, 255)
+            lambda _: send_cmd(MSG_M2_RETRACT, state["speed_m2"])
         )
 
     def read_loop():
