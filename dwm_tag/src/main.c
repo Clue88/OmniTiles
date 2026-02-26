@@ -56,6 +56,8 @@ static uint32_t nus_send_backoff_until_ms;
 
 /* Set in disconnected(); main loop sends M1+M2 brake to STM32 on next SPI transaction */
 static volatile bool send_brake_on_disconnect;
+/* Set in bt_receive_cb when queue is full; main loop sends M1+M2 brake on next SPI transaction */
+static volatile bool send_brake_on_queue_full;
 
 static void adv_work_handler(struct k_work* work) {
   int err =
@@ -68,7 +70,7 @@ static void adv_work_handler(struct k_work* work) {
 static const struct device* const spi_dev = DEVICE_DT_GET(SPI_SLAVE_NODE);
 static const struct gpio_dt_spec drdy_pin = GPIO_DT_SPEC_GET(DRDY_GPIO_NODE, gpios);
 
-K_MSGQ_DEFINE(ble_msgq, SPI_BUF_SIZE, 10, 4);
+K_MSGQ_DEFINE(ble_msgq, SPI_BUF_SIZE, 32, 4);
 
 static uint8_t tx_buffer[SPI_BUF_SIZE];
 static uint8_t rx_buffer[SPI_BUF_SIZE];
@@ -95,6 +97,7 @@ static void bt_receive_cb(struct bt_conn* conn, const uint8_t* const data, uint1
 
   if (k_msgq_put(&ble_msgq, temp_buf, K_NO_WAIT) != 0) {
     LOG_WRN("BLE Queue Full");
+    send_brake_on_queue_full = true;
   }
 }
 
@@ -182,6 +185,17 @@ int main(void) {
     /* On BLE disconnect, send brake to STM32 so motors stop when link is lost */
     if (send_brake_on_disconnect) {
       send_brake_on_disconnect = false;
+      tx_buffer[0] = CMD_START_BYTE;
+      tx_buffer[1] = CMD_M1_BRAKE;
+      tx_buffer[2] = CMD_M1_BRAKE;
+      tx_buffer[3] = CMD_START_BYTE;
+      tx_buffer[4] = CMD_M2_BRAKE;
+      tx_buffer[5] = CMD_M2_BRAKE;
+      memset(tx_buffer + 6, 0, SPI_BUF_SIZE - 6);
+    }
+    /* When queue overflowed, send brake so actuators stop immediately */
+    if (send_brake_on_queue_full) {
+      send_brake_on_queue_full = false;
       tx_buffer[0] = CMD_START_BYTE;
       tx_buffer[1] = CMD_M1_BRAKE;
       tx_buffer[2] = CMD_M1_BRAKE;
