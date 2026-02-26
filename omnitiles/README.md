@@ -50,6 +50,9 @@ terminal works as above.
 
 ## Documentation
 
+Message IDs and the frame parser live in `src/protocol/` ([messages.rs](src/protocol/messages.rs),
+[parser.rs](src/protocol/parser.rs)).
+
 ```bash
 cargo doc --no-deps --open
 ```

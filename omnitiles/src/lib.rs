@@ -13,6 +13,7 @@
 //! | [`hw`] | MCU-level wrappers around USART, SPI, CAN, timers, etc. |
 //! | [`drivers`] | Device-level drivers (e.g., DRV8873, GDZ468) |
 //! | [`control`]   | Control algorithms (PID, high-level control) |
+//! | [`protocol`]  | Command message IDs and frame parser |
 //!
 //! ## Getting Started
 //!

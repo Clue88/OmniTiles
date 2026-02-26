@@ -1,7 +1,7 @@
 # DWM tag: BLE-to-SPI bridge
 
-This folder is the firmware for the DWM tag (nRF52) on the OmniTiles. The tag runs as a BLE
-peripheral using the Nordic UART Service (NUS). Whatever it receives over BLE it forwards to the
+This folder contains the Zephyr firmware for the DWM tag (nRF52) on the OmniTiles. The tag runs as a
+BLE peripheral using the Nordic UART Service (NUS). Whatever it receives over BLE it forwards to the
 STM32 over SPI, with the nRF52 as SPI slave. The [GUI](../gui/) (or any NUS client) can send command
 packets over the air, and the [OmniTiles firmware](../omnitiles/) on the STM32 reads them via SPI.
 
