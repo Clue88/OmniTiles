@@ -144,13 +144,22 @@ def main():
             )
 
     # Load M1 Models
+    m1_is_t16 = "t16" in M1_CONFIG["move_stl"].lower()
+    m1_carriage_offset_z = -0.013 if m1_is_t16 else 0.0
     load_mesh("m1_base", M1_CONFIG["base_stl"], color=(50, 50, 50), pos=(0, 0, 0))
-    m1_shaft = load_mesh("m1_shaft", M1_CONFIG["move_stl"], color=(200, 200, 200), pos=(0, 0, 0))
+    m1_shaft = load_mesh(
+        "m1_shaft", M1_CONFIG["move_stl"], color=(200, 200, 200), pos=(0, 0, m1_carriage_offset_z)
+    )
 
-    # Load M2 Models (Carriage offset by 13 mm)
+    # Load M2 Models
+    m2_is_t16 = "t16" in M2_CONFIG["move_stl"].lower()
+    m2_carriage_offset_z = -0.013 if m2_is_t16 else 0.0
     load_mesh("m2_base", M2_CONFIG["base_stl"], color=(50, 50, 80), pos=(0.1, 0, 0))
     m2_carriage = load_mesh(
-        "m2_carriage", M2_CONFIG["move_stl"], color=(200, 200, 200), pos=(0.1, 0, -0.013)
+        "m2_carriage",
+        M2_CONFIG["move_stl"],
+        color=(200, 200, 200),
+        pos=(0.1, 0, m2_carriage_offset_z),
     )
 
     # 3. Telemetry Callback Logic
@@ -170,8 +179,10 @@ def main():
                 m2_md.content = f"**ADC:** {m2_pos_adc} | **Est. Pos:** {m2_mm:.1f} mm"
 
                 # Update 3D Models
-                m1_shaft.position = (0.0, 0.0, m1_mm / 1000.0)
-                m2_carriage.position = (0.1, 0.0, (m2_mm - 13) / 1000.0)
+                m1_z = (m1_mm - 13) / 1000.0 if m1_is_t16 else m1_mm / 1000.0
+                m2_z = (m2_mm - 13) / 1000.0 if m2_is_t16 else m2_mm / 1000.0
+                m1_shaft.position = (0.0, 0.0, m1_z)
+                m2_carriage.position = (0.1, 0.0, m2_z)
 
     # 4. Start BLE
     start_ble_thread(handle_telemetry)
