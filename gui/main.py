@@ -16,8 +16,8 @@ from trimesh.visual.color import ColorVisuals
 M1_CONFIG = {
     "name": "P16 Linear Actuator",
     "stroke_mm": 150.0,
-    "buffer_bottom_mm": 35.0,
-    "buffer_top_mm": 25.0,
+    "buffer_bottom_mm": 20.0,
+    "buffer_top_mm": 35.0,
     "base_stl": "p16_base.stl",
     "move_stl": "p16_shaft.stl",
 }
@@ -25,7 +25,7 @@ M1_CONFIG = {
 M2_CONFIG = {
     "name": "T16 Track Actuator",
     "stroke_mm": 100.0,
-    "buffer_bottom_mm": 15.0,
+    "buffer_bottom_mm": 25.0,
     "buffer_top_mm": 15.0,
     "base_stl": "t16_base.stl",
     "move_stl": "t16_carriage.stl",

@@ -100,8 +100,8 @@ fn main() -> ! {
     let mut m1 = LinearController::new(
         m1_actuator,
         Pid::new(0.5, 0.01, 0.05),
-        35.0,  // min_position_mm (buffer at retracted end)
-        125.0, // max_position_mm (stroke 150 mm - buffer 25 mm at extended end)
+        20.0,  // min_position_mm (buffer at retracted end)
+        115.0, // max_position_mm (stroke 150 mm - buffer 35 mm at extended end)
         2.0,   // on_target_tolerance_mm
     );
 
@@ -120,8 +120,8 @@ fn main() -> ! {
     let mut m2 = LinearController::new(
         m2_actuator,
         Pid::new(0.5, 0.01, 0.05),
-        15.0, // min_position_mm
-        85.0, // max_position_mm (stroke 100 mm - buffer 15 mm)
+        25.0, // min_position_mm (buffer at retracted end)
+        85.0, // max_position_mm (stroke 100 mm - buffer 15 mm at extended end)
         2.0,  // on_target_tolerance_mm
     );
 
