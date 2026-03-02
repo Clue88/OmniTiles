@@ -273,7 +273,7 @@ def main():
         global ble_client, ble_loop
         packet = create_packet(cmd_id, payload)
         cmd_name = CMD_NAMES.get(cmd_id, f"UNKNOWN_{cmd_id:02X}")
-        payload_str = f" speed={payload}" if payload is not None else ""
+        payload_str = f" payload={payload}" if payload is not None else ""
 
         if ble_client and ble_client.is_connected and ble_loop is not None:
             asyncio.run_coroutine_threadsafe(
