@@ -125,6 +125,14 @@ fn main() -> ! {
         2.0,  // on_target_tolerance_mm
     );
 
+    // Disable PID control and engage brakes at boot
+    m1.mode = LinearMode::Disabled;
+    m2.mode = LinearMode::Disabled;
+    m1.actuator.brake();
+    m2.actuator.brake();
+    led_green.off();
+    led_blue.off();
+
     let mut parser = Parser::new();
 
     loop {
@@ -184,6 +192,7 @@ fn main() -> ! {
                         }
                         Command::M1Brake => {
                             writeln!(usart, "cmd: M1Brake\r").ok();
+                            m1.mode = LinearMode::Disabled;
                             m1.actuator.brake();
                             led_green.off();
                         }
@@ -208,6 +217,7 @@ fn main() -> ! {
                         }
                         Command::M2Brake => {
                             writeln!(usart, "cmd: M2Brake\r").ok();
+                            m2.mode = LinearMode::Disabled;
                             m2.actuator.brake();
                             led_blue.off();
                         }
@@ -245,6 +255,7 @@ fn main() -> ! {
                     }
                     Command::M1Brake => {
                         writeln!(usart, "cmd: M1Brake\r").ok();
+                        m1.mode = LinearMode::Disabled;
                         m1.actuator.brake();
                         led_green.off();
                     }
@@ -269,6 +280,7 @@ fn main() -> ! {
                     }
                     Command::M2Brake => {
                         writeln!(usart, "cmd: M2Brake\r").ok();
+                        m2.mode = LinearMode::Disabled;
                         m2.actuator.brake();
                         led_blue.off();
                     }
