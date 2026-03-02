@@ -132,7 +132,7 @@ fn main() -> ! {
         m1.step(DT);
         m2.step(DT);
 
-        if m1.is_limit_braking() || m2.is_limit_braking() {
+        if m1.actuator.is_limit_braking() || m2.actuator.is_limit_braking() {
             led_red.on();
         } else {
             led_red.off();
