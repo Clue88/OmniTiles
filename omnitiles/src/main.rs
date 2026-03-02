@@ -99,10 +99,10 @@ fn main() -> ! {
     m1_actuator.enable_outputs();
     let mut m1 = LinearController::new(
         m1_actuator,
-        Pid::new(0.5, 0.01, 0.05),
-        20.0,  // min_position_mm (buffer at retracted end)
-        115.0, // max_position_mm (stroke 150 mm - buffer 35 mm at extended end)
-        2.0,   // on_target_tolerance_mm
+        Pid::new(0.0, 5.0, 0.0), // Under load we might need to bring back kp
+        20.0,                    // min_position_mm (buffer at retracted end)
+        115.0,                   // max_position_mm (stroke 150 mm - buffer 35 mm at extended end)
+        2.0,                     // on_target_tolerance_mm
     );
 
     let mut m2_actuator = ActuonixLinear::new(
@@ -119,10 +119,10 @@ fn main() -> ! {
     m2_actuator.enable_outputs();
     let mut m2 = LinearController::new(
         m2_actuator,
-        Pid::new(0.5, 0.01, 0.05),
-        25.0, // min_position_mm (buffer at retracted end)
-        85.0, // max_position_mm (stroke 100 mm - buffer 15 mm at extended end)
-        2.0,  // on_target_tolerance_mm
+        Pid::new(0.0, 5.0, 0.0), // Under load we might need to bring back kp
+        25.0,                    // min_position_mm (buffer at retracted end)
+        85.0,                    // max_position_mm (stroke 100 mm - buffer 15 mm at extended end)
+        0.45,                    // on_target_tolerance_mm
     );
 
     // Disable PID control and engage brakes at boot
