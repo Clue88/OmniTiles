@@ -197,6 +197,7 @@ fn main() -> ! {
                             led_green.off();
                         }
                         Command::M1SetPosition(mm) => {
+                            writeln!(usart, "cmd: M1SetPosition mm={}\r", mm).ok();
                             m1.mode = LinearMode::PositionControl;
                             m1.set_target_position_mm(mm as f32);
                             led_green.on();
@@ -222,6 +223,7 @@ fn main() -> ! {
                             led_blue.off();
                         }
                         Command::M2SetPosition(mm) => {
+                            writeln!(usart, "cmd: M2SetPosition mm={}\r", mm).ok();
                             m2.mode = LinearMode::PositionControl;
                             m2.set_target_position_mm(mm as f32);
                             led_blue.on();
@@ -260,6 +262,7 @@ fn main() -> ! {
                         led_green.off();
                     }
                     Command::M1SetPosition(mm) => {
+                        writeln!(usart, "cmd: M1SetPosition mm={}\r", mm).ok();
                         m1.mode = LinearMode::PositionControl;
                         m1.set_target_position_mm(mm as f32);
                         led_green.on();
@@ -285,6 +288,7 @@ fn main() -> ! {
                         led_blue.off();
                     }
                     Command::M2SetPosition(mm) => {
+                        writeln!(usart, "cmd: M2SetPosition mm={}\r", mm).ok();
                         m2.mode = LinearMode::PositionControl;
                         m2.set_target_position_mm(mm as f32);
                         led_blue.on();
