@@ -10,6 +10,7 @@
 //!
 //! - [`drv8873`] – TI DRV8873-Q1 4-wire SPI motor driver
 //! - [`actuonix_linear`] – Actuonix linear actuator with DRV8873 driver and potentiometer feedback
+//! - [`vl53l0x`] – VL53L0X Time-of-Flight sensor
 //!
 //! ## Legacy drivers
 //!
@@ -21,8 +22,10 @@ pub mod drv8873;
 pub mod actuonix_linear;
 pub mod fit0185;
 pub mod gim6010;
+pub mod vl53l0x;
 
 pub use actuonix_linear::ActuonixLinear;
 pub use drv8873::Drv8873;
 pub use fit0185::Fit0185;
 pub use gim6010::Gim6010;
+pub use vl53l0x::Vl53l0x;

@@ -4,7 +4,9 @@
 //! Pin definitions for STM32F767ZI devboard.
 
 use stm32f7xx_hal::{
-    gpio::{gpioa, gpiob, gpioc, gpiod, Alternate, Analog, Floating, Input, Output, PushPull},
+    gpio::{
+        gpioa, gpiob, gpioc, gpiod, Alternate, Analog, Floating, Input, OpenDrain, Output, PushPull,
+    },
     pac,
     prelude::*,
 };
@@ -15,6 +17,7 @@ pub struct BoardPins {
     pub spi1: Spi1Pins,
     pub m1: Motor1Pins,
     pub m2: Motor2Pins,
+    pub i2c1: I2c1Pins,
 }
 
 pub struct Leds {
@@ -43,6 +46,11 @@ pub struct Motor1Pins {
     pub nsleep: gpiod::PD1<Output<PushPull>>,
     pub disable: gpiod::PD2<Output<PushPull>>,
     pub adc: gpiob::PB1<Analog>,
+}
+
+pub struct I2c1Pins {
+    pub scl: gpiob::PB8<Alternate<4, OpenDrain>>,
+    pub sda: gpiob::PB9<Alternate<4, OpenDrain>>,
 }
 
 pub struct Motor2Pins {
@@ -97,6 +105,11 @@ impl BoardPins {
                 nsleep: gpiod.pd4.into_push_pull_output(),
                 disable: gpiod.pd5.into_push_pull_output(),
                 adc: gpioc.pc2.into_analog(),
+            },
+
+            i2c1: I2c1Pins {
+                scl: gpiob.pb8.into_alternate_open_drain::<4>(),
+                sda: gpiob.pb9.into_alternate_open_drain::<4>(),
             },
         }
     }

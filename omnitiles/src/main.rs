@@ -12,6 +12,7 @@ use core::cell::RefCell;
 use core::fmt::Write;
 
 use hal::{
+    i2c::{BlockingI2c, Mode as I2cMode},
     pac,
     prelude::*,
     serial::{Config, Serial},
@@ -21,8 +22,8 @@ use stm32f7xx_hal as hal;
 
 use omnitiles::{
     control::{LinearController, LinearMode, Pid},
-    drivers::{ActuonixLinear, Drv8873},
-    hw::{pins_f767zi::BoardPins, Adc, ChipSelect, Led, SpiBus, Usart},
+    drivers::{ActuonixLinear, Drv8873, Vl53l0x},
+    hw::{pins_f767zi::BoardPins, Adc, ChipSelect, I2cBus, Led, SpiBus, Usart},
     protocol::{Command, Parser},
 };
 
@@ -38,6 +39,7 @@ fn main() -> ! {
 
     let rcc = dp.RCC.constrain();
     let clocks = rcc.cfgr.freeze();
+    let mut apb1 = rcc.apb1;
     let mut apb2 = rcc.apb2;
 
     let mut delay = Delay::new(cp.SYST, clocks.sysclk().raw());
@@ -61,6 +63,21 @@ fn main() -> ! {
     let mut usart = Usart::new(serial);
 
     usart.println("Booting OmniTiles firmware...");
+
+    let i2c_raw = BlockingI2c::i2c1(
+        dp.I2C1,
+        (pins.i2c1.scl, pins.i2c1.sda),
+        I2cMode::standard(100_000_u32.Hz()),
+        &clocks,
+        &mut apb1,
+        10_000, // data_timeout_us
+    );
+    let i2c_bus = I2cBus::new(i2c_raw);
+    let mut tof = Vl53l0x::new(i2c_bus)
+        .and_then(|mut s| s.static_init().map(|_| s))
+        .and_then(|mut s| s.load_tuning().map(|_| s))
+        .and_then(|mut s| s.calibrate().map(|_| s))
+        .ok();
 
     let mut spi_bus = {
         let spi_mode = Mode {
@@ -134,11 +151,27 @@ fn main() -> ! {
     led_blue.off();
 
     let mut parser = Parser::new();
+    let mut tof_counter: u8 = 0;
 
     loop {
         const DT: f32 = 0.02;
         m1.step(DT);
         m2.step(DT);
+
+        tof_counter = tof_counter.wrapping_add(1);
+        if tof_counter >= 5 {
+            tof_counter = 0;
+            if let Some(ref mut sensor) = tof {
+                match sensor.read_range_mm() {
+                    Ok(mm) => {
+                        writeln!(usart, "tof: {}mm\r", mm).ok();
+                    }
+                    Err(_) => {
+                        usart.println("tof: read error\r");
+                    }
+                }
+            }
+        }
 
         if m1.actuator.is_limit_braking() || m2.actuator.is_limit_braking() {
             led_red.on();
