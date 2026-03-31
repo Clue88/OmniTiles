@@ -152,6 +152,10 @@ fn main() -> ! {
 
     let mut parser = Parser::new();
     let mut tof_counter: u8 = 0;
+    let mut tof_history: [u16; 50] = [0; 50];
+    let mut tof_idx: usize = 0;
+    let mut tof_history_count: usize = 0;
+    let mut tof_sum: u32 = 0;
 
     loop {
         const DT: f32 = 0.02;
@@ -164,7 +168,22 @@ fn main() -> ! {
             if let Some(ref mut sensor) = tof {
                 match sensor.read_range_mm() {
                     Ok(mm) => {
-                        writeln!(usart, "tof: {}mm\r", mm).ok();
+                        if tof_history_count < 50 {
+                            tof_history[tof_idx] = mm;
+                            tof_sum += mm as u32;
+                            tof_history_count += 1;
+                            tof_idx = (tof_idx + 1) % 50;
+                        } else {
+                            let old = tof_history[tof_idx];
+                            tof_history[tof_idx] = mm;
+                            tof_sum = tof_sum + (mm as u32) - (old as u32);
+                            tof_idx = (tof_idx + 1) % 50;
+                        }
+
+                        let denom = tof_history_count as u32;
+                        let mm_avg = (tof_sum / denom) as u16;
+
+                        writeln!(usart, "tof: {}mm\r", mm_avg).ok();
                     }
                     Err(_) => {
                         usart.println("tof: read error\r");
