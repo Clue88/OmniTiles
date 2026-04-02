@@ -64,20 +64,20 @@ fn main() -> ! {
 
     usart.println("Booting OmniTiles firmware...");
 
-    let i2c_raw = BlockingI2c::i2c1(
-        dp.I2C1,
-        (pins.i2c1.scl, pins.i2c1.sda),
-        I2cMode::standard(100_000_u32.Hz()),
-        &clocks,
-        &mut apb1,
-        10_000, // data_timeout_us
-    );
-    let i2c_bus = I2cBus::new(i2c_raw);
-    let mut tof = Vl53l0x::new(i2c_bus)
-        .and_then(|mut s| s.static_init().map(|_| s))
-        .and_then(|mut s| s.load_tuning().map(|_| s))
-        .and_then(|mut s| s.calibrate().map(|_| s))
-        .ok();
+    // let i2c_raw = BlockingI2c::i2c1(
+    //     dp.I2C1,
+    //     (pins.i2c1.scl, pins.i2c1.sda),
+    //     I2cMode::standard(100_000_u32.Hz()),
+    //     &clocks,
+    //     &mut apb1,
+    //     10_000, // data_timeout_us
+    // );
+    // let i2c_bus = I2cBus::new(i2c_raw);
+    // let mut tof = Vl53l0x::new(i2c_bus)
+    //     .and_then(|mut s| s.static_init().map(|_| s))
+    //     .and_then(|mut s| s.load_tuning().map(|_| s))
+    //     .and_then(|mut s| s.calibrate().map(|_| s))
+    //     .ok();
 
     let mut spi_bus = {
         let spi_mode = Mode {
@@ -152,46 +152,46 @@ fn main() -> ! {
     led_green.off();
 
     let mut parser = Parser::new();
-    let mut tof_counter: u8 = 0;
-    let mut tof_history: [u16; 50] = [0; 50];
-    let mut tof_idx: usize = 0;
-    let mut tof_history_count: usize = 0;
-    let mut tof_sum: u32 = 0;
+    // let mut tof_counter: u8 = 0;
+    // let mut tof_history: [u16; 50] = [0; 50];
+    // let mut tof_idx: usize = 0;
+    // let mut tof_history_count: usize = 0;
+    // let mut tof_sum: u32 = 0;
 
     loop {
         const DT: f32 = 0.02;
         m1.step(DT);
         m2.step(DT);
 
-        tof_counter = tof_counter.wrapping_add(1);
-        if tof_counter >= 5 {
-            tof_counter = 0;
-            if let Some(ref mut sensor) = tof {
-                match sensor.read_range_mm() {
-                    Ok(mm) => {
-                        if tof_history_count < 50 {
-                            tof_history[tof_idx] = mm;
-                            tof_sum += mm as u32;
-                            tof_history_count += 1;
-                            tof_idx = (tof_idx + 1) % 50;
-                        } else {
-                            let old = tof_history[tof_idx];
-                            tof_history[tof_idx] = mm;
-                            tof_sum = tof_sum + (mm as u32) - (old as u32);
-                            tof_idx = (tof_idx + 1) % 50;
-                        }
+        // tof_counter = tof_counter.wrapping_add(1);
+        // if tof_counter >= 5 {
+        //     tof_counter = 0;
+        //     if let Some(ref mut sensor) = tof {
+        //         match sensor.read_range_mm() {
+        //             Ok(mm) => {
+        //                 if tof_history_count < 50 {
+        //                     tof_history[tof_idx] = mm;
+        //                     tof_sum += mm as u32;
+        //                     tof_history_count += 1;
+        //                     tof_idx = (tof_idx + 1) % 50;
+        //                 } else {
+        //                     let old = tof_history[tof_idx];
+        //                     tof_history[tof_idx] = mm;
+        //                     tof_sum = tof_sum + (mm as u32) - (old as u32);
+        //                     tof_idx = (tof_idx + 1) % 50;
+        //                 }
 
-                        let denom = tof_history_count as u32;
-                        let mm_avg = (tof_sum / denom) as u16;
+        //                 let denom = tof_history_count as u32;
+        //                 let mm_avg = (tof_sum / denom) as u16;
 
-                        writeln!(usart, "tof: {}mm\r", mm_avg).ok();
-                    }
-                    Err(_) => {
-                        usart.println("tof: read error\r");
-                    }
-                }
-            }
-        }
+        //                 writeln!(usart, "tof: {}mm\r", mm_avg).ok();
+        //             }
+        //             Err(_) => {
+        //                 usart.println("tof: read error\r");
+        //             }
+        //         }
+        //     }
+        // }
 
         if m1.actuator.is_limit_braking() || m2.actuator.is_limit_braking() {
             led_red.on();
