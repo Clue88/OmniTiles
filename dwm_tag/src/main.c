@@ -39,39 +39,20 @@ LOG_MODULE_REGISTER(main);
 #define CMD_M2_BRAKE   0x42
 
 // ---------------------------------------------------------------------------
-// UWB ranging constants — must match anchor firmware exactly
+// UWB ranging constants — based on Qorvo SS-TWR examples (ex_06a/ex_06b)
 // ---------------------------------------------------------------------------
 #define NUM_ANCHORS 3
 
-#define UWB_FC_0        0x41
-#define UWB_FC_1        0x88
-#define UWB_PAN_ID_0    0xCA  // PAN 0xDECA
-#define UWB_PAN_ID_1    0xDE
-#define UWB_FUNC_POLL   0x21
-#define UWB_FUNC_RESP   0x10
-#define UWB_FUNC_FINAL  0x23
-#define UWB_FUNC_RESULT 0x24
-
-#define UWB_TAG_ADDR_0 0x01
-#define UWB_TAG_ADDR_1 0x00
-
-// Anchor short addresses: 0x0010, 0x0011, 0x0012
-#define UWB_ANCHOR_ADDR_BASE 0x10
+#define UWB_FUNC_POLL 0xE0
+#define UWB_FUNC_RESP 0xE1
 
 #define UWB_TX_ANT_DLY 16385
 #define UWB_RX_ANT_DLY 16385
 
-// Delay between TX of Poll and expected RX of Response, in UWB microseconds
-#define UWB_POLL_TX_TO_RESP_RX_DLY_UUS 300
-// RX timeout waiting for Response, in UWB microseconds
+// SDK ex_06a defaults: 240 UUS delay, 400 UUS timeout
+// We need much larger values for 8 MHz SPI (anchor needs 1500 UUS to respond)
+#define UWB_POLL_TX_TO_RESP_RX_DLY_UUS 1400
 #define UWB_RESP_RX_TIMEOUT_UUS 3000
-// Delay between RX of Response and TX of Final, in UWB microseconds
-#define UWB_RESP_RX_TO_FINAL_TX_DLY_UUS 300
-// RX timeout waiting for Distance Result, in UWB microseconds
-#define UWB_RESULT_RX_TIMEOUT_UUS 3000
-
-// Convert UWB microseconds to DW3000 device time units
-#define UUS_TO_DWT_TIME 65536
 
 #define SPEED_OF_LIGHT 299702547.0
 
@@ -205,7 +186,7 @@ static void bt_ready(int err) {
 }
 
 // ---------------------------------------------------------------------------
-// UWB Ranging Thread — DS-TWR initiator
+// UWB Ranging Thread — SS-TWR initiator (based on Qorvo ex_06a)
 // ---------------------------------------------------------------------------
 static dwt_config_t uwb_config = {
     .chan = 5,
@@ -223,164 +204,27 @@ static dwt_config_t uwb_config = {
     .pdoaMode = DWT_PDOA_M0,
 };
 
-static uint8_t uwb_seq_num = 0;
-static uint8_t uwb_rx_buf[24];
+// Frame format matching SDK ex_06a/ex_06b
+static uint8_t tx_poll_msg[] = {
+    0x41, 0x88, 0, 0xCA, 0xDE, 'W', 'A', 'V', 'E', UWB_FUNC_POLL, 0, 0};
+static uint8_t rx_resp_msg[] = {
+    0x41, 0x88, 0, 0xCA, 0xDE, 'V', 'E', 'W', 'A', UWB_FUNC_RESP,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
-static uint64_t uwb_get_rx_timestamp_u64(void) {
-  uint8_t ts[5];
-  dwt_readrxtimestamp(ts, DWT_COMPAT_NONE);
-  return ((uint64_t)ts[0]) | ((uint64_t)ts[1] << 8) | ((uint64_t)ts[2] << 16) |
-         ((uint64_t)ts[3] << 24) | ((uint64_t)ts[4] << 32);
-}
+#define ALL_MSG_SN_IDX          2
+#define ALL_MSG_COMMON_LEN      10
+#define RESP_MSG_POLL_RX_TS_IDX 10
+#define RESP_MSG_RESP_TX_TS_IDX 14
+#define RESP_MSG_TS_LEN         4
 
-static uint64_t uwb_get_tx_timestamp_u64(void) {
-  uint8_t ts[5];
-  dwt_readtxtimestamp(ts);
-  return ((uint64_t)ts[0]) | ((uint64_t)ts[1] << 8) | ((uint64_t)ts[2] << 16) |
-         ((uint64_t)ts[3] << 24) | ((uint64_t)ts[4] << 32);
-}
+static uint8_t uwb_frame_seq_nb = 0;
 
-// Perform one DS-TWR exchange with a single anchor. Returns distance in mm or 0xFFFF on failure.
-static uint16_t uwb_range_one_anchor(uint8_t anchor_id) {
-  uint8_t anchor_addr_lo = UWB_ANCHOR_ADDR_BASE + anchor_id;
+#define UWB_RX_BUF_LEN 20
+static uint8_t uwb_rx_buf[UWB_RX_BUF_LEN];
 
-  // --- Send Poll ---
-  uint8_t poll_msg[] = {
-      UWB_FC_0,
-      UWB_FC_1,
-      uwb_seq_num++,
-      UWB_PAN_ID_0,
-      UWB_PAN_ID_1,
-      anchor_addr_lo,
-      0x00,  // Dest = anchor
-      UWB_TAG_ADDR_0,
-      UWB_TAG_ADDR_1,  // Src = tag
-      UWB_FUNC_POLL,
-  };
-
-  dwt_writetxdata(sizeof(poll_msg) + FCS_LEN, poll_msg, 0);
-  dwt_writetxfctrl(sizeof(poll_msg) + FCS_LEN, 0, 1);
-
-  dwt_setrxaftertxdelay((uint32_t)UWB_POLL_TX_TO_RESP_RX_DLY_UUS);
-  dwt_setrxtimeout(UWB_RESP_RX_TIMEOUT_UUS);
-
-  if (dwt_starttx(DWT_START_TX_IMMEDIATE | DWT_RESPONSE_EXPECTED) != DWT_SUCCESS) {
-    return 0xFFFF;
-  }
-
-  // Wait for TX complete
-  uint32_t status;
-  while (!((status = dwt_readsysstatuslo()) & DWT_INT_TXFRS_BIT_MASK)) {
-  }
-  dwt_writesysstatuslo(DWT_INT_TXFRS_BIT_MASK);
-
-  uint64_t poll_tx_ts = uwb_get_tx_timestamp_u64();
-
-  // --- Wait for Response ---
-  while (!(
-      (status = dwt_readsysstatuslo()) &
-      (DWT_INT_RXFCG_BIT_MASK | DWT_INT_RXFTO_BIT_MASK | DWT_INT_RXPTO_BIT_MASK |
-          DWT_INT_RXPHE_BIT_MASK | DWT_INT_RXFCE_BIT_MASK | DWT_INT_RXFSL_BIT_MASK))) {
-  }
-
-  if (!(status & DWT_INT_RXFCG_BIT_MASK)) {
-    dwt_writesysstatuslo(0xFFFFFFFF);
-    return 0xFFFF;
-  }
-  dwt_writesysstatuslo(DWT_INT_RXFCG_BIT_MASK);
-
-  uint8_t rng_bit = 0;
-  uint16_t rx_len = dwt_getframelength(&rng_bit);
-  if (rx_len > sizeof(uwb_rx_buf))
-    rx_len = sizeof(uwb_rx_buf);
-  dwt_readrxdata(uwb_rx_buf, rx_len, 0);
-
-  if (uwb_rx_buf[9] != UWB_FUNC_RESP) {
-    return 0xFFFF;
-  }
-
-  uint64_t resp_rx_ts = uwb_get_rx_timestamp_u64();
-
-  // --- Send Final (with embedded timestamps for the anchor to compute distance) ---
-  uint32_t final_tx_time =
-      (uint32_t)((resp_rx_ts +
-                     ((uint64_t)UWB_RESP_RX_TO_FINAL_TX_DLY_UUS * UUS_TO_DWT_TIME)) >>
-                 8);
-  dwt_setdelayedtrxtime(final_tx_time);
-
-  // The actual TX timestamp will be final_tx_time << 8 (top 32 bits)
-  uint64_t final_tx_ts = (((uint64_t)final_tx_time) << 8) + UWB_TX_ANT_DLY;
-
-  uint8_t final_msg[22] = {
-      UWB_FC_0,
-      UWB_FC_1,
-      uwb_seq_num++,
-      UWB_PAN_ID_0,
-      UWB_PAN_ID_1,
-      anchor_addr_lo,
-      0x00,
-      UWB_TAG_ADDR_0,
-      UWB_TAG_ADDR_1,
-      UWB_FUNC_FINAL,
-      // Bytes 10..13: poll_tx_ts (lower 32 bits, LE)
-      (uint8_t)(poll_tx_ts),
-      (uint8_t)(poll_tx_ts >> 8),
-      (uint8_t)(poll_tx_ts >> 16),
-      (uint8_t)(poll_tx_ts >> 24),
-      // Bytes 14..17: resp_rx_ts (lower 32 bits, LE)
-      (uint8_t)(resp_rx_ts),
-      (uint8_t)(resp_rx_ts >> 8),
-      (uint8_t)(resp_rx_ts >> 16),
-      (uint8_t)(resp_rx_ts >> 24),
-      // Bytes 18..21: final_tx_ts (lower 32 bits, LE)
-      (uint8_t)(final_tx_ts),
-      (uint8_t)(final_tx_ts >> 8),
-      (uint8_t)(final_tx_ts >> 16),
-      (uint8_t)(final_tx_ts >> 24),
-  };
-
-  dwt_writetxdata(sizeof(final_msg) + FCS_LEN, final_msg, 0);
-  dwt_writetxfctrl(sizeof(final_msg) + FCS_LEN, 0, 1);
-
-  dwt_setrxaftertxdelay(0);
-  dwt_setrxtimeout(UWB_RESULT_RX_TIMEOUT_UUS);
-
-  if (dwt_starttx(DWT_START_TX_DELAYED | DWT_RESPONSE_EXPECTED) != DWT_SUCCESS) {
-    return 0xFFFF;
-  }
-
-  // Wait for TX complete
-  while (!((status = dwt_readsysstatuslo()) & DWT_INT_TXFRS_BIT_MASK)) {
-  }
-  dwt_writesysstatuslo(DWT_INT_TXFRS_BIT_MASK);
-
-  // --- Wait for Distance Result from anchor ---
-  while (!(
-      (status = dwt_readsysstatuslo()) &
-      (DWT_INT_RXFCG_BIT_MASK | DWT_INT_RXFTO_BIT_MASK | DWT_INT_RXPTO_BIT_MASK |
-          DWT_INT_RXPHE_BIT_MASK | DWT_INT_RXFCE_BIT_MASK | DWT_INT_RXFSL_BIT_MASK))) {
-  }
-
-  if (!(status & DWT_INT_RXFCG_BIT_MASK)) {
-    dwt_writesysstatuslo(0xFFFFFFFF);
-    return 0xFFFF;
-  }
-  dwt_writesysstatuslo(DWT_INT_RXFCG_BIT_MASK);
-
-  rx_len = dwt_getframelength(&rng_bit);
-  if (rx_len > sizeof(uwb_rx_buf))
-    rx_len = sizeof(uwb_rx_buf);
-  dwt_readrxdata(uwb_rx_buf, rx_len, 0);
-
-  if (uwb_rx_buf[9] != UWB_FUNC_RESULT) {
-    return 0xFFFF;
-  }
-
-  // Extract distance (uint32 LE at bytes 10..13), clamp to uint16
-  uint32_t dist = (uint32_t)uwb_rx_buf[10] | ((uint32_t)uwb_rx_buf[11] << 8) |
-                  ((uint32_t)uwb_rx_buf[12] << 16) | ((uint32_t)uwb_rx_buf[13] << 24);
-
-  return (dist > 0xFFFE) ? 0xFFFE : (uint16_t)dist;
+static void resp_msg_get_ts(const uint8_t* ts_field, uint32_t* ts) {
+  *ts = (uint32_t)ts_field[0] | ((uint32_t)ts_field[1] << 8) |
+        ((uint32_t)ts_field[2] << 16) | ((uint32_t)ts_field[3] << 24);
 }
 
 static void uwb_ranging_thread_fn(void* p1, void* p2, void* p3) {
@@ -392,7 +236,7 @@ static void uwb_ranging_thread_fn(void* p1, void* p2, void* p3) {
 
   dw3000_hw_init();
   dw3000_hw_reset();
-  k_sleep(K_MSEC(2));
+  k_sleep(K_MSEC(10));
 
   if (dwt_probe((struct dwt_probe_s*)&dw3000_probe_interf) != DWT_SUCCESS) {
     LOG_ERR("UWB: dwt_probe failed");
@@ -401,38 +245,118 @@ static void uwb_ranging_thread_fn(void* p1, void* p2, void* p3) {
 
   LOG_INF("UWB: DW3000 Device ID: 0x%08X", dwt_readdevid());
 
-  if (dwt_initialise(DWT_DW_INIT) != DWT_SUCCESS) {
+  if (dwt_initialise(DWT_DW_INIT | DWT_READ_OTP_PID | DWT_READ_OTP_LID |
+                     DWT_READ_OTP_BAT | DWT_READ_OTP_TMP) != DWT_SUCCESS) {
     LOG_ERR("UWB: dwt_initialise failed");
     return;
   }
+  LOG_INF("UWB: dwt_initialise OK");
+
+  dwt_setleds(DWT_LEDS_ENABLE | DWT_LEDS_INIT_BLINK);
 
   if (dwt_configure(&uwb_config) != DWT_SUCCESS) {
     LOG_ERR("UWB: dwt_configure failed");
     return;
   }
 
+  static dwt_txconfig_t txconfig = {0x34, 0xfdfdfdfd, 0x0};
+  dwt_configuretxrf(&txconfig);
+
   dwt_setrxantennadelay(UWB_RX_ANT_DLY);
   dwt_settxantennadelay(UWB_TX_ANT_DLY);
-  dwt_setaddress16(0x0001);  // Tag address
-  dwt_setpanid(0xDECA);
 
-  LOG_INF("UWB: Ranging started (3 anchors)");
+  dwt_setrxaftertxdelay(UWB_POLL_TX_TO_RESP_RX_DLY_UUS);
+  dwt_setrxtimeout(UWB_RESP_RX_TIMEOUT_UUS);
+
+  dwt_setlnapamode(DWT_LNA_ENABLE | DWT_PA_ENABLE);
+
+  LOG_INF("UWB: SS-TWR initiator started");
 
   while (1) {
-    for (uint8_t i = 0; i < NUM_ANCHORS; i++) {
-      uint16_t dist = uwb_range_one_anchor(i);
-      uwb_dist_mm[i] = dist;
+    uint32_t status_reg;
 
-      if (dist != 0xFFFF) {
-        LOG_DBG("UWB: Anchor %d = %u mm", i, dist);
-      }
+    // Prepare and send poll (matching SDK ex_06a exactly)
+    tx_poll_msg[ALL_MSG_SN_IDX] = uwb_frame_seq_nb;
+    dwt_writesysstatuslo(DWT_INT_TXFRS_BIT_MASK);
+    dwt_writetxdata(sizeof(tx_poll_msg), tx_poll_msg, 0);
+    dwt_writetxfctrl(sizeof(tx_poll_msg), 0, 1);
 
-      k_sleep(K_MSEC(2));  // Brief pause between anchors
+    dwt_starttx(DWT_START_TX_IMMEDIATE);
+
+    // Wait for TX done
+    while (!((status_reg = dwt_readsysstatuslo()) & DWT_INT_TXFRS_BIT_MASK)) {
     }
+    dwt_writesysstatuslo(0xFFFFFFFF);
+
+    // Manually enable RX with timeout (bypass DWT_RESPONSE_EXPECTED)
+    dwt_setrxtimeout(UWB_RESP_RX_TIMEOUT_UUS);
+    dwt_rxenable(DWT_START_RX_IMMEDIATE);
+
+    // Wait for RX good frame, timeout, or error
+    while (!((status_reg = dwt_readsysstatuslo()) &
+             (DWT_INT_RXFCG_BIT_MASK | SYS_STATUS_ALL_RX_TO |
+                 SYS_STATUS_ALL_RX_ERR))) {
+    }
+
+    uwb_frame_seq_nb++;
+
+    if (status_reg & DWT_INT_RXFCG_BIT_MASK) {
+      uint16_t frame_len;
+
+      dwt_writesysstatuslo(DWT_INT_RXFCG_BIT_MASK);
+
+      frame_len = dwt_getframelength(NULL);
+      if (frame_len <= sizeof(uwb_rx_buf)) {
+        dwt_readrxdata(uwb_rx_buf, frame_len, 0);
+
+        // Validate response: clear seq number, compare common header
+        uwb_rx_buf[ALL_MSG_SN_IDX] = 0;
+        if (uwb_rx_buf[9] == UWB_FUNC_RESP) {
+          uint32_t poll_tx_ts, resp_rx_ts, poll_rx_ts, resp_tx_ts;
+          int32_t rtd_init, rtd_resp;
+          float clockOffsetRatio;
+
+          poll_tx_ts = dwt_readtxtimestamplo32();
+          resp_rx_ts = dwt_readrxtimestamplo32(0);
+
+          clockOffsetRatio =
+              ((float)dwt_readclockoffset()) / (uint32_t)(1 << 26);
+
+          resp_msg_get_ts(
+              &uwb_rx_buf[RESP_MSG_POLL_RX_TS_IDX], &poll_rx_ts);
+          resp_msg_get_ts(
+              &uwb_rx_buf[RESP_MSG_RESP_TX_TS_IDX], &resp_tx_ts);
+
+          rtd_init = resp_rx_ts - poll_tx_ts;
+          rtd_resp = resp_tx_ts - poll_rx_ts;
+
+          double tof =
+              ((rtd_init - rtd_resp * (1.0 - clockOffsetRatio)) / 2.0) *
+              DWT_TIME_UNITS;
+          double distance = tof * SPEED_OF_LIGHT;
+          uint32_t dist_mm = (uint32_t)(distance * 1000.0);
+
+          LOG_INF("UWB: dist=%u mm (rtd_i=%d rtd_r=%d clk=%.2f ppm)",
+              dist_mm,
+              rtd_init,
+              rtd_resp,
+              (double)(clockOffsetRatio * 1e6));
+
+          uwb_dist_mm[0] = (dist_mm > 0xFFFE) ? 0xFFFE : (uint16_t)dist_mm;
+        } else {
+          LOG_WRN("UWB: unexpected func=0x%02X", uwb_rx_buf[9]);
+        }
+      }
+    } else {
+      dwt_writesysstatuslo(SYS_STATUS_ALL_RX_TO | SYS_STATUS_ALL_RX_ERR);
+      LOG_WRN("UWB: no response (status=0x%08X)", status_reg);
+    }
+
+    k_sleep(K_MSEC(200));
   }
 }
 
-K_THREAD_STACK_DEFINE(uwb_stack, 4096);
+K_THREAD_STACK_DEFINE(uwb_stack, 8192);
 static struct k_thread uwb_thread;
 
 int main(void) {
