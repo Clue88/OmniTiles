@@ -23,7 +23,7 @@ use stm32f7xx_hal as hal;
 use omnitiles::{
     control::{LinearController, LinearMode, Pid},
     drivers::{ActuonixLinear, Drv8873, Vl53l0x},
-    hw::{pins_devboard::BoardPins, spi::NoChipSelect, Adc, ChipSelect, I2cBus, Led, SpiBus, Usart},
+    hw::{pins_v2::BoardPins, spi::NoChipSelect, Adc, ChipSelect, I2cBus, Led, SpiBus, Usart},
     protocol::{Command, Parser},
 };
 
