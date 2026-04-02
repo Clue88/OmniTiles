@@ -64,20 +64,20 @@ fn main() -> ! {
 
     usart.println("Booting OmniTiles firmware...");
 
-    // let i2c_raw = BlockingI2c::i2c1(
-    //     dp.I2C1,
-    //     (pins.i2c1.scl, pins.i2c1.sda),
-    //     I2cMode::standard(100_000_u32.Hz()),
-    //     &clocks,
-    //     &mut apb1,
-    //     10_000, // data_timeout_us
-    // );
-    // let i2c_bus = I2cBus::new(i2c_raw);
-    // let mut tof = Vl53l0x::new(i2c_bus)
-    //     .and_then(|mut s| s.static_init().map(|_| s))
-    //     .and_then(|mut s| s.load_tuning().map(|_| s))
-    //     .and_then(|mut s| s.calibrate().map(|_| s))
-    //     .ok();
+    let i2c_raw = BlockingI2c::i2c1(
+        dp.I2C1,
+        (pins.i2c1.scl, pins.i2c1.sda),
+        I2cMode::standard(100_000_u32.Hz()),
+        &clocks,
+        &mut apb1,
+        10_000, // data_timeout_us
+    );
+    let i2c_bus = I2cBus::new(i2c_raw);
+    let mut tof = Vl53l0x::new(i2c_bus)
+        .and_then(|mut s| s.static_init().map(|_| s))
+        .and_then(|mut s| s.load_tuning().map(|_| s))
+        .and_then(|mut s| s.calibrate().map(|_| s))
+        .ok();
 
     let mut spi_bus = {
         let spi_mode = Mode {
@@ -122,236 +122,234 @@ fn main() -> ! {
         2.0,                     // on_target_tolerance_mm
     );
 
-    // let mut m2_actuator = ActuonixLinear::new(
-    //     Drv8873::new(ChipSelect::active_low(pins.m2.cs)),
-    //     m2_in1,
-    //     m2_in2,
-    //     pins.m2.nsleep,
-    //     pins.m2.disable,
-    //     Adc::make_reader(&adc1, 12), // ADC1_IN12
-    //     100.0,                       // T16 has 100 mm stroke length
-    //     25.0,                        // 25 mm buffer at bottom (retracted)
-    //     15.0,                        // 15 mm buffer at top (extended)
-    // );
-    // m2_actuator.enable_outputs();
-    // let mut m2 = LinearController::new(
-    //     m2_actuator,
-    //     Pid::new(0.0, 5.0, 0.0), // Under load we might need to bring back kp
-    //     25.0,                    // min_position_mm (buffer at retracted end)
-    //     85.0,                    // max_position_mm (stroke 100 mm - buffer 15 mm at extended end)
-    //     0.45,                    // on_target_tolerance_mm
-    // );
+    let mut m2_actuator = ActuonixLinear::new(
+        Drv8873::new(ChipSelect::active_low(pins.m2.cs)),
+        m2_in1,
+        m2_in2,
+        pins.m2.nsleep,
+        pins.m2.disable,
+        Adc::make_reader(&adc1, 12), // ADC1_IN12
+        100.0,                       // T16 has 100 mm stroke length
+        25.0,                        // 25 mm buffer at bottom (retracted)
+        15.0,                        // 15 mm buffer at top (extended)
+    );
+    m2_actuator.enable_outputs();
+    let mut m2 = LinearController::new(
+        m2_actuator,
+        Pid::new(0.0, 5.0, 0.0), // Under load we might need to bring back kp
+        25.0,                    // min_position_mm (buffer at retracted end)
+        85.0,                    // max_position_mm (stroke 100 mm - buffer 15 mm at extended end)
+        0.45,                    // on_target_tolerance_mm
+    );
 
     // Disable PID control and engage brakes at boot
     m1.mode = LinearMode::Disabled;
-    // m2.mode = LinearMode::Disabled;
+    m2.mode = LinearMode::Disabled;
     m1.actuator.brake();
-    // m2.actuator.brake();
+    m2.actuator.brake();
     led_red.off();
     led_yellow.off();
     led_green.off();
 
     m1.actuator.set_speed(1.0);
 
-    loop {}
+    let mut parser = Parser::new();
+    let mut tof_counter: u8 = 0;
+    let mut tof_history: [u16; 50] = [0; 50];
+    let mut tof_idx: usize = 0;
+    let mut tof_history_count: usize = 0;
+    let mut tof_sum: u32 = 0;
 
-    // let mut parser = Parser::new();
-    // let mut tof_counter: u8 = 0;
-    // let mut tof_history: [u16; 50] = [0; 50];
-    // let mut tof_idx: usize = 0;
-    // let mut tof_history_count: usize = 0;
-    // let mut tof_sum: u32 = 0;
+    loop {
+        const DT: f32 = 0.02;
+        m1.step(DT);
+        m2.step(DT);
 
-    // loop {
-    //     const DT: f32 = 0.02;
-    //     m1.step(DT);
-    //     m2.step(DT);
+        tof_counter = tof_counter.wrapping_add(1);
+        if tof_counter >= 5 {
+            tof_counter = 0;
+            if let Some(ref mut sensor) = tof {
+                match sensor.read_range_mm() {
+                    Ok(mm) => {
+                        if tof_history_count < 50 {
+                            tof_history[tof_idx] = mm;
+                            tof_sum += mm as u32;
+                            tof_history_count += 1;
+                            tof_idx = (tof_idx + 1) % 50;
+                        } else {
+                            let old = tof_history[tof_idx];
+                            tof_history[tof_idx] = mm;
+                            tof_sum = tof_sum + (mm as u32) - (old as u32);
+                            tof_idx = (tof_idx + 1) % 50;
+                        }
 
-    //     // tof_counter = tof_counter.wrapping_add(1);
-    //     // if tof_counter >= 5 {
-    //     //     tof_counter = 0;
-    //     //     if let Some(ref mut sensor) = tof {
-    //     //         match sensor.read_range_mm() {
-    //     //             Ok(mm) => {
-    //     //                 if tof_history_count < 50 {
-    //     //                     tof_history[tof_idx] = mm;
-    //     //                     tof_sum += mm as u32;
-    //     //                     tof_history_count += 1;
-    //     //                     tof_idx = (tof_idx + 1) % 50;
-    //     //                 } else {
-    //     //                     let old = tof_history[tof_idx];
-    //     //                     tof_history[tof_idx] = mm;
-    //     //                     tof_sum = tof_sum + (mm as u32) - (old as u32);
-    //     //                     tof_idx = (tof_idx + 1) % 50;
-    //     //                 }
+                        let denom = tof_history_count as u32;
+                        let mm_avg = (tof_sum / denom) as u16;
 
-    //     //                 let denom = tof_history_count as u32;
-    //     //                 let mm_avg = (tof_sum / denom) as u16;
+                        writeln!(usart, "tof: {}mm\r", mm_avg).ok();
+                    }
+                    Err(_) => {
+                        usart.println("tof: read error\r");
+                    }
+                }
+            }
+        }
 
-    //     //                 writeln!(usart, "tof: {}mm\r", mm_avg).ok();
-    //     //             }
-    //     //             Err(_) => {
-    //     //                 usart.println("tof: read error\r");
-    //     //             }
-    //     //         }
-    //     //     }
-    //     // }
+        if m1.actuator.is_limit_braking() || m2.actuator.is_limit_braking() {
+            led_red.on();
+        } else {
+            led_red.off();
+        }
 
-    //     if m1.actuator.is_limit_braking() || m2.actuator.is_limit_braking() {
-    //         led_red.on();
-    //     } else {
-    //         led_red.off();
-    //     }
+        if drdy.is_high() {
+            delay.delay_ms(2_u32);
 
-    //     if drdy.is_high() {
-    //         delay.delay_ms(2_u32);
+            let mut buf = [0u8; 128];
 
-    //         let mut buf = [0u8; 128];
+            let p16_raw = m1.actuator.position_raw();
+            let t16_raw = m2.actuator.position_raw();
 
-    //         let p16_raw = m1.actuator.position_raw();
-    //         let t16_raw = m2.actuator.position_raw();
+            // Scale 12-bit ADC (0-4095) down to 8-bit (0-255)
+            let p16_pos = (p16_raw >> 4) as u8;
+            let t16_pos = (t16_raw >> 4) as u8;
 
-    //         // Scale 12-bit ADC (0-4095) down to 8-bit (0-255)
-    //         let p16_pos = (p16_raw >> 4) as u8;
-    //         let t16_pos = (t16_raw >> 4) as u8;
+            buf[0] = omnitiles::protocol::messages::START_BYTE;
+            buf[1] = omnitiles::protocol::messages::MSG_TELEMETRY;
+            buf[2] = p16_pos;
+            buf[3] = t16_pos;
+            buf[4] = buf[1].wrapping_add(buf[2]).wrapping_add(buf[3]);
 
-    //         buf[0] = omnitiles::protocol::messages::START_BYTE;
-    //         buf[1] = omnitiles::protocol::messages::MSG_TELEMETRY;
-    //         buf[2] = p16_pos;
-    //         buf[3] = t16_pos;
-    //         buf[4] = buf[1].wrapping_add(buf[2]).wrapping_add(buf[3]);
+            cs.select();
+            delay.delay_us(50_u32);
+            spi_bus.transfer_in_place(&mut buf).unwrap_or_default();
+            delay.delay_us(50_u32);
+            cs.deselect();
 
-    //         cs.select();
-    //         delay.delay_us(50_u32);
-    //         spi_bus.transfer_in_place(&mut buf).unwrap_or_default();
-    //         delay.delay_us(50_u32);
-    //         cs.deselect();
+            for &byte in &buf {
+                if let Some(cmd) = parser.push(byte) {
+                    match cmd {
+                        Command::Ping => {
+                            writeln!(usart, "cmd: PING — System is alive.\r").ok();
+                        }
+                        Command::M1Extend(speed) => {
+                            writeln!(usart, "cmd: M1Extend speed={}\r", speed).ok();
+                            let s = speed_to_float(speed);
+                            m1.mode = LinearMode::Disabled;
+                            m1.actuator.set_speed(s);
+                            led_green.on();
+                        }
+                        Command::M1Retract(speed) => {
+                            writeln!(usart, "cmd: M1Retract speed={}\r", speed).ok();
+                            let s = speed_to_float(speed);
+                            m1.mode = LinearMode::Disabled;
+                            m1.actuator.set_speed(-s);
+                            led_green.on();
+                        }
+                        Command::M1Brake => {
+                            writeln!(usart, "cmd: M1Brake\r").ok();
+                            m1.mode = LinearMode::Disabled;
+                            m1.actuator.brake();
+                            led_green.off();
+                        }
+                        Command::M1SetPosition(mm) => {
+                            writeln!(usart, "cmd: M1SetPosition mm={}\r", mm).ok();
+                            m1.mode = LinearMode::PositionControl;
+                            m1.set_target_position_mm(mm as f32);
+                            led_green.on();
+                        }
+                        Command::M2Extend(speed) => {
+                            writeln!(usart, "cmd: M2Extend speed={}\r", speed).ok();
+                            let s = speed_to_float(speed);
+                            m2.mode = LinearMode::Disabled;
+                            m2.actuator.set_speed(s);
+                            led_yellow.on();
+                        }
+                        Command::M2Retract(speed) => {
+                            writeln!(usart, "cmd: M2Retract speed={}\r", speed).ok();
+                            let s = speed_to_float(speed);
+                            m2.mode = LinearMode::Disabled;
+                            m2.actuator.set_speed(-s);
+                            led_yellow.on();
+                        }
+                        Command::M2Brake => {
+                            writeln!(usart, "cmd: M2Brake\r").ok();
+                            m2.mode = LinearMode::Disabled;
+                            m2.actuator.brake();
+                            led_yellow.off();
+                        }
+                        Command::M2SetPosition(mm) => {
+                            writeln!(usart, "cmd: M2SetPosition mm={}\r", mm).ok();
+                            m2.mode = LinearMode::PositionControl;
+                            m2.set_target_position_mm(mm as f32);
+                            led_yellow.on();
+                        }
+                    }
+                }
+            }
 
-    //         for &byte in &buf {
-    //             if let Some(cmd) = parser.push(byte) {
-    //                 match cmd {
-    //                     Command::Ping => {
-    //                         writeln!(usart, "cmd: PING — System is alive.\r").ok();
-    //                     }
-    //                     Command::M1Extend(speed) => {
-    //                         writeln!(usart, "cmd: M1Extend speed={}\r", speed).ok();
-    //                         let s = speed_to_float(speed);
-    //                         m1.mode = LinearMode::Disabled;
-    //                         m1.actuator.set_speed(s);
-    //                         led_green.on();
-    //                     }
-    //                     Command::M1Retract(speed) => {
-    //                         writeln!(usart, "cmd: M1Retract speed={}\r", speed).ok();
-    //                         let s = speed_to_float(speed);
-    //                         m1.mode = LinearMode::Disabled;
-    //                         m1.actuator.set_speed(-s);
-    //                         led_green.on();
-    //                     }
-    //                     Command::M1Brake => {
-    //                         writeln!(usart, "cmd: M1Brake\r").ok();
-    //                         m1.mode = LinearMode::Disabled;
-    //                         m1.actuator.brake();
-    //                         led_green.off();
-    //                     }
-    //                     Command::M1SetPosition(mm) => {
-    //                         writeln!(usart, "cmd: M1SetPosition mm={}\r", mm).ok();
-    //                         m1.mode = LinearMode::PositionControl;
-    //                         m1.set_target_position_mm(mm as f32);
-    //                         led_green.on();
-    //                     }
-    //                     Command::M2Extend(speed) => {
-    //                         writeln!(usart, "cmd: M2Extend speed={}\r", speed).ok();
-    //                         let s = speed_to_float(speed);
-    //                         m2.mode = LinearMode::Disabled;
-    //                         m2.actuator.set_speed(s);
-    //                         led_yellow.on();
-    //                     }
-    //                     Command::M2Retract(speed) => {
-    //                         writeln!(usart, "cmd: M2Retract speed={}\r", speed).ok();
-    //                         let s = speed_to_float(speed);
-    //                         m2.mode = LinearMode::Disabled;
-    //                         m2.actuator.set_speed(-s);
-    //                         led_yellow.on();
-    //                     }
-    //                     Command::M2Brake => {
-    //                         writeln!(usart, "cmd: M2Brake\r").ok();
-    //                         m2.mode = LinearMode::Disabled;
-    //                         m2.actuator.brake();
-    //                         led_yellow.off();
-    //                     }
-    //                     Command::M2SetPosition(mm) => {
-    //                         writeln!(usart, "cmd: M2SetPosition mm={}\r", mm).ok();
-    //                         m2.mode = LinearMode::PositionControl;
-    //                         m2.set_target_position_mm(mm as f32);
-    //                         led_yellow.on();
-    //                     }
-    //                 }
-    //             }
-    //         }
+            while drdy.is_high() {}
+        }
 
-    //         while drdy.is_high() {}
-    //     }
-
-    //     if let Some(byte) = usart.read_byte() {
-    //         if let Some(cmd) = parser.push(byte) {
-    //             match cmd {
-    //                 Command::Ping => {
-    //                     writeln!(usart, "cmd: PING — System is alive.\r").ok();
-    //                 }
-    //                 Command::M1Extend(speed) => {
-    //                     writeln!(usart, "cmd: M1Extend speed={}\r", speed).ok();
-    //                     let s = speed_to_float(speed);
-    //                     m1.mode = LinearMode::Disabled;
-    //                     m1.actuator.set_speed(s);
-    //                     led_green.on();
-    //                 }
-    //                 Command::M1Retract(speed) => {
-    //                     writeln!(usart, "cmd: M1Retract speed={}\r", speed).ok();
-    //                     let s = speed_to_float(speed);
-    //                     m1.mode = LinearMode::Disabled;
-    //                     m1.actuator.set_speed(-s);
-    //                     led_green.on();
-    //                 }
-    //                 Command::M1Brake => {
-    //                     writeln!(usart, "cmd: M1Brake\r").ok();
-    //                     m1.mode = LinearMode::Disabled;
-    //                     m1.actuator.brake();
-    //                     led_green.off();
-    //                 }
-    //                 Command::M1SetPosition(mm) => {
-    //                     writeln!(usart, "cmd: M1SetPosition mm={}\r", mm).ok();
-    //                     m1.mode = LinearMode::PositionControl;
-    //                     m1.set_target_position_mm(mm as f32);
-    //                     led_green.on();
-    //                 }
-    //                 Command::M2Extend(speed) => {
-    //                     writeln!(usart, "cmd: M2Extend speed={}\r", speed).ok();
-    //                     let s = speed_to_float(speed);
-    //                     m2.mode = LinearMode::Disabled;
-    //                     m2.actuator.set_speed(s);
-    //                     led_yellow.on();
-    //                 }
-    //                 Command::M2Retract(speed) => {
-    //                     writeln!(usart, "cmd: M2Retract speed={}\r", speed).ok();
-    //                     let s = speed_to_float(speed);
-    //                     m2.mode = LinearMode::Disabled;
-    //                     m2.actuator.set_speed(-s);
-    //                     led_yellow.on();
-    //                 }
-    //                 Command::M2Brake => {
-    //                     writeln!(usart, "cmd: M2Brake\r").ok();
-    //                     m2.mode = LinearMode::Disabled;
-    //                     m2.actuator.brake();
-    //                     led_yellow.off();
-    //                 }
-    //                 Command::M2SetPosition(mm) => {
-    //                     writeln!(usart, "cmd: M2SetPosition mm={}\r", mm).ok();
-    //                     m2.mode = LinearMode::PositionControl;
-    //                     m2.set_target_position_mm(mm as f32);
-    //                     led_yellow.on();
-    //                 }
-    //             }
-    //         }
-    //     }
-    // }
+        if let Some(byte) = usart.read_byte() {
+            if let Some(cmd) = parser.push(byte) {
+                match cmd {
+                    Command::Ping => {
+                        writeln!(usart, "cmd: PING — System is alive.\r").ok();
+                    }
+                    Command::M1Extend(speed) => {
+                        writeln!(usart, "cmd: M1Extend speed={}\r", speed).ok();
+                        let s = speed_to_float(speed);
+                        m1.mode = LinearMode::Disabled;
+                        m1.actuator.set_speed(s);
+                        led_green.on();
+                    }
+                    Command::M1Retract(speed) => {
+                        writeln!(usart, "cmd: M1Retract speed={}\r", speed).ok();
+                        let s = speed_to_float(speed);
+                        m1.mode = LinearMode::Disabled;
+                        m1.actuator.set_speed(-s);
+                        led_green.on();
+                    }
+                    Command::M1Brake => {
+                        writeln!(usart, "cmd: M1Brake\r").ok();
+                        m1.mode = LinearMode::Disabled;
+                        m1.actuator.brake();
+                        led_green.off();
+                    }
+                    Command::M1SetPosition(mm) => {
+                        writeln!(usart, "cmd: M1SetPosition mm={}\r", mm).ok();
+                        m1.mode = LinearMode::PositionControl;
+                        m1.set_target_position_mm(mm as f32);
+                        led_green.on();
+                    }
+                    Command::M2Extend(speed) => {
+                        writeln!(usart, "cmd: M2Extend speed={}\r", speed).ok();
+                        let s = speed_to_float(speed);
+                        m2.mode = LinearMode::Disabled;
+                        m2.actuator.set_speed(s);
+                        led_yellow.on();
+                    }
+                    Command::M2Retract(speed) => {
+                        writeln!(usart, "cmd: M2Retract speed={}\r", speed).ok();
+                        let s = speed_to_float(speed);
+                        m2.mode = LinearMode::Disabled;
+                        m2.actuator.set_speed(-s);
+                        led_yellow.on();
+                    }
+                    Command::M2Brake => {
+                        writeln!(usart, "cmd: M2Brake\r").ok();
+                        m2.mode = LinearMode::Disabled;
+                        m2.actuator.brake();
+                        led_yellow.off();
+                    }
+                    Command::M2SetPosition(mm) => {
+                        writeln!(usart, "cmd: M2SetPosition mm={}\r", mm).ok();
+                        m2.mode = LinearMode::PositionControl;
+                        m2.set_target_position_mm(mm as f32);
+                        led_yellow.on();
+                    }
+                }
+            }
+        }
+    }
 }
