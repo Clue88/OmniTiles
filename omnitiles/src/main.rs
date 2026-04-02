@@ -151,8 +151,6 @@ fn main() -> ! {
     led_yellow.off();
     led_green.off();
 
-    m1.actuator.set_speed(1.0);
-
     let mut parser = Parser::new();
     let mut tof_counter: u8 = 0;
     let mut tof_history: [u16; 50] = [0; 50];
