@@ -115,8 +115,16 @@ fn read_channel(adc: &pac::adc1::RegisterBlock, channel: u8) -> u16 {
             9 => w.smp9().bits(0b111),
             _ => unreachable!(),
         });
-    } else if channel == 12 {
-        adc.smpr1.modify(|_, w| w.smp12().bits(0b111));
+    } else {
+        adc.smpr1.modify(|_, w| match channel {
+            10 => w.smp10().bits(0b111),
+            11 => w.smp11().bits(0b111),
+            12 => w.smp12().bits(0b111),
+            13 => w.smp13().bits(0b111),
+            14 => w.smp14().bits(0b111),
+            15 => w.smp15().bits(0b111),
+            _ => w,
+        });
     }
 
     // Sequence length = 1 conversion

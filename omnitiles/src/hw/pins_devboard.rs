@@ -54,7 +54,10 @@ pub struct Motor1Pins {
     pub cs: gpiod::PD0<Output<PushPull>>,
     pub nsleep: gpiod::PD2<Output<PushPull>>,
     pub disable: gpiod::PD1<Output<PushPull>>,
-    pub adc: gpiob::PB1<Analog>, // ADC1_IN9
+    pub adc1: gpiob::PB0<Analog>, // ADC1_IN8
+    pub adc2: gpiob::PB1<Analog>, // ADC1_IN9
+    pub adc3: gpioc::PC0<Analog>, // ADC1_IN10
+    pub adc4: gpioc::PC1<Analog>, // ADC1_IN11
 }
 
 pub struct Motor2Pins {
@@ -63,7 +66,8 @@ pub struct Motor2Pins {
     pub cs: gpiod::PD3<Output<PushPull>>,
     pub nsleep: gpiod::PD4<Output<PushPull>>,
     pub disable: gpiod::PD5<Output<PushPull>>,
-    pub adc: gpioc::PC2<Analog>, // ADC1_IN12
+    pub adc1: gpioc::PC2<Analog>, // ADC1_IN12
+    pub adc2: gpioc::PC3<Analog>, // ADC1_IN13
 }
 
 pub struct I2c1Pins {
@@ -113,7 +117,10 @@ impl BoardPins {
                 cs: gpiod.pd0.into_push_pull_output(),
                 nsleep: gpiod.pd2.into_push_pull_output(),
                 disable: gpiod.pd1.into_push_pull_output(),
-                adc: gpiob.pb1.into_analog(),
+                adc1: gpiob.pb0.into_analog(),
+                adc2: gpiob.pb1.into_analog(),
+                adc3: gpioc.pc0.into_analog(),
+                adc4: gpioc.pc1.into_analog(),
             },
 
             m2: Motor2Pins {
@@ -122,7 +129,8 @@ impl BoardPins {
                 cs: gpiod.pd3.into_push_pull_output(),
                 nsleep: gpiod.pd4.into_push_pull_output(),
                 disable: gpiod.pd5.into_push_pull_output(),
-                adc: gpioc.pc2.into_analog(),
+                adc1: gpioc.pc2.into_analog(),
+                adc2: gpioc.pc3.into_analog(),
             },
 
             i2c1: I2c1Pins {
