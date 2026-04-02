@@ -24,7 +24,6 @@ pub struct BoardPins {
     pub m1: Motor1Pins,
     pub m2: Motor2Pins,
     pub i2c1: I2c1Pins,
-    pub can1: Can1Pins,
 }
 
 pub struct LedPins {
@@ -44,8 +43,9 @@ pub struct Spi4Pins {
     pub sck: gpioe::PE12<Alternate<5>>,
     pub miso: gpioe::PE13<Alternate<5>>,
     pub mosi: gpioe::PE14<Alternate<5>>,
-    pub cs: gpioe::PE4<Output<PushPull>>,
+    pub cs1: gpioe::PE4<Output<PushPull>>,
     pub drdy: gpioe::PE5<Input<Floating>>,
+    pub cs2: gpioe::PE11<Output<PushPull>>,
 }
 
 pub struct Motor1Pins {
@@ -69,12 +69,6 @@ pub struct Motor2Pins {
 pub struct I2c1Pins {
     pub scl: gpiob::PB8<Alternate<4, OpenDrain>>,
     pub sda: gpiob::PB9<Alternate<4, OpenDrain>>,
-}
-
-/// CAN1 TX/RX
-pub struct Can1Pins {
-    pub tx: gpioa::PA12<Alternate<9>>,
-    pub rx: gpioa::PA11<Alternate<9>>,
 }
 
 impl BoardPins {
@@ -108,8 +102,9 @@ impl BoardPins {
                 sck: gpioe.pe12.into_alternate::<5>(),
                 miso: gpioe.pe13.into_alternate::<5>(),
                 mosi: gpioe.pe14.into_alternate::<5>(),
-                cs: gpioe.pe4.into_push_pull_output(),
+                cs1: gpioe.pe4.into_push_pull_output(),
                 drdy: gpioe.pe5.into_floating_input(),
+                cs2: gpioe.pe11.into_push_pull_output(),
             },
 
             m1: Motor1Pins {
@@ -133,11 +128,6 @@ impl BoardPins {
             i2c1: I2c1Pins {
                 scl: gpiob.pb8.into_alternate_open_drain::<4>(),
                 sda: gpiob.pb9.into_alternate_open_drain::<4>(),
-            },
-
-            can1: Can1Pins {
-                tx: gpioa.pa12.into_alternate::<9>(),
-                rx: gpioa.pa11.into_alternate::<9>().internal_pull_up(true),
             },
         }
     }

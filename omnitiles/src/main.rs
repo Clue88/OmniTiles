@@ -88,10 +88,12 @@ fn main() -> ! {
         let spi4_enabled = spi4_raw.enable::<u8>(spi_mode, 100.kHz(), &clocks, &mut apb2);
         SpiBus::new(spi4_enabled)
     };
-    let mut cs = ChipSelect::active_low(pins.spi4.cs);
+    let mut cs1 = ChipSelect::active_low(pins.spi4.cs1);
     let drdy = pins.spi4.drdy;
+    let mut cs2 = ChipSelect::active_low(pins.spi4.cs2);
 
-    cs.deselect();
+    cs1.deselect();
+    cs2.deselect();
 
     let adc1 = RefCell::new(Adc::adc1(dp.ADC1));
 
@@ -217,11 +219,11 @@ fn main() -> ! {
             buf[3] = t16_pos;
             buf[4] = buf[1].wrapping_add(buf[2]).wrapping_add(buf[3]);
 
-            cs.select();
+            cs1.select();
             delay.delay_us(50_u32);
             spi_bus.transfer_in_place(&mut buf).unwrap_or_default();
             delay.delay_us(50_u32);
-            cs.deselect();
+            cs1.deselect();
 
             for &byte in &buf {
                 if let Some(cmd) = parser.push(byte) {
