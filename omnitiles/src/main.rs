@@ -3,6 +3,7 @@
 
 #![no_main]
 #![no_std]
+#![allow(unused)]
 
 use cortex_m::delay::Delay;
 use cortex_m_rt::entry;
