@@ -232,11 +232,12 @@ static dwt_config_t uwb_config = {
     .pdoaMode = DWT_PDOA_M0,
 };
 
-// Frame format matching SDK ex_06a/ex_06b
+// Address format: dst[0] = target anchor ID, dst[1] = 'A'; src = 'T','G' (tag)
+#define ADDR_DST_IDX 5
 static uint8_t tx_poll_msg[] = {
-    0x41, 0x88, 0, 0xCA, 0xDE, 'W', 'A', 'V', 'E', UWB_FUNC_POLL, 0, 0};
+    0x41, 0x88, 0, 0xCA, 0xDE, 0, 'A', 'T', 'G', UWB_FUNC_POLL, 0, 0};
 static uint8_t rx_resp_msg[] = {
-    0x41, 0x88, 0, 0xCA, 0xDE, 'V', 'E', 'W', 'A', UWB_FUNC_RESP,
+    0x41, 0x88, 0, 0xCA, 0xDE, 'T', 'G', 0, 'A', UWB_FUNC_RESP,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 #define ALL_MSG_SN_IDX          2
@@ -260,8 +261,6 @@ static void uwb_ranging_thread_fn(void* p1, void* p2, void* p3) {
   ARG_UNUSED(p2);
   ARG_UNUSED(p3);
 
-  LOG_INF("UWB: Initializing DW3000...");
-
   dw3000_hw_init();
   dw3000_hw_reset();
   k_sleep(K_MSEC(10));
@@ -271,14 +270,11 @@ static void uwb_ranging_thread_fn(void* p1, void* p2, void* p3) {
     return;
   }
 
-  LOG_INF("UWB: DW3000 Device ID: 0x%08X", dwt_readdevid());
-
   if (dwt_initialise(DWT_DW_INIT | DWT_READ_OTP_PID | DWT_READ_OTP_LID |
                      DWT_READ_OTP_BAT | DWT_READ_OTP_TMP) != DWT_SUCCESS) {
     LOG_ERR("UWB: dwt_initialise failed");
     return;
   }
-  LOG_INF("UWB: dwt_initialise OK");
 
   dwt_setleds(DWT_LEDS_ENABLE | DWT_LEDS_INIT_BLINK);
 
@@ -298,12 +294,15 @@ static void uwb_ranging_thread_fn(void* p1, void* p2, void* p3) {
 
   dwt_setlnapamode(DWT_LNA_ENABLE | DWT_PA_ENABLE);
 
-  LOG_INF("UWB: SS-TWR initiator started");
+  LOG_INF("UWB: ready (SS-TWR, 3 anchors)");
+
+  int cur_anchor = 0;
 
   while (1) {
     uint32_t status_reg;
 
-    // Prepare and send poll (matching SDK ex_06a exactly)
+    // Set target anchor ID in poll frame
+    tx_poll_msg[ADDR_DST_IDX] = (uint8_t)cur_anchor;
     tx_poll_msg[ALL_MSG_SN_IDX] = uwb_frame_seq_nb;
     dwt_writesysstatuslo(DWT_INT_TXFRS_BIT_MASK);
     dwt_writetxdata(sizeof(tx_poll_msg), tx_poll_msg, 0);
@@ -337,7 +336,6 @@ static void uwb_ranging_thread_fn(void* p1, void* p2, void* p3) {
       if (frame_len <= sizeof(uwb_rx_buf)) {
         dwt_readrxdata(uwb_rx_buf, frame_len, 0);
 
-        // Validate response: clear seq number, compare common header
         uwb_rx_buf[ALL_MSG_SN_IDX] = 0;
         if (uwb_rx_buf[9] == UWB_FUNC_RESP) {
           uint32_t poll_tx_ts, resp_rx_ts, poll_rx_ts, resp_tx_ts;
@@ -368,21 +366,57 @@ static void uwb_ranging_thread_fn(void* p1, void* p2, void* p3) {
             dist_mm = 0;
           }
 
-          LOG_INF("UWB: raw=%d mm filtered=%u mm",
-              dist_mm,
-              (unsigned)uwb_dist_mm[0]);
-
-          uwb_filter_update(0, (uint16_t)dist_mm);
+          uwb_filter_update(cur_anchor, (uint16_t)dist_mm);
         } else {
-          LOG_WRN("UWB: unexpected func=0x%02X", uwb_rx_buf[9]);
+          LOG_WRN("UWB: anchor %d unexpected func=0x%02X",
+              cur_anchor,
+              uwb_rx_buf[9]);
         }
       }
     } else {
       dwt_writesysstatuslo(SYS_STATUS_ALL_RX_TO | SYS_STATUS_ALL_RX_ERR);
-      LOG_WRN("UWB: no response (status=0x%08X)", status_reg);
     }
 
-    k_sleep(K_MSEC(100));
+    // Cycle to next anchor
+    cur_anchor = (cur_anchor + 1) % NUM_ANCHORS;
+
+    // After a full cycle, send UWB-only telemetry over BLE if no STM32 data
+    // is flowing (rate limiter prevents double-sends when STM32 is active)
+    if (cur_anchor == 0 && current_conn != NULL) {
+      uint32_t now = k_uptime_get_32();
+      if (now >= last_nus_send_ms + NUS_SEND_INTERVAL_MS &&
+          now >= nus_send_backoff_until_ms) {
+        uint8_t telem[11];
+        telem[0] = 0xA5;
+        telem[1] = 0x60;
+        telem[2] = 0;  // no motor data
+        telem[3] = 0;
+
+        uint16_t d0 = uwb_dist_mm[0];
+        uint16_t d1 = uwb_dist_mm[1];
+        uint16_t d2 = uwb_dist_mm[2];
+
+        telem[4] = (uint8_t)(d0);
+        telem[5] = (uint8_t)(d0 >> 8);
+        telem[6] = (uint8_t)(d1);
+        telem[7] = (uint8_t)(d1 >> 8);
+        telem[8] = (uint8_t)(d2);
+        telem[9] = (uint8_t)(d2 >> 8);
+
+        uint8_t csum = 0;
+        for (int i = 1; i < 10; i++) {
+          csum += telem[i];
+        }
+        telem[10] = csum;
+
+        if (bt_nus_send(current_conn, telem, sizeof(telem)) == 0) {
+          last_nus_send_ms = now;
+        }
+      }
+    }
+
+    // Brief delay between ranging exchanges
+    k_sleep(K_MSEC(30));
   }
 }
 
@@ -461,58 +495,48 @@ int main(void) {
     ret = spi_transceive(spi_dev, &spi_cfg, &tx, &rx);
     set_drdy(false);
 
-    // Check for incoming telemetry packet, append UWB distances, and forward over BLE
-    if (rx_buffer[0] == 0xA5 && rx_buffer[1] == 0x60) {
-      uint8_t orig_checksum = (rx_buffer[1] + rx_buffer[2] + rx_buffer[3]) & 0xFF;
-      if (rx_buffer[4] != orig_checksum) {
-        LOG_WRN(
-            "Telemetry checksum mismatch (got %02X, expected %02X) — forwarding anyway",
-            rx_buffer[4],
-            orig_checksum);
-      }
+    bool have_stm32 = (ret == 0 && rx_buffer[0] == 0xA5 && rx_buffer[1] == 0x60);
+    uint8_t m1_adc = have_stm32 ? rx_buffer[2] : 0;
+    uint8_t m2_adc = have_stm32 ? rx_buffer[3] : 0;
 
-      if (current_conn != NULL) {
-        uint32_t now = k_uptime_get_32();
-        bool in_backoff = (now < nus_send_backoff_until_ms);
-        bool rate_ok = (now - last_nus_send_ms >= NUS_SEND_INTERVAL_MS);
+    if (current_conn != NULL) {
+      uint32_t now = k_uptime_get_32();
+      bool in_backoff = (now < nus_send_backoff_until_ms);
+      bool rate_ok = (now - last_nus_send_ms >= NUS_SEND_INTERVAL_MS);
 
-        if (!in_backoff && rate_ok) {
-          // Build extended telemetry: [0xA5, 0x60, m1, m2, d0_lo, d0_hi, d1_lo, d1_hi, d2_lo, d2_hi, csum]
-          uint8_t telem[11];
-          telem[0] = 0xA5;
-          telem[1] = 0x60;
-          telem[2] = rx_buffer[2];  // m1_adc
-          telem[3] = rx_buffer[3];  // m2_adc
+      if (!in_backoff && rate_ok) {
+        uint8_t telem[11];
+        telem[0] = 0xA5;
+        telem[1] = 0x60;
+        telem[2] = m1_adc;
+        telem[3] = m2_adc;
 
-          // Snapshot UWB distances
-          uint16_t d0 = uwb_dist_mm[0];
-          uint16_t d1 = uwb_dist_mm[1];
-          uint16_t d2 = uwb_dist_mm[2];
+        uint16_t d0 = uwb_dist_mm[0];
+        uint16_t d1 = uwb_dist_mm[1];
+        uint16_t d2 = uwb_dist_mm[2];
 
-          telem[4] = (uint8_t)(d0);
-          telem[5] = (uint8_t)(d0 >> 8);
-          telem[6] = (uint8_t)(d1);
-          telem[7] = (uint8_t)(d1 >> 8);
-          telem[8] = (uint8_t)(d2);
-          telem[9] = (uint8_t)(d2 >> 8);
+        telem[4] = (uint8_t)(d0);
+        telem[5] = (uint8_t)(d0 >> 8);
+        telem[6] = (uint8_t)(d1);
+        telem[7] = (uint8_t)(d1 >> 8);
+        telem[8] = (uint8_t)(d2);
+        telem[9] = (uint8_t)(d2 >> 8);
 
-          // Recompute checksum over bytes 1..9
-          uint8_t csum = 0;
-          for (int i = 1; i < 10; i++) {
-            csum += telem[i];
-          }
-          telem[10] = csum;
+        uint8_t csum = 0;
+        for (int i = 1; i < 10; i++) {
+          csum += telem[i];
+        }
+        telem[10] = csum;
 
-          int err = bt_nus_send(current_conn, telem, sizeof(telem));
-          if (err == 0) {
-            last_nus_send_ms = now;
-            nus_send_backoff_until_ms = 0;
-          } else {
-            nus_send_backoff_until_ms = now + NUS_SEND_BACKOFF_MS;
-            LOG_WRN("bt_nus_send failed: %d (backing off %d ms)",
-                err,
-                (int)NUS_SEND_BACKOFF_MS);
-          }
+        int err = bt_nus_send(current_conn, telem, sizeof(telem));
+        if (err == 0) {
+          last_nus_send_ms = now;
+          nus_send_backoff_until_ms = 0;
+        } else {
+          nus_send_backoff_until_ms = now + NUS_SEND_BACKOFF_MS;
+          LOG_WRN("bt_nus_send failed: %d (backing off %d ms)",
+              err,
+              (int)NUS_SEND_BACKOFF_MS);
         }
       }
     }

@@ -52,16 +52,18 @@ static dwt_config_t uwb_config = {
 
 #define UUS_TO_DWT_TIME 63898
 
-// Addresses match SDK: poll src='V','E' dst='W','A'; resp is reversed
+// Address format: dst[0] = anchor ID, dst[1] = 'A'; src = 'T','G' (tag)
+// Anchor only responds to polls where dst[0] matches its own ID.
+#define ADDR_DST_IDX 5
 static uint8_t rx_poll_msg[] = {
-    0x41, 0x88, 0, 0xCA, 0xDE, 'W', 'A', 'V', 'E', FUNC_POLL, 0, 0};
+    0x41, 0x88, 0, 0xCA, 0xDE, 0, 'A', 'T', 'G', FUNC_POLL, 0, 0};
 static uint8_t tx_resp_msg[] = {
-    0x41, 0x88, 0, 0xCA, 0xDE, 'V', 'E', 'W', 'A', FUNC_RESP,
+    0x41, 0x88, 0, 0xCA, 0xDE, 'T', 'G', 0, 'A', FUNC_RESP,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 #define ALL_MSG_COMMON_LEN 5  // Only validate FC + PAN (skip addresses)
 
-#define RX_BUF_LEN 12
+#define RX_BUF_LEN 24  // Must fit any frame (poll=12, response=20, +CRC)
 static uint8_t rx_buffer[RX_BUF_LEN];
 
 static uint8_t frame_seq_nb = 0;
@@ -96,14 +98,11 @@ int main(void) {
     return -1;
   }
 
-  LOG_INF("DW3000 Device ID: 0x%08X", dwt_readdevid());
-
   if (dwt_initialise(DWT_DW_INIT | DWT_READ_OTP_PID | DWT_READ_OTP_LID |
                      DWT_READ_OTP_BAT | DWT_READ_OTP_TMP) != DWT_SUCCESS) {
     LOG_ERR("dwt_initialise failed");
     return -1;
   }
-  LOG_INF("dwt_initialise OK");
 
   dwt_setleds(DWT_LEDS_ENABLE | DWT_LEDS_INIT_BLINK);
 
@@ -120,14 +119,17 @@ int main(void) {
 
   dwt_setlnapamode(DWT_LNA_ENABLE | DWT_PA_ENABLE);
 
+  // Set this anchor's ID in the response frame src address
+  tx_resp_msg[7] = CONFIG_ANCHOR_ID;
+
   LOG_INF("Anchor %d ready (SS-TWR). Listening...", CONFIG_ANCHOR_ID);
 
   while (1) {
     dwt_rxenable(DWT_START_RX_IMMEDIATE);
 
-    // Poll for RX good frame or error (matching SDK pattern)
     while (!((status_reg = dwt_readsysstatuslo()) &
-             (DWT_INT_RXFCG_BIT_MASK | SYS_STATUS_ALL_RX_ERR))) {
+             (DWT_INT_RXFCG_BIT_MASK | SYS_STATUS_ALL_RX_TO |
+                 SYS_STATUS_ALL_RX_ERR))) {
     }
 
     if (status_reg & DWT_INT_RXFCG_BIT_MASK) {
@@ -139,10 +141,11 @@ int main(void) {
       if (frame_len <= sizeof(rx_buffer)) {
         dwt_readrxdata(rx_buffer, frame_len, 0);
 
-        // Check FC + PAN match, and function code is POLL
         rx_buffer[ALL_MSG_SN_IDX] = 0;
+        // Check FC + PAN + addressed to this anchor + function code is POLL
         if (rx_buffer[0] == 0x41 && rx_buffer[1] == 0x88 &&
             rx_buffer[3] == 0xCA && rx_buffer[4] == 0xDE &&
+            rx_buffer[ADDR_DST_IDX] == CONFIG_ANCHOR_ID &&
             rx_buffer[9] == FUNC_POLL) {
           uint32_t resp_tx_time;
           int ret;
@@ -172,14 +175,13 @@ int main(void) {
             }
             dwt_writesysstatuslo(DWT_INT_TXFRS_BIT_MASK);
             frame_seq_nb++;
-            LOG_INF("Resp TX OK");
           } else {
             LOG_WRN("Resp TX late");
           }
         }
       }
     } else {
-      dwt_writesysstatuslo(SYS_STATUS_ALL_RX_ERR);
+      dwt_writesysstatuslo(SYS_STATUS_ALL_RX_TO | SYS_STATUS_ALL_RX_ERR);
     }
   }
 
