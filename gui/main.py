@@ -2,9 +2,11 @@ import argparse
 import asyncio
 import math
 import os
+import struct
 import threading
 import time
 
+import numpy as np
 import serial
 import trimesh
 import viser
@@ -64,6 +66,45 @@ CMD_NAMES = {
     MSG_M2_SET_POSITION: f"{M2_CONFIG['name']}_SET_POSITION",
     MSG_PING: "PING",
 }
+
+# --- UWB Anchor Positions (meters) — measure and update per setup ---
+ANCHOR_POSITIONS = np.array(
+    [
+        [0.0, 0.0],  # Anchor 0
+        [3.0, 0.0],  # Anchor 1
+        [0.0, 2.5],  # Anchor 2
+    ]
+)
+
+
+def trilaterate(anchors: np.ndarray, dists: np.ndarray):
+    """2D trilateration from 3 anchor distances. Returns (x, y) or None."""
+    # Subtract circle equation 0 from equations 1 and 2 to get a linear system:
+    #   2*(x1-x0)*x + 2*(y1-y0)*y = d0^2 - d1^2 - x0^2 + x1^2 - y0^2 + y1^2
+    #   2*(x2-x0)*x + 2*(y2-y0)*y = d0^2 - d2^2 - x0^2 + x2^2 - y0^2 + y2^2
+    x0, y0 = anchors[0]
+    x1, y1 = anchors[1]
+    x2, y2 = anchors[2]
+    d0, d1, d2 = dists
+
+    A = np.array(
+        [
+            [2 * (x1 - x0), 2 * (y1 - y0)],
+            [2 * (x2 - x0), 2 * (y2 - y0)],
+        ]
+    )
+    b = np.array(
+        [
+            d0**2 - d1**2 - x0**2 + x1**2 - y0**2 + y1**2,
+            d0**2 - d2**2 - x0**2 + x2**2 - y0**2 + y2**2,
+        ]
+    )
+
+    try:
+        return np.linalg.solve(A, b)
+    except np.linalg.LinAlgError:
+        return None
+
 
 # Nordic UART Service UUIDs
 NUS_RX_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"
@@ -238,37 +279,68 @@ def main():
     m2_carriage.position = (0.1, m2_carriage_offset_y + m2_y_init, m2_carriage_offset_z)
     m2b_carriage.position = (0.16, m2_carriage_offset_y + m2_y_init, m2_carriage_offset_z)
 
+    # UWB tile position marker
+    tile_marker = server.scene.add_icosphere(
+        "tile_position", radius=0.03, color=(0, 200, 255), position=(0.0, 0.0, 0.0)
+    )
+    tile_marker.visible = False
+
     # 3. Telemetry Callback Logic
     def handle_telemetry(sender, data: bytearray):
-        if len(data) >= 5 and data[0] == START_BYTE and data[1] == MSG_TELEMETRY:
-            m1_pos_adc = data[2]
-            m2_pos_adc = data[3]
+        if len(data) < 5 or data[0] != START_BYTE or data[1] != MSG_TELEMETRY:
+            return
+
+        m1_pos_adc = data[2]
+        m2_pos_adc = data[3]
+
+        # Determine packet format by length
+        if len(data) == 11:
+            # Extended: [0xA5, 0x60, m1, m2, d0_lo, d0_hi, d1_lo, d1_hi, d2_lo, d2_hi, csum]
+            csum = 0
+            for i in range(1, 10):
+                csum = (csum + data[i]) & 0xFF
+            if data[10] != csum:
+                return
+
+            d0, d1, d2 = struct.unpack_from("<HHH", data, 4)
+
+            # Update UWB position if all distances are valid
+            if d0 != 0xFFFF and d1 != 0xFFFF and d2 != 0xFFFF:
+                dists_m = np.array([d0 / 1000.0, d1 / 1000.0, d2 / 1000.0])
+                pos = trilaterate(ANCHOR_POSITIONS, dists_m)
+                if pos is not None:
+                    tile_marker.position = (pos[0], pos[1], 0.0)
+                    tile_marker.visible = True
+                    uwb_md.content = (
+                        f"**Pos:** ({pos[0]:.2f}, {pos[1]:.2f}) m  \n"
+                        f"**Ranges:** {d0} / {d1} / {d2} mm"
+                    )
+            else:
+                uwb_md.content = f"**Ranges:** {d0} / {d1} / {d2} mm (incomplete)"
+
+        elif len(data) >= 5:
+            # Legacy 5-byte packet (no UWB)
             checksum = (data[1] + data[2] + data[3]) & 0xFF
+            if data[4] != checksum:
+                return
 
-            if data[4] == checksum:
-                # Convert 8-bit ADC (0-255) back into physical mm
-                m1_mm = (m1_pos_adc / 255.0) * M1_CONFIG["stroke_mm"]
-                m2_mm = (m2_pos_adc / 255.0) * M2_CONFIG["stroke_mm"]
+        # Motor telemetry update (common to both formats)
+        m1_mm = (m1_pos_adc / 255.0) * M1_CONFIG["stroke_mm"]
+        m2_mm = (m2_pos_adc / 255.0) * M2_CONFIG["stroke_mm"]
 
-                # Update Text
-                m1_md.content = f"**ADC:** {m1_pos_adc} | **Est. Pos:** {m1_mm:.1f} mm"
-                m2_md.content = f"**ADC:** {m2_pos_adc} | **Est. Pos:** {m2_mm:.1f} mm"
+        m1_md.content = f"**ADC:** {m1_pos_adc} | **Est. Pos:** {m1_mm:.1f} mm"
+        m2_md.content = f"**ADC:** {m2_pos_adc} | **Est. Pos:** {m2_mm:.1f} mm"
 
-                # Update 3D Models
-                m1_z = (m1_mm - 13) / 1000.0 if m1_is_t16 else m1_mm / 1000.0
-                # Mirrored M1: 150 - x mm
-                m1b_mm = M1_CONFIG["stroke_mm"] - m1_mm
-                m1b_z = (m1b_mm - 13) / 1000.0 if m1_is_t16 else m1b_mm / 1000.0
-                m2_y = m2_mm / 1000.0
-                m1_shaft.position = (0.0, 0.0, m1_z)
-                m1b_shaft.position = (-0.06, 0.0, m1b_z)
-                m2_carriage.position = (0.1, m2_carriage_offset_y + m2_y, m2_carriage_offset_z)
-                m2b_carriage.position = (0.16, m2_carriage_offset_y + m2_y, m2_carriage_offset_z)
+        m1_z = (m1_mm - 13) / 1000.0 if m1_is_t16 else m1_mm / 1000.0
+        m1b_mm = M1_CONFIG["stroke_mm"] - m1_mm
+        m1b_z = (m1b_mm - 13) / 1000.0 if m1_is_t16 else m1b_mm / 1000.0
+        m2_y = m2_mm / 1000.0
+        m1_shaft.position = (0.0, 0.0, m1_z)
+        m1b_shaft.position = (-0.06, 0.0, m1b_z)
+        m2_carriage.position = (0.1, m2_carriage_offset_y + m2_y, m2_carriage_offset_z)
+        m2b_carriage.position = (0.16, m2_carriage_offset_y + m2_y, m2_carriage_offset_z)
 
-    # 4. Start BLE
-    start_ble_thread(handle_telemetry)
-
-    # 5. GUI Commands
+    # 4. GUI Commands
     def send_cmd(cmd_id, payload=None):
         global ble_client, ble_loop
         packet = create_packet(cmd_id, payload)
@@ -339,6 +411,12 @@ def main():
             initial_value=int(_min_position_mm(M2_CONFIG)),
         )
         m2_slider.on_update(lambda event: send_cmd(MSG_M2_SET_POSITION, int(event.target.value)))
+
+    with server.gui.add_folder("UWB Localization"):
+        uwb_md = server.gui.add_markdown("Waiting for UWB data...")
+
+    # 5. Start BLE (after GUI is fully set up so callbacks can reference all widgets)
+    start_ble_thread(handle_telemetry)
 
     def read_loop():
         while True:

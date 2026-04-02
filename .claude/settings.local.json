@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "Bash(ls -la /Users/christopherliu/Programming/OmniTiles/gui/*.py)",
+      "Bash(find /Users/christopherliu/Programming/OmniTiles -name *test* -o -name *tests*)",
+      "Bash(git -C /Users/christopherliu/Programming/OmniTiles log --oneline)"
+    ]
+  }
+}

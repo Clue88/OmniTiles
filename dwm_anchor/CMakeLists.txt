@@ -4,6 +4,6 @@ list(APPEND ZEPHYR_EXTRA_MODULES ${CMAKE_CURRENT_SOURCE_DIR}/../zephyr-dw3000-de
 
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 
-project(dwm_tag)
+project(dwm_anchor)
 
 target_sources(app PRIVATE src/main.c)
