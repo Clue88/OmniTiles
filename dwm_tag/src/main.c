@@ -56,9 +56,37 @@ LOG_MODULE_REGISTER(main);
 
 #define SPEED_OF_LIGHT 299702547.0
 
+// Simple moving average filter for UWB distances
+#define UWB_FILTER_LEN    5
+#define UWB_MAX_DIST_MM   20000  // reject readings > 20m
+#define UWB_MIN_DIST_MM   0      // reject negative (clamped to 0 before here)
+
+static uint16_t uwb_filter_buf[NUM_ANCHORS][UWB_FILTER_LEN];
+static uint8_t uwb_filter_idx[NUM_ANCHORS];
+static uint8_t uwb_filter_count[NUM_ANCHORS];
+
 // Shared UWB distance data (written by UWB thread, read by main loop for BLE TX)
 // 0xFFFF = no valid measurement
 static volatile uint16_t uwb_dist_mm[NUM_ANCHORS] = {0xFFFF, 0xFFFF, 0xFFFF};
+
+static void uwb_filter_update(int anchor, uint16_t dist_mm) {
+  if (dist_mm > UWB_MAX_DIST_MM) {
+    return;  // reject outlier
+  }
+
+  uwb_filter_buf[anchor][uwb_filter_idx[anchor]] = dist_mm;
+  uwb_filter_idx[anchor] =
+      (uwb_filter_idx[anchor] + 1) % UWB_FILTER_LEN;
+  if (uwb_filter_count[anchor] < UWB_FILTER_LEN) {
+    uwb_filter_count[anchor]++;
+  }
+
+  uint32_t sum = 0;
+  for (int i = 0; i < uwb_filter_count[anchor]; i++) {
+    sum += uwb_filter_buf[anchor][i];
+  }
+  uwb_dist_mm[anchor] = (uint16_t)(sum / uwb_filter_count[anchor]);
+}
 
 /* Define NUS UUID so scanners can see us in Scan Response */
 #define NUS_UUID_Service_Val                                                             \
@@ -334,15 +362,17 @@ static void uwb_ranging_thread_fn(void* p1, void* p2, void* p3) {
               ((rtd_init - rtd_resp * (1.0 - clockOffsetRatio)) / 2.0) *
               DWT_TIME_UNITS;
           double distance = tof * SPEED_OF_LIGHT;
-          uint32_t dist_mm = (uint32_t)(distance * 1000.0);
+          int32_t dist_mm = (int32_t)(distance * 1000.0);
 
-          LOG_INF("UWB: dist=%u mm (rtd_i=%d rtd_r=%d clk=%.2f ppm)",
+          if (dist_mm < 0) {
+            dist_mm = 0;
+          }
+
+          LOG_INF("UWB: raw=%d mm filtered=%u mm",
               dist_mm,
-              rtd_init,
-              rtd_resp,
-              (double)(clockOffsetRatio * 1e6));
+              (unsigned)uwb_dist_mm[0]);
 
-          uwb_dist_mm[0] = (dist_mm > 0xFFFE) ? 0xFFFE : (uint16_t)dist_mm;
+          uwb_filter_update(0, (uint16_t)dist_mm);
         } else {
           LOG_WRN("UWB: unexpected func=0x%02X", uwb_rx_buf[9]);
         }
@@ -352,7 +382,7 @@ static void uwb_ranging_thread_fn(void* p1, void* p2, void* p3) {
       LOG_WRN("UWB: no response (status=0x%08X)", status_reg);
     }
 
-    k_sleep(K_MSEC(200));
+    k_sleep(K_MSEC(100));
   }
 }
 
