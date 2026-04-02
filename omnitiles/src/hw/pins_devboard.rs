@@ -4,7 +4,7 @@
 //! Pin definitions for STM32F777 MCU Devboard for OmniTiles.
 
 use stm32f7xx_hal::{
-    gpio::{gpioa, gpiod, gpioe, Alternate, Output, PushPull},
+    gpio::{gpioa, gpiod, gpioe, Alternate, Floating, Input, Output, PushPull},
     pac,
     prelude::*,
 };
@@ -38,8 +38,8 @@ pub struct Spi4Pins {
     pub sck: gpioe::PE12<Alternate<5>>,
     pub miso: gpioe::PE13<Alternate<5>>,
     pub mosi: gpioe::PE14<Alternate<5>>,
-    pub cs1: gpioe::PE4<Output<PushPull>>,
-    pub cs2: gpioe::PE11<Output<PushPull>>,
+    pub cs: gpioe::PE4<Output<PushPull>>,
+    pub drdy: gpioe::PE5<Input<Floating>>,
 }
 
 /// CAN1 TX/RX
@@ -71,8 +71,8 @@ impl BoardPins {
                 sck: gpioe.pe12.into_alternate::<5>(),
                 miso: gpioe.pe13.into_alternate::<5>(),
                 mosi: gpioe.pe14.into_alternate::<5>(),
-                cs1: gpioe.pe4.into_push_pull_output(),
-                cs2: gpioe.pe11.into_push_pull_output(),
+                cs: gpioe.pe4.into_push_pull_output(),
+                drdy: gpioe.pe5.into_floating_input(),
             },
 
             can1: Can1Pins {
