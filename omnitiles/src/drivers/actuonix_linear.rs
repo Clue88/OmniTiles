@@ -13,6 +13,7 @@
 //! - Pin 5 (Yellow): Potentiometer Reference (3.3V)
 
 use crate::drivers::drv8873::{Drv8873, Fault};
+use crate::hw::spi::CsControl;
 use crate::hw::SpiBus;
 
 use stm32f7xx_hal::{
@@ -33,8 +34,7 @@ pub enum Direction {
 ///
 /// `ReadPos` is a closure that returns the raw 12-bit ADC reading (0..4095).
 pub struct ActuonixLinear<
-    const CS_P: char,
-    const CS_N: u8,
+    CS: CsControl,
     const SLP_P: char,
     const SLP_N: u8,
     const DIS_P: char,
@@ -43,7 +43,7 @@ pub struct ActuonixLinear<
     Pwm2,
     ReadPos,
 > {
-    drv: Drv8873<CS_P, CS_N>,
+    drv: Drv8873<CS>,
     pwm1: Pwm1,
     pwm2: Pwm2,
     nsleep: gpio::Pin<SLP_P, SLP_N, Output<PushPull>>,
@@ -59,8 +59,7 @@ pub struct ActuonixLinear<
 }
 
 impl<
-        const CS_P: char,
-        const CS_N: u8,
+        CS: CsControl,
         const SLP_P: char,
         const SLP_N: u8,
         const DIS_P: char,
@@ -68,7 +67,7 @@ impl<
         Pwm1,
         Pwm2,
         ReadPos,
-    > ActuonixLinear<CS_P, CS_N, SLP_P, SLP_N, DIS_P, DIS_N, Pwm1, Pwm2, ReadPos>
+    > ActuonixLinear<CS, SLP_P, SLP_N, DIS_P, DIS_N, Pwm1, Pwm2, ReadPos>
 where
     Pwm1: _embedded_hal_PwmPin<Duty = u16>,
     Pwm2: _embedded_hal_PwmPin<Duty = u16>,
@@ -76,7 +75,7 @@ where
 {
     /// Construct a new Actuonix driver with Hardware PWM.
     pub fn new<SlpMode, DisMode>(
-        drv: Drv8873<CS_P, CS_N>,
+        drv: Drv8873<CS>,
         pwm1: Pwm1,
         pwm2: Pwm2,
         nsleep: gpio::Pin<SLP_P, SLP_N, SlpMode>,
@@ -253,7 +252,7 @@ where
     }
 
     /// Access the inner DRV8873 for fault reading.
-    pub fn drv(&mut self) -> &mut Drv8873<CS_P, CS_N> {
+    pub fn drv(&mut self) -> &mut Drv8873<CS> {
         &mut self.drv
     }
 

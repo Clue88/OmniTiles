@@ -59,6 +59,25 @@ where
     }
 }
 
+/// Trait for chip-select control, allowing real pins or a no-op stub.
+pub trait CsControl {
+    fn select(&mut self);
+    fn deselect(&mut self);
+}
+
+/// Stub chip-select for when no SPI connection is used.
+/// Panics if `select()` or `deselect()` is ever called.
+pub struct NoChipSelect;
+
+impl CsControl for NoChipSelect {
+    fn select(&mut self) {
+        panic!("SPI chip select used on a driver constructed without one");
+    }
+    fn deselect(&mut self) {
+        panic!("SPI chip select used on a driver constructed without one");
+    }
+}
+
 /// Manual chip-select line, active-low, generic over any GPIO pin.
 pub struct ChipSelect<const P: char, const N: u8> {
     pin: gpio::Pin<P, N, Output<PushPull>>,
@@ -86,5 +105,16 @@ impl<const P: char, const N: u8> ChipSelect<P, N> {
 
     pub fn free(self) -> gpio::Pin<P, N, Output<PushPull>> {
         self.pin
+    }
+}
+
+impl<const P: char, const N: u8> CsControl for ChipSelect<P, N> {
+    #[inline]
+    fn select(&mut self) {
+        self.pin.set_low();
+    }
+    #[inline]
+    fn deselect(&mut self) {
+        self.pin.set_high();
     }
 }

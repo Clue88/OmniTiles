@@ -5,6 +5,7 @@
 
 use crate::control::Pid;
 use crate::drivers::ActuonixLinear;
+use crate::hw::spi::CsControl;
 use stm32f7xx_hal::prelude::*;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -15,8 +16,7 @@ pub enum LinearMode {
 
 /// PID position controller for an Actuonix linear actuator. Call [`step`](Self::step) periodically.
 pub struct LinearController<
-    const CS_P: char,
-    const CS_N: u8,
+    CS: CsControl,
     const SLP_P: char,
     const SLP_N: u8,
     const DIS_P: char,
@@ -25,7 +25,7 @@ pub struct LinearController<
     Pwm2,
     ReadPos,
 > {
-    pub actuator: ActuonixLinear<CS_P, CS_N, SLP_P, SLP_N, DIS_P, DIS_N, Pwm1, Pwm2, ReadPos>,
+    pub actuator: ActuonixLinear<CS, SLP_P, SLP_N, DIS_P, DIS_N, Pwm1, Pwm2, ReadPos>,
     pub pid: Pid,
     pub mode: LinearMode,
 
@@ -36,8 +36,7 @@ pub struct LinearController<
 }
 
 impl<
-        const CS_P: char,
-        const CS_N: u8,
+        CS: CsControl,
         const SLP_P: char,
         const SLP_N: u8,
         const DIS_P: char,
@@ -45,7 +44,7 @@ impl<
         Pwm1,
         Pwm2,
         ReadPos,
-    > LinearController<CS_P, CS_N, SLP_P, SLP_N, DIS_P, DIS_N, Pwm1, Pwm2, ReadPos>
+    > LinearController<CS, SLP_P, SLP_N, DIS_P, DIS_N, Pwm1, Pwm2, ReadPos>
 where
     Pwm1: _embedded_hal_PwmPin<Duty = u16>,
     Pwm2: _embedded_hal_PwmPin<Duty = u16>,
@@ -53,7 +52,7 @@ where
 {
     /// Create a new linear controller with PID gains and limits.
     pub fn new(
-        actuator: ActuonixLinear<CS_P, CS_N, SLP_P, SLP_N, DIS_P, DIS_N, Pwm1, Pwm2, ReadPos>,
+        actuator: ActuonixLinear<CS, SLP_P, SLP_N, DIS_P, DIS_N, Pwm1, Pwm2, ReadPos>,
         pid: Pid,
         min_position_mm: f32,
         max_position_mm: f32,

@@ -6,7 +6,7 @@
 //! This module handles SPI framing and register access for DRV8873-Q1. Higher-level motor control
 //! can be layered on top of these primitives.
 
-use crate::hw::{ChipSelect, SpiBus};
+use crate::hw::{spi::CsControl, SpiBus};
 use stm32f7xx_hal::spi;
 
 // Register addresses
@@ -197,22 +197,22 @@ pub struct Response {
     pub data: u8,
 }
 
-/// DRV8873 driver bound to a specific chip-select pin.
+/// DRV8873 driver bound to a chip-select control.
 ///
 /// The SPI bus is passed in as &mut to each method so that multiple DRV8873 instances can share the
-/// same bus.
-pub struct Drv8873<const P: char, const N: u8> {
-    cs: ChipSelect<P, N>,
+/// same bus. Use `NoChipSelect` if the DRV8873's SPI interface is not connected.
+pub struct Drv8873<CS: CsControl> {
+    cs: CS,
 }
 
-impl<const P: char, const N: u8> Drv8873<P, N> {
-    /// Construct a driver from an active-low chip-select pin.
-    pub fn new(cs: ChipSelect<P, N>) -> Self {
+impl<CS: CsControl> Drv8873<CS> {
+    /// Construct a driver from a chip-select control (real pin or `NoChipSelect`).
+    pub fn new(cs: CS) -> Self {
         Self { cs }
     }
 
-    /// Release the chip-select pin.
-    pub fn free(self) -> ChipSelect<P, N> {
+    /// Release the chip-select control.
+    pub fn free(self) -> CS {
         self.cs
     }
 

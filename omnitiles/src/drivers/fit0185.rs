@@ -6,6 +6,7 @@
 //! This module includes functions to drive the motor and read encoder values.
 
 use crate::drivers::drv8873::{Diag, Drv8873, Fault};
+use crate::hw::spi::CsControl;
 use crate::hw::{Encoder, SpiBus};
 
 use micromath::F32Ext;
@@ -26,8 +27,7 @@ pub enum Direction {
 
 /// Motor abstraction that combines a DRV8873 driver, four control pins, and a TIM2 encoder.
 pub struct Fit0185<
-    const CS_P: char,
-    const CS_N: u8,
+    CS: CsControl,
     const IN1_P: char,
     const IN1_N: u8,
     const IN2_P: char,
@@ -37,7 +37,7 @@ pub struct Fit0185<
     const DIS_P: char,
     const DIS_N: u8,
 > {
-    drv: Drv8873<CS_P, CS_N>,
+    drv: Drv8873<CS>,
     enc: Encoder<pac::TIM2>,
     in1: gpio::Pin<IN1_P, IN1_N, Output<PushPull>>,
     in2: gpio::Pin<IN2_P, IN2_N, Output<PushPull>>,
@@ -47,8 +47,7 @@ pub struct Fit0185<
 }
 
 impl<
-        const CS_P: char,
-        const CS_N: u8,
+        CS: CsControl,
         const IN1_P: char,
         const IN1_N: u8,
         const IN2_P: char,
@@ -57,13 +56,13 @@ impl<
         const SLP_N: u8,
         const DIS_P: char,
         const DIS_N: u8,
-    > Fit0185<CS_P, CS_N, IN1_P, IN1_N, IN2_P, IN2_N, SLP_P, SLP_N, DIS_P, DIS_N>
+    > Fit0185<CS, IN1_P, IN1_N, IN2_P, IN2_N, SLP_P, SLP_N, DIS_P, DIS_N>
 {
     /// Construct a new `SpiMotor`.
     ///
     /// `counts_per_rev` is the encoder resolution at the mechanical shaft (after any gear ratio).
     pub fn new<In1Mode, In2Mode, SlpMode, DisMode>(
-        drv: Drv8873<CS_P, CS_N>,
+        drv: Drv8873<CS>,
         enc: Encoder<pac::TIM2>,
         in1: gpio::Pin<IN1_P, IN1_N, In1Mode>,
         in2: gpio::Pin<IN2_P, IN2_N, In2Mode>,
@@ -98,7 +97,7 @@ impl<
     pub fn free(
         self,
     ) -> (
-        Drv8873<CS_P, CS_N>,
+        Drv8873<CS>,
         Encoder<pac::TIM2>,
         gpio::Pin<IN1_P, IN1_N, Output<PushPull>>,
         gpio::Pin<IN2_P, IN2_N, Output<PushPull>>,
@@ -152,7 +151,7 @@ impl<
 
     /// Access the underlying DRV8873 driver for advanced SPI control.
     #[inline]
-    pub fn drv(&mut self) -> &mut Drv8873<CS_P, CS_N> {
+    pub fn drv(&mut self) -> &mut Drv8873<CS> {
         &mut self.drv
     }
 

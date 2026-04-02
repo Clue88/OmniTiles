@@ -35,5 +35,6 @@ pub use i2c::I2cBus;
 pub use led::Led;
 pub use pins_v1::BoardPins;
 pub use spi::ChipSelect;
+pub use spi::NoChipSelect;
 pub use spi::SpiBus;
 pub use usart::Usart;

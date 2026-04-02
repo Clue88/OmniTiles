@@ -23,7 +23,7 @@ use stm32f7xx_hal as hal;
 use omnitiles::{
     control::{LinearController, LinearMode, Pid},
     drivers::{ActuonixLinear, Drv8873, Vl53l0x},
-    hw::{pins_devboard::BoardPins, Adc, ChipSelect, I2cBus, Led, SpiBus, Usart},
+    hw::{pins_devboard::BoardPins, spi::NoChipSelect, Adc, ChipSelect, I2cBus, Led, SpiBus, Usart},
     protocol::{Command, Parser},
 };
 
@@ -105,7 +105,7 @@ fn main() -> ! {
     let (m1_in1, m1_in2, m2_in1, m2_in2) = pwm.split();
 
     let mut m1_actuator = ActuonixLinear::new(
-        Drv8873::new(ChipSelect::active_low(pins.m1.cs)),
+        Drv8873::new(NoChipSelect),
         m1_in1,
         m1_in2,
         pins.m1.nsleep,
@@ -125,7 +125,7 @@ fn main() -> ! {
     );
 
     let mut m2_actuator = ActuonixLinear::new(
-        Drv8873::new(ChipSelect::active_low(pins.m2.cs)),
+        Drv8873::new(NoChipSelect),
         m2_in1,
         m2_in2,
         pins.m2.nsleep,
