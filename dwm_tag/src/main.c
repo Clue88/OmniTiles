@@ -56,22 +56,23 @@ LOG_MODULE_REGISTER(main);
 
 #define SPEED_OF_LIGHT 299702547.0
 
-// Simple moving average filter for UWB distances
-#define UWB_FILTER_LEN  5
+// Median filter for UWB distances
+#define UWB_FILTER_LEN  200
 #define UWB_MAX_DIST_MM 20000  // reject readings > 20m
-#define UWB_MIN_DIST_MM 0      // reject negative (clamped to 0 before here)
 
 static uint16_t uwb_filter_buf[NUM_ANCHORS][UWB_FILTER_LEN];
-static uint8_t uwb_filter_idx[NUM_ANCHORS];
-static uint8_t uwb_filter_count[NUM_ANCHORS];
+static uint16_t uwb_filter_idx[NUM_ANCHORS];
+static uint16_t uwb_filter_count[NUM_ANCHORS];
 
 // Shared UWB distance data (written by UWB thread, read by main loop for BLE TX)
 // 0xFFFF = no valid measurement
 static volatile uint16_t uwb_dist_mm[NUM_ANCHORS] = {0xFFFF, 0xFFFF, 0xFFFF};
 
+static uint16_t uwb_scratch[UWB_FILTER_LEN];
+
 static void uwb_filter_update(int anchor, uint16_t dist_mm) {
   if (dist_mm > UWB_MAX_DIST_MM) {
-    return;  // reject outlier
+    return;
   }
 
   uwb_filter_buf[anchor][uwb_filter_idx[anchor]] = dist_mm;
@@ -80,11 +81,21 @@ static void uwb_filter_update(int anchor, uint16_t dist_mm) {
     uwb_filter_count[anchor]++;
   }
 
-  uint32_t sum = 0;
-  for (int i = 0; i < uwb_filter_count[anchor]; i++) {
-    sum += uwb_filter_buf[anchor][i];
+  uint16_t n = uwb_filter_count[anchor];
+  memcpy(uwb_scratch, uwb_filter_buf[anchor], n * sizeof(uint16_t));
+
+  // Insertion sort
+  for (int i = 1; i < n; i++) {
+    uint16_t key = uwb_scratch[i];
+    int j = i - 1;
+    while (j >= 0 && uwb_scratch[j] > key) {
+      uwb_scratch[j + 1] = uwb_scratch[j];
+      j--;
+    }
+    uwb_scratch[j + 1] = key;
   }
-  uwb_dist_mm[anchor] = (uint16_t)(sum / uwb_filter_count[anchor]);
+
+  uwb_dist_mm[anchor] = uwb_scratch[n / 2];
 }
 
 /* Define NUS UUID so scanners can see us in Scan Response */
