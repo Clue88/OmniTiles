@@ -45,7 +45,7 @@ pub struct Spi4Pins {
     pub mosi: gpioe::PE14<Alternate<5>>,
     pub cs1: gpioe::PE4<Output<PushPull>>,
     pub drdy: gpioe::PE11<Input<Floating>>,
-    // TODO: add CS2 pin
+    pub cs2: gpioe::PE3<Output<PushPull>>,
 }
 
 pub struct Motor1Pins {
@@ -106,6 +106,7 @@ impl BoardPins {
                 mosi: gpioe.pe14.into_alternate::<5>(),
                 cs1: gpioe.pe4.into_push_pull_output(),
                 drdy: gpioe.pe11.into_floating_input(),
+                cs2: gpioe.pe3.into_push_pull_output(),
             },
 
             m1: Motor1Pins {
