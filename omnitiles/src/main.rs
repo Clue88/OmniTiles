@@ -65,15 +65,15 @@ fn main() -> ! {
 
     usart.println("Booting OmniTiles firmware...");
 
-    // let i2c_raw = BlockingI2c::i2c1(
-    //     dp.I2C1,
-    //     (pins.i2c1.scl, pins.i2c1.sda),
-    //     I2cMode::standard(100_000_u32.Hz()),
-    //     &clocks,
-    //     &mut apb1,
-    //     10_000, // data_timeout_us
-    // );
-    // let i2c_bus = I2cBus::new(i2c_raw);
+    let i2c_raw = BlockingI2c::i2c1(
+        dp.I2C1,
+        (pins.i2c1.scl, pins.i2c1.sda),
+        I2cMode::standard(100_000_u32.Hz()),
+        &clocks,
+        &mut apb1,
+        10_000, // data_timeout_us
+    );
+    let i2c_bus = I2cBus::new(i2c_raw);
     // let mut tof = Vl53l0x::new(i2c_bus)
     //     .and_then(|mut s| s.static_init().map(|_| s))
     //     .and_then(|mut s| s.load_tuning().map(|_| s))
