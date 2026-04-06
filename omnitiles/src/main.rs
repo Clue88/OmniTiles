@@ -91,10 +91,11 @@ fn main() -> ! {
     };
     let mut cs1 = ChipSelect::active_low(pins.spi4.cs1);
     let drdy = pins.spi4.drdy;
-    let mut cs2 = ChipSelect::active_low(pins.spi4.cs2);
-
     cs1.deselect();
-    cs2.deselect();
+
+    // TODO: add CS2 pin
+    // let mut cs2 = ChipSelect::active_low(pins.spi4.cs2);
+    // cs2.deselect();
 
     let adc1 = RefCell::new(Adc::adc1(dp.ADC1));
 

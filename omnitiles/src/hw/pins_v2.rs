@@ -41,11 +41,11 @@ pub struct Usart1Pins {
 /// SPI4 SCK/MISO/MOSI and CS
 pub struct Spi4Pins {
     pub sck: gpioe::PE12<Alternate<5>>,
-    pub miso: gpioe::PE13<Alternate<5>>,
+    pub miso: gpioe::PE5<Alternate<5>>,
     pub mosi: gpioe::PE14<Alternate<5>>,
     pub cs1: gpioe::PE4<Output<PushPull>>,
-    pub drdy: gpioe::PE5<Input<Floating>>,
-    pub cs2: gpioe::PE11<Output<PushPull>>,
+    pub drdy: gpioe::PE11<Input<Floating>>,
+    // TODO: add CS2 pin
 }
 
 pub struct Motor1Pins {
@@ -102,11 +102,10 @@ impl BoardPins {
 
             spi4: Spi4Pins {
                 sck: gpioe.pe12.into_alternate::<5>(),
-                miso: gpioe.pe13.into_alternate::<5>(),
+                miso: gpioe.pe5.into_alternate::<5>(),
                 mosi: gpioe.pe14.into_alternate::<5>(),
                 cs1: gpioe.pe4.into_push_pull_output(),
-                drdy: gpioe.pe5.into_floating_input(),
-                cs2: gpioe.pe11.into_push_pull_output(),
+                drdy: gpioe.pe11.into_floating_input(),
             },
 
             m1: Motor1Pins {
