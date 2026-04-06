@@ -58,8 +58,7 @@ static dwt_config_t uwb_config = {
 static uint8_t rx_poll_msg[] = {
     0x41, 0x88, 0, 0xCA, 0xDE, 0, 'A', 'T', 'G', FUNC_POLL, 0, 0};
 static uint8_t tx_resp_msg[] = {
-    0x41, 0x88, 0, 0xCA, 0xDE, 'T', 'G', 0, 'A', FUNC_RESP,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    0x41, 0x88, 0, 0xCA, 0xDE, 'T', 'G', 0, 'A', FUNC_RESP, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 #define ALL_MSG_COMMON_LEN 5  // Only validate FC + PAN (skip addresses)
 
@@ -128,8 +127,7 @@ int main(void) {
     dwt_rxenable(DWT_START_RX_IMMEDIATE);
 
     while (!((status_reg = dwt_readsysstatuslo()) &
-             (DWT_INT_RXFCG_BIT_MASK | SYS_STATUS_ALL_RX_TO |
-                 SYS_STATUS_ALL_RX_ERR))) {
+             (DWT_INT_RXFCG_BIT_MASK | SYS_STATUS_ALL_RX_TO | SYS_STATUS_ALL_RX_ERR))) {
     }
 
     if (status_reg & DWT_INT_RXFCG_BIT_MASK) {
@@ -143,23 +141,20 @@ int main(void) {
 
         rx_buffer[ALL_MSG_SN_IDX] = 0;
         // Check FC + PAN + addressed to this anchor + function code is POLL
-        if (rx_buffer[0] == 0x41 && rx_buffer[1] == 0x88 &&
-            rx_buffer[3] == 0xCA && rx_buffer[4] == 0xDE &&
-            rx_buffer[ADDR_DST_IDX] == CONFIG_ANCHOR_ID &&
+        if (rx_buffer[0] == 0x41 && rx_buffer[1] == 0x88 && rx_buffer[3] == 0xCA &&
+            rx_buffer[4] == 0xDE && rx_buffer[ADDR_DST_IDX] == CONFIG_ANCHOR_ID &&
             rx_buffer[9] == FUNC_POLL) {
           uint32_t resp_tx_time;
           int ret;
 
           poll_rx_ts = get_rx_timestamp_u64();
 
-          resp_tx_time =
-              (uint32_t)((poll_rx_ts +
-                             ((uint64_t)POLL_RX_TO_RESP_TX_DLY_UUS * UUS_TO_DWT_TIME)) >>
-                         8);
+          resp_tx_time = (uint32_t)((poll_rx_ts + ((uint64_t)POLL_RX_TO_RESP_TX_DLY_UUS *
+                                                      UUS_TO_DWT_TIME)) >>
+                                    8);
           dwt_setdelayedtrxtime(resp_tx_time);
 
-          resp_tx_ts =
-              (((uint64_t)(resp_tx_time & 0xFFFFFFFEUL)) << 8) + TX_ANT_DLY;
+          resp_tx_ts = (((uint64_t)(resp_tx_time & 0xFFFFFFFEUL)) << 8) + TX_ANT_DLY;
 
           resp_msg_set_ts(&tx_resp_msg[RESP_MSG_POLL_RX_TS_IDX], poll_rx_ts);
           resp_msg_set_ts(&tx_resp_msg[RESP_MSG_RESP_TX_TS_IDX], resp_tx_ts);
@@ -170,8 +165,7 @@ int main(void) {
           ret = dwt_starttx(DWT_START_TX_DELAYED);
 
           if (ret == DWT_SUCCESS) {
-            while (!((status_reg = dwt_readsysstatuslo()) &
-                     DWT_INT_TXFRS_BIT_MASK)) {
+            while (!((status_reg = dwt_readsysstatuslo()) & DWT_INT_TXFRS_BIT_MASK)) {
             }
             dwt_writesysstatuslo(DWT_INT_TXFRS_BIT_MASK);
             frame_seq_nb++;

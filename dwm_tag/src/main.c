@@ -52,14 +52,14 @@ LOG_MODULE_REGISTER(main);
 // SDK ex_06a defaults: 240 UUS delay, 400 UUS timeout
 // We need much larger values for 8 MHz SPI (anchor needs 1500 UUS to respond)
 #define UWB_POLL_TX_TO_RESP_RX_DLY_UUS 1400
-#define UWB_RESP_RX_TIMEOUT_UUS 3000
+#define UWB_RESP_RX_TIMEOUT_UUS        3000
 
 #define SPEED_OF_LIGHT 299702547.0
 
 // Simple moving average filter for UWB distances
-#define UWB_FILTER_LEN    5
-#define UWB_MAX_DIST_MM   20000  // reject readings > 20m
-#define UWB_MIN_DIST_MM   0      // reject negative (clamped to 0 before here)
+#define UWB_FILTER_LEN  5
+#define UWB_MAX_DIST_MM 20000  // reject readings > 20m
+#define UWB_MIN_DIST_MM 0      // reject negative (clamped to 0 before here)
 
 static uint16_t uwb_filter_buf[NUM_ANCHORS][UWB_FILTER_LEN];
 static uint8_t uwb_filter_idx[NUM_ANCHORS];
@@ -75,8 +75,7 @@ static void uwb_filter_update(int anchor, uint16_t dist_mm) {
   }
 
   uwb_filter_buf[anchor][uwb_filter_idx[anchor]] = dist_mm;
-  uwb_filter_idx[anchor] =
-      (uwb_filter_idx[anchor] + 1) % UWB_FILTER_LEN;
+  uwb_filter_idx[anchor] = (uwb_filter_idx[anchor] + 1) % UWB_FILTER_LEN;
   if (uwb_filter_count[anchor] < UWB_FILTER_LEN) {
     uwb_filter_count[anchor]++;
   }
@@ -236,10 +235,6 @@ static dwt_config_t uwb_config = {
 #define ADDR_DST_IDX 5
 static uint8_t tx_poll_msg[] = {
     0x41, 0x88, 0, 0xCA, 0xDE, 0, 'A', 'T', 'G', UWB_FUNC_POLL, 0, 0};
-static uint8_t rx_resp_msg[] = {
-    0x41, 0x88, 0, 0xCA, 0xDE, 'T', 'G', 0, 'A', UWB_FUNC_RESP,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-
 #define ALL_MSG_SN_IDX          2
 #define ALL_MSG_COMMON_LEN      10
 #define RESP_MSG_POLL_RX_TS_IDX 10
@@ -321,8 +316,7 @@ static void uwb_ranging_thread_fn(void* p1, void* p2, void* p3) {
 
     // Wait for RX good frame, timeout, or error
     while (!((status_reg = dwt_readsysstatuslo()) &
-             (DWT_INT_RXFCG_BIT_MASK | SYS_STATUS_ALL_RX_TO |
-                 SYS_STATUS_ALL_RX_ERR))) {
+             (DWT_INT_RXFCG_BIT_MASK | SYS_STATUS_ALL_RX_TO | SYS_STATUS_ALL_RX_ERR))) {
     }
 
     uwb_frame_seq_nb++;
@@ -345,20 +339,16 @@ static void uwb_ranging_thread_fn(void* p1, void* p2, void* p3) {
           poll_tx_ts = dwt_readtxtimestamplo32();
           resp_rx_ts = dwt_readrxtimestamplo32(0);
 
-          clockOffsetRatio =
-              ((float)dwt_readclockoffset()) / (uint32_t)(1 << 26);
+          clockOffsetRatio = ((float)dwt_readclockoffset()) / (float)(1 << 26);
 
-          resp_msg_get_ts(
-              &uwb_rx_buf[RESP_MSG_POLL_RX_TS_IDX], &poll_rx_ts);
-          resp_msg_get_ts(
-              &uwb_rx_buf[RESP_MSG_RESP_TX_TS_IDX], &resp_tx_ts);
+          resp_msg_get_ts(&uwb_rx_buf[RESP_MSG_POLL_RX_TS_IDX], &poll_rx_ts);
+          resp_msg_get_ts(&uwb_rx_buf[RESP_MSG_RESP_TX_TS_IDX], &resp_tx_ts);
 
           rtd_init = resp_rx_ts - poll_tx_ts;
           rtd_resp = resp_tx_ts - poll_rx_ts;
 
           double tof =
-              ((rtd_init - rtd_resp * (1.0 - clockOffsetRatio)) / 2.0) *
-              DWT_TIME_UNITS;
+              ((rtd_init - rtd_resp * (1.0 - clockOffsetRatio)) / 2.0) * DWT_TIME_UNITS;
           double distance = tof * SPEED_OF_LIGHT;
           int32_t dist_mm = (int32_t)(distance * 1000.0);
 
@@ -368,9 +358,7 @@ static void uwb_ranging_thread_fn(void* p1, void* p2, void* p3) {
 
           uwb_filter_update(cur_anchor, (uint16_t)dist_mm);
         } else {
-          LOG_WRN("UWB: anchor %d unexpected func=0x%02X",
-              cur_anchor,
-              uwb_rx_buf[9]);
+          LOG_WRN("UWB: anchor %d unexpected func=0x%02X", cur_anchor, uwb_rx_buf[9]);
         }
       }
     } else {
