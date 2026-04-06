@@ -8,7 +8,7 @@ cargo build --release      # build only
 cargo doc --no-deps --open # local API docs
 ```
 
-Target: `thumbv7em-none-eabihf` (STM32F767ZITx). Config in `Embed.toml` and
+Target: `thumbv7em-none-eabihf` (STM32F777VITx). Config in `Embed.toml` and
 `.cargo/config.toml`.
 
 ## Important: embedded_hal
