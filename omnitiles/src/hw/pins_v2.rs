@@ -24,6 +24,7 @@ pub struct BoardPins {
     pub m1: Motor1Pins,
     pub m2: Motor2Pins,
     pub i2c1: I2c1Pins,
+    pub wheels: WheelPins,
 }
 
 pub struct LedPins {
@@ -71,6 +72,23 @@ pub struct Motor2Pins {
 pub struct I2c1Pins {
     pub scl: gpiob::PB6<Alternate<4, OpenDrain>>,
     pub sda: gpiob::PB9<Alternate<4, OpenDrain>>,
+}
+
+pub struct WheelPins {
+    pub w1_pwm: gpiod::PD12<Alternate<2>>, // TIM4_CH1
+    pub w1_in1: gpiod::PD3<Output<PushPull>>,
+    pub w1_in2: gpiod::PD6<Output<PushPull>>,
+    pub w2_pwm: gpiod::PD13<Alternate<2>>, // TIM4_CH2
+    pub w2_in1: gpiod::PD7<Output<PushPull>>,
+    pub w2_in2: gpiod::PD11<Output<PushPull>>,
+    pub stby_a: gpioe::PE7<Output<PushPull>>,
+    pub w3_pwm: gpiod::PD14<Alternate<2>>, // TIM4_CH3
+    pub w3_in1: gpioe::PE0<Output<PushPull>>,
+    pub w3_in2: gpioe::PE1<Output<PushPull>>,
+    pub w4_pwm: gpiod::PD15<Alternate<2>>, // TIM4_CH4
+    pub w4_in1: gpioe::PE2<Output<PushPull>>,
+    pub w4_in2: gpioe::PE6<Output<PushPull>>,
+    pub stby_b: gpioe::PE8<Output<PushPull>>,
 }
 
 impl BoardPins {
@@ -140,6 +158,23 @@ impl BoardPins {
                     .into_alternate::<4>()
                     .internal_pull_up(true)
                     .set_open_drain(),
+            },
+
+            wheels: WheelPins {
+                w1_pwm: gpiod.pd12.into_alternate::<2>(),
+                w1_in1: gpiod.pd3.into_push_pull_output(),
+                w1_in2: gpiod.pd6.into_push_pull_output(),
+                w2_pwm: gpiod.pd13.into_alternate::<2>(),
+                w2_in1: gpiod.pd7.into_push_pull_output(),
+                w2_in2: gpiod.pd11.into_push_pull_output(),
+                stby_a: gpioe.pe7.into_push_pull_output(),
+                w3_pwm: gpiod.pd14.into_alternate::<2>(),
+                w3_in1: gpioe.pe0.into_push_pull_output(),
+                w3_in2: gpioe.pe1.into_push_pull_output(),
+                w4_pwm: gpiod.pd15.into_alternate::<2>(),
+                w4_in1: gpioe.pe2.into_push_pull_output(),
+                w4_in2: gpioe.pe6.into_push_pull_output(),
+                stby_b: gpioe.pe8.into_push_pull_output(),
             },
         }
     }
