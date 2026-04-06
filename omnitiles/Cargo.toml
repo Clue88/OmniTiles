@@ -15,7 +15,7 @@ micromath   = "2.1.0"
 
 [dependencies.stm32f7xx-hal]
 version  = "0.8.0"
-features = [ "stm32f767", "rt", "has-can" ]
+features = [ "stm32f777", "rt", "has-can" ]
 
 
 # Set the default for dependencies.
