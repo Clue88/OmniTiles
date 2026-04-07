@@ -24,6 +24,7 @@ pub struct BoardPins {
     pub m1: Motor1Pins,
     pub m2: Motor2Pins,
     pub i2c1: I2c1Pins,
+    #[cfg(feature = "mobile-base")]
     pub wheels: WheelPins,
 }
 
@@ -74,6 +75,7 @@ pub struct I2c1Pins {
     pub sda: gpiob::PB9<Alternate<4, OpenDrain>>,
 }
 
+#[cfg(feature = "mobile-base")]
 pub struct WheelPins {
     pub w1_pwm: gpiod::PD12<Alternate<2>>, // TIM4_CH1
     pub w1_in1: gpiod::PD3<Output<PushPull>>,
@@ -160,6 +162,7 @@ impl BoardPins {
                     .set_open_drain(),
             },
 
+            #[cfg(feature = "mobile-base")]
             wheels: WheelPins {
                 w1_pwm: gpiod.pd12.into_alternate::<2>(),
                 w1_in1: gpiod.pd3.into_push_pull_output(),

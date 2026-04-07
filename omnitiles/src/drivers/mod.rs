@@ -22,10 +22,12 @@ pub mod drv8873;
 pub mod actuonix_linear;
 pub mod fit0185;
 pub mod gim6010;
+pub mod tb6612;
 pub mod vl53l0x;
 
 pub use actuonix_linear::ActuonixLinear;
 pub use drv8873::Drv8873;
 pub use fit0185::Fit0185;
 pub use gim6010::Gim6010;
+pub use tb6612::Tb6612;
 pub use vl53l0x::Vl53l0x;

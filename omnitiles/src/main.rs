@@ -28,6 +28,11 @@ use omnitiles::{
     hw::{pins_v2::BoardPins, spi::NoChipSelect, Adc, ChipSelect, I2cBus, Led, SpiBus, Usart},
     protocol::{Command, Parser},
 };
+#[cfg(feature = "mobile-base")]
+use omnitiles::{
+    control::BaseController,
+    drivers::Tb6612,
+};
 
 /// Map protocol speed byte (0–255) to motor set_speed magnitude in [0.0, 1.0].
 fn speed_to_float(speed: u8) -> f32 {
@@ -171,6 +176,30 @@ fn main() -> ! {
     led_red.off();
     led_yellow.off();
     led_green.off();
+
+    #[cfg(feature = "mobile-base")]
+    let mut base = {
+        let mut stby_a = pins.wheels.stby_a;
+        let mut stby_b = pins.wheels.stby_b;
+        stby_a.set_high();
+        stby_b.set_high();
+
+        let wheel_pwm = dp.TIM4.pwm::<_, _, 1_000_000>(
+            (pins.wheels.w1_pwm, pins.wheels.w2_pwm, pins.wheels.w3_pwm, pins.wheels.w4_pwm),
+            50.micros(), // 20 kHz
+            &clocks,
+        );
+        let (w1_pwm, w2_pwm, w3_pwm, w4_pwm) = wheel_pwm.split();
+
+        let mut base = BaseController::new(
+            Tb6612::new(pins.wheels.w1_in1, pins.wheels.w1_in2, w1_pwm),
+            Tb6612::new(pins.wheels.w2_in1, pins.wheels.w2_in2, w2_pwm),
+            Tb6612::new(pins.wheels.w3_in1, pins.wheels.w3_in2, w3_pwm),
+            Tb6612::new(pins.wheels.w4_in1, pins.wheels.w4_in2, w4_pwm),
+        );
+        base.brake();
+        base
+    };
 
     let mut parser = Parser::new();
     let mut drdy_prev = false;
@@ -325,6 +354,18 @@ fn main() -> ! {
                             m2.set_target_position_mm(mm as f32);
                             led_yellow.on();
                         }
+                        #[cfg(feature = "mobile-base")]
+                        Command::BaseVelocity { vx, vy, omega } => {
+                            writeln!(usart, "cmd: BaseVelocity vx={} vy={} omega={}\r", vx, vy, omega).ok();
+                            base.set_velocity(vx as f32 / 127.0, vy as f32 / 127.0, omega as f32 / 127.0);
+                        }
+                        #[cfg(feature = "mobile-base")]
+                        Command::BaseBrake => {
+                            writeln!(usart, "cmd: BaseBrake\r").ok();
+                            base.brake();
+                        }
+                        #[cfg(not(feature = "mobile-base"))]
+                        _ => {}
                     }
                 }
             }
@@ -389,6 +430,18 @@ fn main() -> ! {
                         m2.set_target_position_mm(mm as f32);
                         led_yellow.on();
                     }
+                    #[cfg(feature = "mobile-base")]
+                    Command::BaseVelocity { vx, vy, omega } => {
+                        writeln!(usart, "cmd: BaseVelocity vx={} vy={} omega={}\r", vx, vy, omega).ok();
+                        base.set_velocity(vx as f32 / 127.0, vy as f32 / 127.0, omega as f32 / 127.0);
+                    }
+                    #[cfg(feature = "mobile-base")]
+                    Command::BaseBrake => {
+                        writeln!(usart, "cmd: BaseBrake\r").ok();
+                        base.brake();
+                    }
+                    #[cfg(not(feature = "mobile-base"))]
+                    _ => {}
                 }
             }
         }
