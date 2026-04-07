@@ -130,8 +130,16 @@ impl BoardPins {
             },
 
             i2c1: I2c1Pins {
-                scl: gpiob.pb6.into_alternate::<4>().internal_pull_up(true).set_open_drain(),
-                sda: gpiob.pb9.into_alternate::<4>().internal_pull_up(true).set_open_drain(),
+                scl: gpiob
+                    .pb6
+                    .into_alternate::<4>()
+                    .internal_pull_up(true)
+                    .set_open_drain(),
+                sda: gpiob
+                    .pb9
+                    .into_alternate::<4>()
+                    .internal_pull_up(true)
+                    .set_open_drain(),
             },
         }
     }
