@@ -111,7 +111,7 @@ fn main() -> ! {
         m1_in2,
         pins.m1.nsleep,
         pins.m1.disable,
-        Adc::make_reader(&adc1, 9), // ADC1_IN9
+        Adc::make_reader(&adc1, 8), // ADC1_IN8
         150.0,                      // P16 has 150 mm stroke length
         20.0,                       // 20 mm buffer at bottom (retracted)
         35.0,                       // 35 mm buffer at top (extended)
