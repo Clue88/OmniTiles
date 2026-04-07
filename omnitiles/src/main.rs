@@ -6,6 +6,7 @@
 #![allow(unused)]
 
 use cortex_m::delay::Delay;
+use cortex_m::peripheral::DWT;
 use cortex_m_rt::entry;
 use panic_halt as _;
 
@@ -44,6 +45,15 @@ fn main() -> ! {
     let mut apb2 = rcc.apb2;
 
     let mut delay = Delay::new(cp.SYST, clocks.sysclk().raw());
+
+    let sysclk_hz = clocks.sysclk().raw() as f32;
+    {
+        let mut dcb = cp.DCB;
+        let mut dwt = cp.DWT;
+        dcb.enable_trace();
+        DWT::unlock();
+        dwt.enable_cycle_counter();
+    }
 
     let pins = BoardPins::new(dp.GPIOA, dp.GPIOB, dp.GPIOC, dp.GPIOD, dp.GPIOE);
 
@@ -165,21 +175,30 @@ fn main() -> ! {
     let mut parser = Parser::new();
     let mut drdy_prev = false;
 
-    // Communication watchdog: brake motors if no SPI command in 500ms.
-    // loop_count * DT approximates elapsed time (DT=0.02 → 25 iterations ≈ 500ms)
-    let mut loops_since_spi: u16 = 0;
-    const SPI_WATCHDOG_LOOPS: u16 = 25;
+    // Communication watchdog: brake motors if no SPI command in 500 ms (real time).
+    let mut last_spi_cycle: u32 = DWT::cycle_count();
+    const SPI_WATCHDOG_CYCLES: u32 = 500; // milliseconds — compared after conversion
     let mut watchdog_braked = false;
-    let mut tof_counter: u8 = 0;
+    let mut last_tof_cycle: u32 = DWT::cycle_count();
+    const TOF_INTERVAL_MS: f32 = 100.0;
     let mut tof_range_mm: u16 = 0xFFFF; // 0xFFFF = no reading
 
-    loop {
-        const DT: f32 = 0.02;
-        m1.step(DT);
-        m2.step(DT);
+    let mut last_pid_cycle: u32 = DWT::cycle_count();
+    const PID_INTERVAL_MS: f32 = 20.0;
 
-        loops_since_spi = loops_since_spi.saturating_add(1);
-        if loops_since_spi >= SPI_WATCHDOG_LOOPS && !watchdog_braked {
+    loop {
+        let now = DWT::cycle_count();
+
+        let pid_elapsed_ms = now.wrapping_sub(last_pid_cycle) as f32 / (sysclk_hz / 1000.0);
+        if pid_elapsed_ms >= PID_INTERVAL_MS {
+            let dt = pid_elapsed_ms / 1000.0;
+            m1.step(dt);
+            m2.step(dt);
+            last_pid_cycle = now;
+        }
+
+        let ms_since_spi = now.wrapping_sub(last_spi_cycle) as f32 / (sysclk_hz / 1000.0);
+        if ms_since_spi >= SPI_WATCHDOG_CYCLES as f32 && !watchdog_braked {
             writeln!(usart, "WATCHDOG: no SPI in 500ms, braking motors\r").ok();
             m1.mode = LinearMode::Disabled;
             m2.mode = LinearMode::Disabled;
@@ -190,9 +209,9 @@ fn main() -> ! {
             watchdog_braked = true;
         }
 
-        tof_counter = tof_counter.wrapping_add(1);
-        if tof_counter >= 5 {
-            tof_counter = 0;
+        let tof_elapsed_ms = now.wrapping_sub(last_tof_cycle) as f32 / (sysclk_hz / 1000.0);
+        if tof_elapsed_ms >= TOF_INTERVAL_MS {
+            last_tof_cycle = now;
             if let Some(ref mut sensor) = tof {
                 match sensor.read_range_mm() {
                     Ok(mm) => tof_range_mm = mm,
@@ -240,7 +259,7 @@ fn main() -> ! {
             spi_bus.transfer_in_place(&mut buf).unwrap_or_default();
             delay.delay_us(50_u32);
             cs1.deselect();
-            loops_since_spi = 0;
+            last_spi_cycle = DWT::cycle_count();
             watchdog_braked = false;
 
             for &byte in &buf {
@@ -305,7 +324,7 @@ fn main() -> ! {
                 }
             }
         }
-        drdy_prev = drdy.is_high();
+        drdy_prev = drdy_now;
 
         if let Some(byte) = usart.read_byte() {
             if let Some(cmd) = parser.push(byte) {

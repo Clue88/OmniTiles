@@ -473,6 +473,7 @@ int main(void) {
   LOG_INF("System Ready. Waiting for BLE data...");
 
   bool spi_in_flight = false;
+  bool spi_was_timing_out = false;
 
   while (1) {
     // --- Collect SPI response from previous transaction ---
@@ -485,6 +486,15 @@ int main(void) {
           last_m1_adc = rx_buffer[2];
           last_m2_adc = rx_buffer[3];
           last_tof_mm = (uint16_t)rx_buffer[4] | ((uint16_t)rx_buffer[5] << 8);
+
+          if (spi_was_timing_out) {
+            LOG_INF("SPI: STM32 reconnected, clearing stale brake flags");
+            spi_was_timing_out = false;
+            send_brake_on_disconnect = false;
+            send_brake_on_queue_full = false;
+            ble_watchdog_braked = false;
+            last_ble_rx_ms = k_uptime_get_32();
+          }
         } else if (spi_result < 0) {
           LOG_WRN("spi_transceive failed: %d", spi_result);
         }
@@ -492,6 +502,7 @@ int main(void) {
         k_sleep(K_MSEC(5));
       } else {
         LOG_WRN("SPI: STM32 did not respond (50 ms timeout), re-pulsing DRDY");
+        spi_was_timing_out = true;
         gpio_pin_set_dt(&drdy_pin, 0);
         k_sleep(K_MSEC(5));
         gpio_pin_set_dt(&drdy_pin, 1);
@@ -548,6 +559,15 @@ int main(void) {
           last_m1_adc = rx_buffer[2];
           last_m2_adc = rx_buffer[3];
           last_tof_mm = (uint16_t)rx_buffer[4] | ((uint16_t)rx_buffer[5] << 8);
+
+          if (spi_was_timing_out) {
+            LOG_INF("SPI: STM32 reconnected, clearing stale brake flags");
+            spi_was_timing_out = false;
+            send_brake_on_disconnect = false;
+            send_brake_on_queue_full = false;
+            ble_watchdog_braked = false;
+            last_ble_rx_ms = k_uptime_get_32();
+          }
         } else if (spi_result < 0) {
           LOG_WRN("spi_transceive failed: %d", spi_result);
         }
@@ -555,6 +575,7 @@ int main(void) {
         k_sleep(K_MSEC(5));
       } else {
         LOG_WRN("SPI: STM32 did not respond (50 ms timeout), re-pulsing DRDY");
+        spi_was_timing_out = true;
         gpio_pin_set_dt(&drdy_pin, 0);
         k_sleep(K_MSEC(5));
         gpio_pin_set_dt(&drdy_pin, 1);
