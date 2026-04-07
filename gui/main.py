@@ -292,17 +292,21 @@ def main():
 
         m1_pos_adc = data[2]
         m2_pos_adc = data[3]
+        tof_val = None
 
         # Determine packet format by length
-        if len(data) == 11:
-            # Extended: [0xA5, 0x60, m1, m2, d0_lo, d0_hi, d1_lo, d1_hi, d2_lo, d2_hi, csum]
+        if len(data) == 13:
+            # Full: [0xA5, 0x60, m1, m2, d0_lo, d0_hi, d1_lo, d1_hi, d2_lo, d2_hi, tof_lo, tof_hi, csum]
             csum = 0
-            for i in range(1, 10):
+            for i in range(1, 12):
                 csum = (csum + data[i]) & 0xFF
-            if data[10] != csum:
+            if data[12] != csum:
                 return
 
-            d0, d1, d2 = struct.unpack_from("<HHH", data, 4)
+            d0, d1, d2, tof_raw = struct.unpack_from("<HHHH", data, 4)
+
+            if tof_raw != 0xFFFF:
+                tof_val = tof_raw
 
             # Update UWB position if all distances are valid
             if d0 != 0xFFFF and d1 != 0xFFFF and d2 != 0xFFFF:
@@ -318,11 +322,39 @@ def main():
             else:
                 uwb_md.content = f"**Ranges:** {d0} / {d1} / {d2} mm (incomplete)"
 
+        elif len(data) == 11:
+            # Legacy UWB without ToF: [0xA5, 0x60, m1, m2, d0..d2, csum]
+            csum = 0
+            for i in range(1, 10):
+                csum = (csum + data[i]) & 0xFF
+            if data[10] != csum:
+                return
+
+            d0, d1, d2 = struct.unpack_from("<HHH", data, 4)
+
+            if d0 != 0xFFFF and d1 != 0xFFFF and d2 != 0xFFFF:
+                dists_m = np.array([d0 / 1000.0, d1 / 1000.0, d2 / 1000.0])
+                pos = trilaterate(ANCHOR_POSITIONS, dists_m)
+                if pos is not None:
+                    tile_marker.position = (pos[0], pos[1], 0.0)
+                    tile_marker.visible = True
+                    uwb_md.content = (
+                        f"**Pos:** ({pos[0]:.2f}, {pos[1]:.2f}) m  \n"
+                        f"**Ranges:** {d0} / {d1} / {d2} mm"
+                    )
+            else:
+                uwb_md.content = f"**Ranges:** {d0} / {d1} / {d2} mm (incomplete)"
+
         elif len(data) >= 5:
-            # Legacy 5-byte packet (no UWB)
+            # Legacy 5-byte packet (no UWB, no ToF)
             checksum = (data[1] + data[2] + data[3]) & 0xFF
             if data[4] != checksum:
                 return
+
+        if tof_val is not None:
+            tof_md.content = f"**Range:** {tof_val} mm"
+        else:
+            tof_md.content = "No sensor / no reading"
 
         # Motor telemetry update (common to both formats)
         m1_mm = (m1_pos_adc / 255.0) * M1_CONFIG["stroke_mm"]
@@ -414,6 +446,9 @@ def main():
 
     with server.gui.add_folder("UWB Localization"):
         uwb_md = server.gui.add_markdown("Waiting for UWB data...")
+
+    with server.gui.add_folder("ToF Sensor"):
+        tof_md = server.gui.add_markdown("Waiting for ToF data...")
 
     # 5. Start BLE (after GUI is fully set up so callbacks can reference all widgets)
     start_ble_thread(handle_telemetry)

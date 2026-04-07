@@ -74,11 +74,19 @@ fn main() -> ! {
         10_000, // data_timeout_us
     );
     let i2c_bus = I2cBus::new(i2c_raw);
-    // let mut tof = Vl53l0x::new(i2c_bus)
-    //     .and_then(|mut s| s.static_init().map(|_| s))
-    //     .and_then(|mut s| s.load_tuning().map(|_| s))
-    //     .and_then(|mut s| s.calibrate().map(|_| s))
-    //     .ok();
+    let mut tof = Vl53l0x::new(i2c_bus)
+        .and_then(|mut s| {
+            s.static_init()?;
+            s.load_tuning()?;
+            s.calibrate()?;
+            Ok(s)
+        })
+        .ok();
+    if tof.is_some() {
+        usart.println("ToF: VL53L0X initialized");
+    } else {
+        usart.println("ToF: not detected, skipping");
+    }
 
     let mut spi_bus = {
         let spi_mode = Mode {
@@ -162,11 +170,8 @@ fn main() -> ! {
     let mut loops_since_spi: u16 = 0;
     const SPI_WATCHDOG_LOOPS: u16 = 25;
     let mut watchdog_braked = false;
-    // let mut tof_counter: u8 = 0;
-    // let mut tof_history: [u16; 50] = [0; 50];
-    // let mut tof_idx: usize = 0;
-    // let mut tof_history_count: usize = 0;
-    // let mut tof_sum: u32 = 0;
+    let mut tof_counter: u8 = 0;
+    let mut tof_range_mm: u16 = 0xFFFF; // 0xFFFF = no reading
 
     loop {
         const DT: f32 = 0.02;
@@ -185,35 +190,16 @@ fn main() -> ! {
             watchdog_braked = true;
         }
 
-        // tof_counter = tof_counter.wrapping_add(1);
-        // if tof_counter >= 5 {
-        //     tof_counter = 0;
-        //     if let Some(ref mut sensor) = tof {
-        //         match sensor.read_range_mm() {
-        //             Ok(mm) => {
-        //                 if tof_history_count < 50 {
-        //                     tof_history[tof_idx] = mm;
-        //                     tof_sum += mm as u32;
-        //                     tof_history_count += 1;
-        //                     tof_idx = (tof_idx + 1) % 50;
-        //                 } else {
-        //                     let old = tof_history[tof_idx];
-        //                     tof_history[tof_idx] = mm;
-        //                     tof_sum = tof_sum + (mm as u32) - (old as u32);
-        //                     tof_idx = (tof_idx + 1) % 50;
-        //                 }
-
-        //                 let denom = tof_history_count as u32;
-        //                 let mm_avg = (tof_sum / denom) as u16;
-
-        //                 writeln!(usart, "tof: {}mm\r", mm_avg).ok();
-        //             }
-        //             Err(_) => {
-        //                 usart.println("tof: read error\r");
-        //             }
-        //         }
-        //     }
-        // }
+        tof_counter = tof_counter.wrapping_add(1);
+        if tof_counter >= 5 {
+            tof_counter = 0;
+            if let Some(ref mut sensor) = tof {
+                match sensor.read_range_mm() {
+                    Ok(mm) => tof_range_mm = mm,
+                    Err(_) => tof_range_mm = 0xFFFF,
+                }
+            }
+        }
 
         if m1.actuator.is_limit_braking() || m2.actuator.is_limit_braking() {
             led_red.on();
@@ -234,11 +220,20 @@ fn main() -> ! {
             let p16_pos = (p16_raw >> 4) as u8;
             let t16_pos = (t16_raw >> 4) as u8;
 
+            let tof_lo = tof_range_mm as u8;
+            let tof_hi = (tof_range_mm >> 8) as u8;
+
             buf[0] = omnitiles::protocol::messages::START_BYTE;
             buf[1] = omnitiles::protocol::messages::MSG_TELEMETRY;
             buf[2] = p16_pos;
             buf[3] = t16_pos;
-            buf[4] = buf[1].wrapping_add(buf[2]).wrapping_add(buf[3]);
+            buf[4] = tof_lo;
+            buf[5] = tof_hi;
+            buf[6] = buf[1]
+                .wrapping_add(buf[2])
+                .wrapping_add(buf[3])
+                .wrapping_add(buf[4])
+                .wrapping_add(buf[5]);
 
             cs1.select();
             delay.delay_us(50_u32);

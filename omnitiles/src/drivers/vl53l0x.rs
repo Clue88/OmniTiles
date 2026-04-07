@@ -42,9 +42,15 @@ where
             stop_variable: 0,
         };
 
+        // Probe first — if no device is present this returns an I2C NACK immediately
+        // instead of hanging during the soft reset sequence below.
+        if dev.read_reg(0xC0)? != 0xEE {
+            return Err(Error::InvalidDevice);
+        }
+
         // Soft reset via SOFT_RESET_GO2_SOFT_RESET_N (0xBF): pull low then high.
         // Page-select (0xFF) and power (0x80) writes ensure the device is in a known
-        // state. Errors are ignored because the device may NACK if stuck.
+        // state. Errors are ignored because the device may NACK during reset.
         let _ = dev.write_reg(0xFF, 0x00);
         let _ = dev.write_reg(0x80, 0x00);
         let _ = dev.write_reg(0xBF, 0x00);
@@ -52,7 +58,7 @@ where
         let _ = dev.write_reg(0xBF, 0x01);
         asm::delay(1_000_000);
 
-        // IDENTIFICATION_MODEL_ID — must read 0xEE for VL53L0X
+        // Re-verify after reset
         if dev.read_reg(0xC0)? != 0xEE {
             return Err(Error::InvalidDevice);
         }
