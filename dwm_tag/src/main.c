@@ -67,6 +67,8 @@ static uint16_t uwb_filter_count[NUM_ANCHORS];
 // Shared UWB distance data (written by UWB thread, read by main loop for BLE TX)
 // 0xFFFF = no valid measurement
 static volatile uint16_t uwb_dist_mm[NUM_ANCHORS] = {0xFFFF, 0xFFFF, 0xFFFF};
+static volatile uint8_t last_m1_adc;
+static volatile uint8_t last_m2_adc;
 
 static uint16_t uwb_scratch[UWB_FILTER_LEN];
 
@@ -146,9 +148,34 @@ static const struct spi_config spi_cfg = {
     .operation = SPI_WORD_SET(8) | SPI_TRANSFER_MSB | SPI_OP_MODE_SLAVE,
 };
 
-static void set_drdy(bool active) {
-  gpio_pin_set_dt(&drdy_pin, active ? 1 : 0);
+// SPI bridge thread: runs blocking spi_transceive so main loop never hangs
+static K_SEM_DEFINE(spi_start_sem, 0, 1);
+static K_SEM_DEFINE(spi_done_sem, 0, 1);
+static volatile int spi_result;
+
+static void spi_bridge_thread_fn(void* p1, void* p2, void* p3) {
+  ARG_UNUSED(p1);
+  ARG_UNUSED(p2);
+  ARG_UNUSED(p3);
+
+  while (1) {
+    k_sem_take(&spi_start_sem, K_FOREVER);
+
+    struct spi_buf tx_buf = {.buf = tx_buffer, .len = SPI_BUF_SIZE};
+    struct spi_buf_set tx = {.buffers = &tx_buf, .count = 1};
+    struct spi_buf rx_buf = {.buf = rx_buffer, .len = SPI_BUF_SIZE};
+    struct spi_buf_set rx = {.buffers = &rx_buf, .count = 1};
+
+    gpio_pin_set_dt(&drdy_pin, 1);
+    spi_result = spi_transceive(spi_dev, &spi_cfg, &tx, &rx);
+    gpio_pin_set_dt(&drdy_pin, 0);
+
+    k_sem_give(&spi_done_sem);
+  }
 }
+
+K_THREAD_STACK_DEFINE(spi_bridge_stack, 1024);
+static struct k_thread spi_bridge_thread;
 
 /* BLE callbacks */
 
@@ -379,40 +406,8 @@ static void uwb_ranging_thread_fn(void* p1, void* p2, void* p3) {
     // Cycle to next anchor
     cur_anchor = (cur_anchor + 1) % NUM_ANCHORS;
 
-    // After a full cycle, send UWB-only telemetry over BLE if no STM32 data
-    // is flowing (rate limiter prevents double-sends when STM32 is active)
-    if (cur_anchor == 0 && current_conn != NULL) {
-      uint32_t now = k_uptime_get_32();
-      if (now >= last_nus_send_ms + NUS_SEND_INTERVAL_MS &&
-          now >= nus_send_backoff_until_ms) {
-        uint8_t telem[11];
-        telem[0] = 0xA5;
-        telem[1] = 0x60;
-        telem[2] = 0;  // no motor data
-        telem[3] = 0;
-
-        uint16_t d0 = uwb_dist_mm[0];
-        uint16_t d1 = uwb_dist_mm[1];
-        uint16_t d2 = uwb_dist_mm[2];
-
-        telem[4] = (uint8_t)(d0);
-        telem[5] = (uint8_t)(d0 >> 8);
-        telem[6] = (uint8_t)(d1);
-        telem[7] = (uint8_t)(d1 >> 8);
-        telem[8] = (uint8_t)(d2);
-        telem[9] = (uint8_t)(d2 >> 8);
-
-        uint8_t csum = 0;
-        for (int i = 1; i < 10; i++) {
-          csum += telem[i];
-        }
-        telem[10] = csum;
-
-        if (bt_nus_send(current_conn, telem, sizeof(telem)) == 0) {
-          last_nus_send_ms = now;
-        }
-      }
-    }
+    // Telemetry is sent exclusively from the main loop after SPI exchange,
+    // which includes both motor ADC values and UWB distances.
 
     // Brief delay between ranging exchanges
     k_sleep(K_MSEC(30));
@@ -452,51 +447,101 @@ int main(void) {
       K_NO_WAIT);
   k_thread_name_set(&uwb_thread, "uwb_ranging");
 
+  // Start SPI bridge thread (blocks on spi_transceive so main loop stays free)
+  k_thread_create(&spi_bridge_thread,
+      spi_bridge_stack,
+      K_THREAD_STACK_SIZEOF(spi_bridge_stack),
+      spi_bridge_thread_fn,
+      NULL,
+      NULL,
+      NULL,
+      K_PRIO_PREEMPT(5),
+      0,
+      K_NO_WAIT);
+  k_thread_name_set(&spi_bridge_thread, "spi_bridge");
+
   LOG_INF("System Ready. Waiting for BLE data...");
 
+  bool spi_in_flight = false;
+
   while (1) {
-    ret = k_msgq_get(&ble_msgq, tx_buffer, K_MSEC(1000));
+    // --- Collect SPI response from previous transaction ---
+    if (spi_in_flight) {
+      ret = k_sem_take(&spi_done_sem, K_MSEC(50));
+      if (ret == 0) {
+        spi_in_flight = false;
 
-    if (ret != 0) {
-      memset(tx_buffer, 0, SPI_BUF_SIZE);
+        if (spi_result >= 0 && rx_buffer[0] == 0xA5 && rx_buffer[1] == 0x60) {
+          last_m1_adc = rx_buffer[2];
+          last_m2_adc = rx_buffer[3];
+        } else if (spi_result < 0) {
+          LOG_WRN("spi_transceive failed: %d", spi_result);
+        }
+
+        k_sleep(K_MSEC(5));
+      } else {
+        LOG_WRN("SPI: STM32 did not respond (50 ms timeout), re-pulsing DRDY");
+        gpio_pin_set_dt(&drdy_pin, 0);
+        k_sleep(K_MSEC(5));
+        gpio_pin_set_dt(&drdy_pin, 1);
+      }
     }
 
-    /* On BLE disconnect, send brake to STM32 so motors stop when link is lost */
-    if (send_brake_on_disconnect) {
-      send_brake_on_disconnect = false;
-      tx_buffer[0] = CMD_START_BYTE;
-      tx_buffer[1] = CMD_M1_BRAKE;
-      tx_buffer[2] = CMD_M1_BRAKE;
-      tx_buffer[3] = CMD_START_BYTE;
-      tx_buffer[4] = CMD_M2_BRAKE;
-      tx_buffer[5] = CMD_M2_BRAKE;
-      memset(tx_buffer + 6, 0, SPI_BUF_SIZE - 6);
+    // --- Prepare next SPI payload (only if previous completed) ---
+    if (!spi_in_flight) {
+      ret = k_msgq_get(&ble_msgq, tx_buffer, K_MSEC(20));
+      if (ret != 0) {
+        memset(tx_buffer, 0, SPI_BUF_SIZE);
+      }
+
+      if (send_brake_on_disconnect) {
+        send_brake_on_disconnect = false;
+        tx_buffer[0] = CMD_START_BYTE;
+        tx_buffer[1] = CMD_M1_BRAKE;
+        tx_buffer[2] = CMD_M1_BRAKE;
+        tx_buffer[3] = CMD_START_BYTE;
+        tx_buffer[4] = CMD_M2_BRAKE;
+        tx_buffer[5] = CMD_M2_BRAKE;
+        memset(tx_buffer + 6, 0, SPI_BUF_SIZE - 6);
+      }
+      if (send_brake_on_queue_full) {
+        send_brake_on_queue_full = false;
+        tx_buffer[0] = CMD_START_BYTE;
+        tx_buffer[1] = CMD_M1_BRAKE;
+        tx_buffer[2] = CMD_M1_BRAKE;
+        tx_buffer[3] = CMD_START_BYTE;
+        tx_buffer[4] = CMD_M2_BRAKE;
+        tx_buffer[5] = CMD_M2_BRAKE;
+        memset(tx_buffer + 6, 0, SPI_BUF_SIZE - 6);
+      }
+
+      spi_in_flight = true;
+      k_sem_give(&spi_start_sem);
+
+      // Wait for this transaction too (first attempt)
+      ret = k_sem_take(&spi_done_sem, K_MSEC(50));
+      if (ret == 0) {
+        spi_in_flight = false;
+
+        if (spi_result >= 0 && rx_buffer[0] == 0xA5 && rx_buffer[1] == 0x60) {
+          last_m1_adc = rx_buffer[2];
+          last_m2_adc = rx_buffer[3];
+        } else if (spi_result < 0) {
+          LOG_WRN("spi_transceive failed: %d", spi_result);
+        }
+
+        k_sleep(K_MSEC(5));
+      } else {
+        LOG_WRN("SPI: STM32 did not respond (50 ms timeout), re-pulsing DRDY");
+        gpio_pin_set_dt(&drdy_pin, 0);
+        k_sleep(K_MSEC(5));
+        gpio_pin_set_dt(&drdy_pin, 1);
+      }
     }
-    /* When queue overflowed, send brake so actuators stop immediately */
-    if (send_brake_on_queue_full) {
-      send_brake_on_queue_full = false;
-      tx_buffer[0] = CMD_START_BYTE;
-      tx_buffer[1] = CMD_M1_BRAKE;
-      tx_buffer[2] = CMD_M1_BRAKE;
-      tx_buffer[3] = CMD_START_BYTE;
-      tx_buffer[4] = CMD_M2_BRAKE;
-      tx_buffer[5] = CMD_M2_BRAKE;
-      memset(tx_buffer + 6, 0, SPI_BUF_SIZE - 6);
-    }
 
-    struct spi_buf tx_buf = {.buf = tx_buffer, .len = SPI_BUF_SIZE};
-    struct spi_buf_set tx = {.buffers = &tx_buf, .count = 1};
-
-    struct spi_buf rx_buf = {.buf = rx_buffer, .len = SPI_BUF_SIZE};
-    struct spi_buf_set rx = {.buffers = &rx_buf, .count = 1};
-
-    set_drdy(true);
-    ret = spi_transceive(spi_dev, &spi_cfg, &tx, &rx);
-    set_drdy(false);
-
-    bool have_stm32 = (ret == 0 && rx_buffer[0] == 0xA5 && rx_buffer[1] == 0x60);
-    uint8_t m1_adc = have_stm32 ? rx_buffer[2] : 0;
-    uint8_t m2_adc = have_stm32 ? rx_buffer[3] : 0;
+    // --- BLE telemetry (always runs, even if SPI is stuck) ---
+    uint8_t m1_adc = last_m1_adc;
+    uint8_t m2_adc = last_m2_adc;
 
     if (current_conn != NULL) {
       uint32_t now = k_uptime_get_32();
@@ -538,10 +583,6 @@ int main(void) {
               (int)NUS_SEND_BACKOFF_MS);
         }
       }
-    }
-
-    if (ret < 0) {
-      LOG_WRN("spi_transceive failed: %d", ret);
     }
   }
   return 0;

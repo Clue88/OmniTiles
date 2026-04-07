@@ -155,6 +155,7 @@ fn main() -> ! {
     led_green.off();
 
     let mut parser = Parser::new();
+    let mut drdy_prev = false;
     // let mut tof_counter: u8 = 0;
     // let mut tof_history: [u16; 50] = [0; 50];
     // let mut tof_idx: usize = 0;
@@ -202,7 +203,8 @@ fn main() -> ! {
             led_red.off();
         }
 
-        if drdy.is_high() {
+        let drdy_now = drdy.is_high();
+        if drdy_now && !drdy_prev {
             delay.delay_ms(2_u32);
 
             let mut buf = [0u8; 128];
@@ -287,9 +289,8 @@ fn main() -> ! {
                     }
                 }
             }
-
-            while drdy.is_high() {}
         }
+        drdy_prev = drdy.is_high();
 
         if let Some(byte) = usart.read_byte() {
             if let Some(cmd) = parser.push(byte) {
