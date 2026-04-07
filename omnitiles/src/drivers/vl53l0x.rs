@@ -42,7 +42,9 @@ where
             stop_variable: 0,
         };
 
-        // Soft reset; ignore errors (device may NACK if stuck on non-standard page).
+        // Soft reset via SOFT_RESET_GO2_SOFT_RESET_N (0xBF): pull low then high.
+        // Page-select (0xFF) and power (0x80) writes ensure the device is in a known
+        // state. Errors are ignored because the device may NACK if stuck.
         let _ = dev.write_reg(0xFF, 0x00);
         let _ = dev.write_reg(0x80, 0x00);
         let _ = dev.write_reg(0xBF, 0x00);
@@ -50,15 +52,17 @@ where
         let _ = dev.write_reg(0xBF, 0x01);
         asm::delay(1_000_000);
 
+        // IDENTIFICATION_MODEL_ID — must read 0xEE for VL53L0X
         if dev.read_reg(0xC0)? != 0xEE {
             return Err(Error::InvalidDevice);
         }
 
-        // Set 2V8 I/O mode
+        // VHV_CONFIG_PAD_SCL_SDA__EXTSUP_HV — set bit 0 to enable 2.8V I/O mode
         let vhv = dev.read_reg(0x89)?;
         dev.write_reg(0x89, vhv | 0x01)?;
 
-        // Mandatory private sequence — capture stop_variable
+        // Capture stop_variable from undocumented register 0x91.
+        // This device-specific value is needed later to start single-shot measurements.
         dev.write_reg(0x88, 0x00)?;
         dev.write_reg(0x80, 0x01)?;
         dev.write_reg(0xFF, 0x01)?;
@@ -68,11 +72,12 @@ where
         dev.write_reg(0xFF, 0x00)?;
         dev.write_reg(0x80, 0x00)?;
 
-        // Disable SIGNAL_RATE_MSRC (bit 1) and SIGNAL_RATE_PRE_RANGE (bit 4) limit checks
+        // MSRC_CONFIG_CONTROL — disable SIGNAL_RATE_MSRC (bit 1) and
+        // SIGNAL_RATE_PRE_RANGE (bit 4) limit checks to avoid rejecting valid readings
         let msrc = dev.read_reg(0x60)?;
         dev.write_reg(0x60, msrc | 0x12)?;
 
-        // Signal rate limit: 0.25 MCPS in 9.7 fixed-point format
+        // FINAL_RANGE_CONFIG_MIN_COUNT_RATE_RTN_LIMIT — 0.25 MCPS (9.7 fixed-point)
         dev.write_reg(0x44, 0x00)?;
         dev.write_reg(0x45, 0x20)?;
 
@@ -156,7 +161,12 @@ where
         Ok(())
     }
 
-    /// Write ST tuning register block
+    /// Write ST's default tuning register table.
+    ///
+    /// This is a magic blob copied verbatim from ST's proprietary VL53L0X API
+    /// (vl53l0x_tuning.h). It configures internal analog/digital parameters that
+    /// ST does not publicly document. Every open-source VL53L0X driver reproduces
+    /// this table as-is. Do not modify individual values.
     pub fn load_tuning(&mut self) -> Result<(), Error> {
         let settings: &[(u8, u8)] = &[
             (0xFF, 0x01),
@@ -246,8 +256,13 @@ where
         Ok(())
     }
 
-    /// VHV and phase calibration
+    /// Run VHV (voltage) and phase reference calibration.
+    ///
+    /// Must be called after `load_tuning`. The two calibration passes (VHV = 0x40,
+    /// phase = 0x00) compensate for chip-to-chip variation. Register 0x01 is
+    /// SYSTEM_SEQUENCE_CONFIG — each write selects which calibration step runs.
     pub fn calibrate(&mut self) -> Result<(), Error> {
+        // SYSRANGE_START config and clear GPIO interrupt
         self.write_reg(0x0A, 0x04)?;
         let gpio_hv = self.read_reg(0x84)?;
         self.write_reg(0x84, gpio_hv & !0x10)?;
@@ -255,12 +270,15 @@ where
 
         self.write_reg(0x01, 0xFF)?;
 
+        // VHV calibration
         self.write_reg(0x01, 0x01)?;
         self.perform_single_ref_calibration(0x40)?;
 
+        // Phase calibration
         self.write_reg(0x01, 0x02)?;
         self.perform_single_ref_calibration(0x00)?;
 
+        // Restore full sequence config
         self.write_reg(0x01, 0xFF)?;
 
         Ok(())
@@ -268,7 +286,8 @@ where
 
     /// Single-shot range measurement in mm
     pub fn read_range_mm(&mut self) -> Result<u16, Error> {
-        // Single-shot start sequence
+        // Write stop_variable (captured during init) then trigger single-shot via
+        // SYSRANGE_START (0x00)
         self.write_reg(0x80, 0x01)?;
         self.write_reg(0xFF, 0x01)?;
         self.write_reg(0x00, 0x00)?;
@@ -279,12 +298,19 @@ where
 
         self.write_reg(0x00, 0x01)?;
 
+        // Wait for SYSRANGE_START bit 0 to clear (device accepted the command)
+        let mut started = false;
         for _ in 0..50_000u32 {
             if self.read_reg(0x00)? & 0x01 == 0 {
+                started = true;
                 break;
             }
         }
+        if !started {
+            return Err(Error::Timeout);
+        }
 
+        // Wait for RESULT_INTERRUPT_STATUS (0x13) — bits [2:0] != 0 means data ready
         let mut done = false;
         for _ in 0..50_000u32 {
             if self.read_reg(0x13)? & 0x07 != 0 {
@@ -296,15 +322,20 @@ where
             return Err(Error::Timeout);
         }
 
+        // Read 16-bit range from RESULT_RANGE_STATUS + 10 (0x1E..0x1F)
         let mut buf = [0u8; 2];
         self.bus.write_read(self.addr, &[0x1Eu8], &mut buf)?;
         let mm = ((buf[0] as u16) << 8) | buf[1] as u16;
 
+        // SYSTEM_INTERRUPT_CLEAR — acknowledge the interrupt
         self.write_reg(0x0B, 0x01)?;
 
         Ok(mm)
     }
 
+    /// Start a calibration via SYSRANGE_START, poll RESULT_INTERRUPT_STATUS until
+    /// complete, then clear the interrupt. `vhv_init_byte` selects the cal type:
+    /// 0x40 = VHV, 0x00 = phase.
     fn perform_single_ref_calibration(&mut self, vhv_init_byte: u8) -> Result<(), Error> {
         self.write_reg(0x00, 0x01 | vhv_init_byte)?;
 
