@@ -69,7 +69,7 @@ pub struct Motor2Pins {
 }
 
 pub struct I2c1Pins {
-    pub scl: gpiob::PB8<Alternate<4, OpenDrain>>,
+    pub scl: gpiob::PB6<Alternate<4, OpenDrain>>,
     pub sda: gpiob::PB9<Alternate<4, OpenDrain>>,
 }
 
@@ -130,7 +130,7 @@ impl BoardPins {
             },
 
             i2c1: I2c1Pins {
-                scl: gpiob.pb8.into_alternate_open_drain::<4>(),
+                scl: gpiob.pb6.into_alternate_open_drain::<4>(),
                 sda: gpiob.pb9.into_alternate_open_drain::<4>(),
             },
         }
