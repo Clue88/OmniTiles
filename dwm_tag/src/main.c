@@ -128,6 +128,12 @@ static volatile bool send_brake_on_disconnect;
 /* Set in bt_receive_cb when queue is full; main loop sends M1+M2 brake on next SPI transaction */
 static volatile bool send_brake_on_queue_full;
 
+/* BLE command watchdog: if connected but no BLE data arrives within this period, brake.
+ * Catches frozen/crashed GUI. Reset on every bt_receive_cb. */
+#define BLE_CMD_WATCHDOG_MS 2000
+static volatile uint32_t last_ble_rx_ms;
+static bool ble_watchdog_braked;
+
 static void adv_work_handler(struct k_work* work) {
   int err =
       bt_le_adv_start(BT_LE_ADV_CONN_FAST_1, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
@@ -180,6 +186,7 @@ static struct k_thread spi_bridge_thread;
 /* BLE callbacks */
 
 static void bt_receive_cb(struct bt_conn* conn, const uint8_t* const data, uint16_t len) {
+  last_ble_rx_ms = k_uptime_get_32();
   uint8_t temp_buf[SPI_BUF_SIZE];
 
   uint16_t copy_len = (len > SPI_BUF_SIZE) ? SPI_BUF_SIZE : len;
@@ -208,6 +215,8 @@ static void connected(struct bt_conn* conn, uint8_t err) {
   LOG_INF("Connected");
 
   /* Track the current connection for NUS TX */
+  last_ble_rx_ms = k_uptime_get_32();
+  ble_watchdog_braked = false;
   current_conn = bt_conn_ref(conn);
 }
 
@@ -484,6 +493,16 @@ int main(void) {
         gpio_pin_set_dt(&drdy_pin, 0);
         k_sleep(K_MSEC(5));
         gpio_pin_set_dt(&drdy_pin, 1);
+      }
+    }
+
+    // --- BLE command watchdog: brake if GUI stops sending ---
+    if (current_conn != NULL && !ble_watchdog_braked) {
+      uint32_t elapsed = k_uptime_get_32() - last_ble_rx_ms;
+      if (elapsed >= BLE_CMD_WATCHDOG_MS) {
+        LOG_WRN("BLE watchdog: no commands in %u ms, sending brake", elapsed);
+        ble_watchdog_braked = true;
+        send_brake_on_disconnect = true;
       }
     }
 

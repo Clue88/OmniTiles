@@ -156,6 +156,12 @@ fn main() -> ! {
 
     let mut parser = Parser::new();
     let mut drdy_prev = false;
+
+    // Communication watchdog: brake motors if no SPI command in 500ms.
+    // loop_count * DT approximates elapsed time (DT=0.02 → 25 iterations ≈ 500ms)
+    let mut loops_since_spi: u16 = 0;
+    const SPI_WATCHDOG_LOOPS: u16 = 25;
+    let mut watchdog_braked = false;
     // let mut tof_counter: u8 = 0;
     // let mut tof_history: [u16; 50] = [0; 50];
     // let mut tof_idx: usize = 0;
@@ -166,6 +172,18 @@ fn main() -> ! {
         const DT: f32 = 0.02;
         m1.step(DT);
         m2.step(DT);
+
+        loops_since_spi = loops_since_spi.saturating_add(1);
+        if loops_since_spi >= SPI_WATCHDOG_LOOPS && !watchdog_braked {
+            writeln!(usart, "WATCHDOG: no SPI in 500ms, braking motors\r").ok();
+            m1.mode = LinearMode::Disabled;
+            m2.mode = LinearMode::Disabled;
+            m1.actuator.brake();
+            m2.actuator.brake();
+            led_green.off();
+            led_yellow.off();
+            watchdog_braked = true;
+        }
 
         // tof_counter = tof_counter.wrapping_add(1);
         // if tof_counter >= 5 {
@@ -227,6 +245,8 @@ fn main() -> ! {
             spi_bus.transfer_in_place(&mut buf).unwrap_or_default();
             delay.delay_us(50_u32);
             cs1.deselect();
+            loops_since_spi = 0;
+            watchdog_braked = false;
 
             for &byte in &buf {
                 if let Some(cmd) = parser.push(byte) {
