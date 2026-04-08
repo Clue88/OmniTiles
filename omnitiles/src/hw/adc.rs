@@ -35,25 +35,34 @@ pub trait AdcRead {
 fn configure_common() {
     let common = unsafe { &*pac::ADC_COMMON::ptr() };
 
-    // ADC prescaler: PCLK2 / 4
-    common.ccr.modify(|_, w| w.adcpre().div4());
+    // Write the full CCR — not modify — so stale MULTI/DMA/DELAY bits are cleared.
+    common.ccr.write(|w| w.adcpre().div4());
 }
 
 fn init_basic_adc(adc: &pac::adc1::RegisterBlock) {
-    // Power off to configure
-    adc.cr2.modify(|_, w| w.adon().clear_bit());
-
-    // 12-bit, right-aligned, software trigger
-    adc.cr1.modify(|_, w| w.res().bits(0b00));
-    adc.cr2.modify(|_, w| {
+    // Full register writes (not modify) to guarantee clean state after soft-reset.
+    // CR2: power off, single conversion, right-aligned, no external trigger
+    adc.cr2.write(|w| {
         w.cont().clear_bit();
         w.align().right();
         w.exten().disabled();
         w
     });
 
-    // Default minimal sample times
-    adc.smpr2.modify(|_, w| unsafe { w.bits(0) });
+    // CR1: 12-bit resolution, no scan, no interrupts
+    adc.cr1.write(|w| w.res().bits(0b00));
+
+    // Zero all sample times
+    adc.smpr1.write(|w| unsafe { w.bits(0) });
+    adc.smpr2.write(|w| unsafe { w.bits(0) });
+
+    // Single conversion in sequence position 1, sequence length = 1
+    adc.sqr1.write(|w| w.l().bits(0));
+    adc.sqr2.write(|w| unsafe { w.bits(0) });
+    adc.sqr3.write(|w| unsafe { w.bits(0) });
+
+    // Clear all status flags
+    adc.sr.write(|w| unsafe { w.bits(0) });
 
     // Power on
     adc.cr2.modify(|_, w| w.adon().set_bit());
@@ -63,7 +72,11 @@ impl Adc<pac::ADC1> {
     /// Create and initialize ADC1.
     pub fn adc1(adc1: pac::ADC1) -> Self {
         let rcc = unsafe { &*pac::RCC::ptr() };
+        // Enable clock, then reset the peripheral so all registers start from known state.
+        // Without the reset, stale values survive a probe-rs soft-reset (MULTI, SCAN, etc.).
         rcc.apb2enr.modify(|_, w| w.adc1en().set_bit());
+        rcc.apb2rstr.modify(|_, w| w.adcrst().set_bit());
+        rcc.apb2rstr.modify(|_, w| w.adcrst().clear_bit());
 
         configure_common();
         init_basic_adc(&adc1);
@@ -146,6 +159,9 @@ fn read_channel(adc: &pac::adc1::RegisterBlock, channel: u8) -> u16 {
 
         sum += adc.dr.read().data().bits() as u32;
     }
+
+    // Point mux away from the external pin to avoid parasitic loading between reads
+    adc.sqr3.modify(|_, w| unsafe { w.sq1().bits(0x1F) });
 
     (sum / SAMPLES) as u16
 }
