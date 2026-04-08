@@ -67,8 +67,8 @@ static uint16_t uwb_filter_count[NUM_ANCHORS];
 // Shared UWB distance data (written by UWB thread, read by main loop for BLE TX)
 // 0xFFFF = no valid measurement
 static volatile uint16_t uwb_dist_mm[NUM_ANCHORS] = {0xFFFF, 0xFFFF, 0xFFFF};
-static volatile uint8_t last_m1_adc;
-static volatile uint8_t last_m2_adc;
+static volatile uint16_t last_m1_adc;
+static volatile uint16_t last_m2_adc;
 static volatile uint16_t last_tof_mm = 0xFFFF;
 
 static uint16_t uwb_scratch[UWB_FILTER_LEN];
@@ -483,9 +483,9 @@ int main(void) {
         spi_in_flight = false;
 
         if (spi_result >= 0 && rx_buffer[0] == 0xA5 && rx_buffer[1] == 0x60) {
-          last_m1_adc = rx_buffer[2];
-          last_m2_adc = rx_buffer[3];
-          last_tof_mm = (uint16_t)rx_buffer[4] | ((uint16_t)rx_buffer[5] << 8);
+          last_m1_adc = (uint16_t)rx_buffer[2] | ((uint16_t)rx_buffer[3] << 8);
+          last_m2_adc = (uint16_t)rx_buffer[4] | ((uint16_t)rx_buffer[5] << 8);
+          last_tof_mm = (uint16_t)rx_buffer[6] | ((uint16_t)rx_buffer[7] << 8);
 
           if (spi_was_timing_out) {
             LOG_INF("SPI: STM32 reconnected, clearing stale brake flags");
@@ -556,9 +556,9 @@ int main(void) {
         spi_in_flight = false;
 
         if (spi_result >= 0 && rx_buffer[0] == 0xA5 && rx_buffer[1] == 0x60) {
-          last_m1_adc = rx_buffer[2];
-          last_m2_adc = rx_buffer[3];
-          last_tof_mm = (uint16_t)rx_buffer[4] | ((uint16_t)rx_buffer[5] << 8);
+          last_m1_adc = (uint16_t)rx_buffer[2] | ((uint16_t)rx_buffer[3] << 8);
+          last_m2_adc = (uint16_t)rx_buffer[4] | ((uint16_t)rx_buffer[5] << 8);
+          last_tof_mm = (uint16_t)rx_buffer[6] | ((uint16_t)rx_buffer[7] << 8);
 
           if (spi_was_timing_out) {
             LOG_INF("SPI: STM32 reconnected, clearing stale brake flags");
@@ -583,8 +583,8 @@ int main(void) {
     }
 
     // --- BLE telemetry (always runs, even if SPI is stuck) ---
-    uint8_t m1_adc = last_m1_adc;
-    uint8_t m2_adc = last_m2_adc;
+    uint16_t m1_adc = last_m1_adc;
+    uint16_t m2_adc = last_m2_adc;
     uint16_t tof_mm = last_tof_mm;
 
     if (current_conn != NULL) {
@@ -593,30 +593,32 @@ int main(void) {
       bool rate_ok = (now - last_nus_send_ms >= NUS_SEND_INTERVAL_MS);
 
       if (!in_backoff && rate_ok) {
-        uint8_t telem[13];
+        uint8_t telem[15];
         telem[0] = 0xA5;
         telem[1] = 0x60;
-        telem[2] = m1_adc;
-        telem[3] = m2_adc;
+        telem[2] = (uint8_t)(m1_adc);
+        telem[3] = (uint8_t)(m1_adc >> 8);
+        telem[4] = (uint8_t)(m2_adc);
+        telem[5] = (uint8_t)(m2_adc >> 8);
 
         uint16_t d0 = uwb_dist_mm[0];
         uint16_t d1 = uwb_dist_mm[1];
         uint16_t d2 = uwb_dist_mm[2];
 
-        telem[4] = (uint8_t)(d0);
-        telem[5] = (uint8_t)(d0 >> 8);
-        telem[6] = (uint8_t)(d1);
-        telem[7] = (uint8_t)(d1 >> 8);
-        telem[8] = (uint8_t)(d2);
-        telem[9] = (uint8_t)(d2 >> 8);
-        telem[10] = (uint8_t)(tof_mm);
-        telem[11] = (uint8_t)(tof_mm >> 8);
+        telem[6] = (uint8_t)(d0);
+        telem[7] = (uint8_t)(d0 >> 8);
+        telem[8] = (uint8_t)(d1);
+        telem[9] = (uint8_t)(d1 >> 8);
+        telem[10] = (uint8_t)(d2);
+        telem[11] = (uint8_t)(d2 >> 8);
+        telem[12] = (uint8_t)(tof_mm);
+        telem[13] = (uint8_t)(tof_mm >> 8);
 
         uint8_t csum = 0;
-        for (int i = 1; i < 12; i++) {
+        for (int i = 1; i < 14; i++) {
           csum += telem[i];
         }
-        telem[12] = csum;
+        telem[14] = csum;
 
         int err = bt_nus_send(current_conn, telem, sizeof(telem));
         if (err == 0) {

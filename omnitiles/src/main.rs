@@ -235,24 +235,29 @@ fn main() -> ! {
             let p16_raw = m1.actuator.position_raw();
             let t16_raw = m2.actuator.position_raw();
 
-            // Scale 12-bit ADC (0-4095) down to 8-bit (0-255)
-            let p16_pos = (p16_raw >> 4) as u8;
-            let t16_pos = (t16_raw >> 4) as u8;
+            let p16_lo = p16_raw as u8;
+            let p16_hi = (p16_raw >> 8) as u8;
+            let t16_lo = t16_raw as u8;
+            let t16_hi = (t16_raw >> 8) as u8;
 
             let tof_lo = tof_range_mm as u8;
             let tof_hi = (tof_range_mm >> 8) as u8;
 
             buf[0] = omnitiles::protocol::messages::START_BYTE;
             buf[1] = omnitiles::protocol::messages::MSG_TELEMETRY;
-            buf[2] = p16_pos;
-            buf[3] = t16_pos;
-            buf[4] = tof_lo;
-            buf[5] = tof_hi;
-            buf[6] = buf[1]
+            buf[2] = p16_lo;
+            buf[3] = p16_hi;
+            buf[4] = t16_lo;
+            buf[5] = t16_hi;
+            buf[6] = tof_lo;
+            buf[7] = tof_hi;
+            buf[8] = buf[1]
                 .wrapping_add(buf[2])
                 .wrapping_add(buf[3])
                 .wrapping_add(buf[4])
-                .wrapping_add(buf[5]);
+                .wrapping_add(buf[5])
+                .wrapping_add(buf[6])
+                .wrapping_add(buf[7]);
 
             cs1.select();
             delay.delay_us(50_u32);

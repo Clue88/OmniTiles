@@ -287,23 +287,22 @@ def main():
 
     # 3. Telemetry Callback Logic
     def handle_telemetry(sender, data: bytearray):
-        if len(data) < 5 or data[0] != START_BYTE or data[1] != MSG_TELEMETRY:
+        if len(data) < 7 or data[0] != START_BYTE or data[1] != MSG_TELEMETRY:
             return
 
-        m1_pos_adc = data[2]
-        m2_pos_adc = data[3]
+        m1_pos_adc, m2_pos_adc = struct.unpack_from("<HH", data, 2)
         tof_val = None
 
         # Determine packet format by length
-        if len(data) == 13:
-            # Full: [0xA5, 0x60, m1, m2, d0_lo, d0_hi, d1_lo, d1_hi, d2_lo, d2_hi, tof_lo, tof_hi, csum]
+        if len(data) == 15:
+            # Full: [0xA5, 0x60, m1_lo, m1_hi, m2_lo, m2_hi, d0_lo, d0_hi, d1_lo, d1_hi, d2_lo, d2_hi, tof_lo, tof_hi, csum]
             csum = 0
-            for i in range(1, 12):
+            for i in range(1, 14):
                 csum = (csum + data[i]) & 0xFF
-            if data[12] != csum:
+            if data[14] != csum:
                 return
 
-            d0, d1, d2, tof_raw = struct.unpack_from("<HHHH", data, 4)
+            d0, d1, d2, tof_raw = struct.unpack_from("<HHHH", data, 6)
 
             if tof_raw != 0xFFFF:
                 tof_val = tof_raw
@@ -322,15 +321,15 @@ def main():
             else:
                 uwb_md.content = f"**Ranges:** {d0} / {d1} / {d2} mm (incomplete)"
 
-        elif len(data) == 11:
-            # Legacy UWB without ToF: [0xA5, 0x60, m1, m2, d0..d2, csum]
+        elif len(data) == 13:
+            # UWB without ToF: [0xA5, 0x60, m1_lo, m1_hi, m2_lo, m2_hi, d0..d2, csum]
             csum = 0
-            for i in range(1, 10):
+            for i in range(1, 12):
                 csum = (csum + data[i]) & 0xFF
-            if data[10] != csum:
+            if data[12] != csum:
                 return
 
-            d0, d1, d2 = struct.unpack_from("<HHH", data, 4)
+            d0, d1, d2 = struct.unpack_from("<HHH", data, 6)
 
             if d0 != 0xFFFF and d1 != 0xFFFF and d2 != 0xFFFF:
                 dists_m = np.array([d0 / 1000.0, d1 / 1000.0, d2 / 1000.0])
@@ -345,10 +344,12 @@ def main():
             else:
                 uwb_md.content = f"**Ranges:** {d0} / {d1} / {d2} mm (incomplete)"
 
-        elif len(data) >= 5:
-            # Legacy 5-byte packet (no UWB, no ToF)
-            checksum = (data[1] + data[2] + data[3]) & 0xFF
-            if data[4] != checksum:
+        elif len(data) >= 7:
+            # Basic packet (no UWB): [0xA5, 0x60, m1_lo, m1_hi, m2_lo, m2_hi, csum]
+            checksum = 0
+            for i in range(1, len(data) - 1):
+                checksum = (checksum + data[i]) & 0xFF
+            if data[-1] != checksum:
                 return
 
         if tof_val is not None:
@@ -356,9 +357,9 @@ def main():
         else:
             tof_md.content = "No sensor / no reading"
 
-        # Motor telemetry update (common to both formats)
-        m1_mm = (m1_pos_adc / 255.0) * M1_CONFIG["stroke_mm"]
-        m2_mm = (m2_pos_adc / 255.0) * M2_CONFIG["stroke_mm"]
+        # Motor telemetry update (common to all formats)
+        m1_mm = (m1_pos_adc / 4095.0) * M1_CONFIG["stroke_mm"]
+        m2_mm = (m2_pos_adc / 4095.0) * M2_CONFIG["stroke_mm"]
 
         m1_md.content = f"**ADC:** {m1_pos_adc} | **Est. Pos:** {m1_mm:.1f} mm"
         m2_md.content = f"**ADC:** {m2_pos_adc} | **Est. Pos:** {m2_mm:.1f} mm"
