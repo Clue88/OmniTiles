@@ -22,12 +22,13 @@ use hal::{
 };
 use stm32f7xx_hal as hal;
 
+// --- Nucleo F767ZI pin config ---
 #[cfg(feature = "mobile-base")]
 use omnitiles::{control::BaseController, drivers::Tb6612};
 use omnitiles::{
     control::{LinearController, LinearMode, Pid},
     drivers::{ActuonixLinear, Drv8873, Vl53l0x},
-    hw::{pins_v2::BoardPins, spi::NoChipSelect, Adc, ChipSelect, I2cBus, Led, SpiBus, Usart},
+    hw::{pins_f767zi::BoardPins, spi::NoChipSelect, Adc, ChipSelect, I2cBus, Led, SpiBus, Usart},
     protocol::{Command, Parser},
 };
 
@@ -60,13 +61,13 @@ fn main() -> ! {
     let pins = BoardPins::new(dp.GPIOA, dp.GPIOB, dp.GPIOC, dp.GPIOD, dp.GPIOE);
 
     // LEDs are active-high on the F767ZI devboard but active-low on PCB v1
-    let mut led_red = Led::active_low(pins.leds.red);
-    let mut led_yellow = Led::active_low(pins.leds.yellow);
-    let mut led_green = Led::active_low(pins.leds.green);
+    let mut led_red = Led::active_high(pins.leds.red);
+    let mut led_blue = Led::active_high(pins.leds.blue);
+    let mut led_green = Led::active_high(pins.leds.green);
 
     let serial = Serial::new(
-        dp.USART1,
-        (pins.usart1.tx, pins.usart1.rx),
+        dp.USART3,
+        (pins.usart3.tx, pins.usart3.rx),
         &clocks,
         Config {
             baud_rate: 115_200.bps(),
@@ -105,16 +106,13 @@ fn main() -> ! {
             polarity: Polarity::IdleLow,
             phase: Phase::CaptureOnFirstTransition,
         };
-        let spi4_raw = Spi::new(dp.SPI4, (pins.spi4.sck, pins.spi4.miso, pins.spi4.mosi));
-        let spi4_enabled = spi4_raw.enable::<u8>(spi_mode, 100.kHz(), &clocks, &mut apb2);
-        SpiBus::new(spi4_enabled)
+        let spi1_raw = Spi::new(dp.SPI1, (pins.spi1.sck, pins.spi1.miso, pins.spi1.mosi));
+        let spi1_enabled = spi1_raw.enable::<u8>(spi_mode, 100.kHz(), &clocks, &mut apb2);
+        SpiBus::new(spi1_enabled)
     };
-    let mut cs1 = ChipSelect::active_low(pins.spi4.cs1);
-    let drdy = pins.spi4.drdy;
+    let mut cs1 = ChipSelect::active_low(pins.spi1.cs);
+    let drdy = pins.spi1.drdy;
     cs1.deselect();
-
-    let mut cs2 = ChipSelect::active_low(pins.spi4.cs2);
-    cs2.deselect();
 
     let adc1 = RefCell::new(Adc::adc1(dp.ADC1));
 
@@ -171,7 +169,7 @@ fn main() -> ! {
     m1.actuator.brake();
     m2.actuator.brake();
     led_red.off();
-    led_yellow.off();
+    led_blue.off();
     led_green.off();
 
     #[cfg(feature = "mobile-base")]
@@ -236,7 +234,7 @@ fn main() -> ! {
             m1.actuator.brake();
             m2.actuator.brake();
             led_green.off();
-            led_yellow.off();
+            led_blue.off();
             watchdog_braked = true;
         }
 
@@ -335,26 +333,26 @@ fn main() -> ! {
                             let s = speed_to_float(speed);
                             m2.mode = LinearMode::Disabled;
                             m2.actuator.set_speed(s);
-                            led_yellow.on();
+                            led_blue.on();
                         }
                         Command::M2Retract(speed) => {
                             writeln!(usart, "cmd: M2Retract speed={}\r", speed).ok();
                             let s = speed_to_float(speed);
                             m2.mode = LinearMode::Disabled;
                             m2.actuator.set_speed(-s);
-                            led_yellow.on();
+                            led_blue.on();
                         }
                         Command::M2Brake => {
                             writeln!(usart, "cmd: M2Brake\r").ok();
                             m2.mode = LinearMode::Disabled;
                             m2.actuator.brake();
-                            led_yellow.off();
+                            led_blue.off();
                         }
                         Command::M2SetPosition(mm) => {
                             writeln!(usart, "cmd: M2SetPosition mm={}\r", mm).ok();
                             m2.mode = LinearMode::PositionControl;
                             m2.set_target_position_mm(mm as f32);
-                            led_yellow.on();
+                            led_blue.on();
                         }
                         #[cfg(feature = "mobile-base")]
                         Command::BaseVelocity { vx, vy, omega } => {
