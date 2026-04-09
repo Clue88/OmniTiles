@@ -22,16 +22,13 @@ use hal::{
 };
 use stm32f7xx_hal as hal;
 
+#[cfg(feature = "mobile-base")]
+use omnitiles::{control::BaseController, drivers::Tb6612};
 use omnitiles::{
     control::{LinearController, LinearMode, Pid},
     drivers::{ActuonixLinear, Drv8873, Vl53l0x},
     hw::{pins_v2::BoardPins, spi::NoChipSelect, Adc, ChipSelect, I2cBus, Led, SpiBus, Usart},
     protocol::{Command, Parser},
-};
-#[cfg(feature = "mobile-base")]
-use omnitiles::{
-    control::BaseController,
-    drivers::Tb6612,
 };
 
 /// Map protocol speed byte (0–255) to motor set_speed magnitude in [0.0, 1.0].
@@ -185,7 +182,12 @@ fn main() -> ! {
         stby_b.set_high();
 
         let wheel_pwm = dp.TIM4.pwm::<_, _, 1_000_000>(
-            (pins.wheels.w1_pwm, pins.wheels.w2_pwm, pins.wheels.w3_pwm, pins.wheels.w4_pwm),
+            (
+                pins.wheels.w1_pwm,
+                pins.wheels.w2_pwm,
+                pins.wheels.w3_pwm,
+                pins.wheels.w4_pwm,
+            ),
             50.micros(), // 20 kHz
             &clocks,
         );
@@ -356,8 +358,17 @@ fn main() -> ! {
                         }
                         #[cfg(feature = "mobile-base")]
                         Command::BaseVelocity { vx, vy, omega } => {
-                            writeln!(usart, "cmd: BaseVelocity vx={} vy={} omega={}\r", vx, vy, omega).ok();
-                            base.set_velocity(vx as f32 / 127.0, vy as f32 / 127.0, omega as f32 / 127.0);
+                            writeln!(
+                                usart,
+                                "cmd: BaseVelocity vx={} vy={} omega={}\r",
+                                vx, vy, omega
+                            )
+                            .ok();
+                            base.set_velocity(
+                                vx as f32 / 127.0,
+                                vy as f32 / 127.0,
+                                omega as f32 / 127.0,
+                            );
                         }
                         #[cfg(feature = "mobile-base")]
                         Command::BaseBrake => {
@@ -371,79 +382,5 @@ fn main() -> ! {
             }
         }
         drdy_prev = drdy_now;
-
-        if let Some(byte) = usart.read_byte() {
-            if let Some(cmd) = parser.push(byte) {
-                match cmd {
-                    Command::Ping => {
-                        writeln!(usart, "cmd: PING — System is alive.\r").ok();
-                    }
-                    Command::M1Extend(speed) => {
-                        writeln!(usart, "cmd: M1Extend speed={}\r", speed).ok();
-                        let s = speed_to_float(speed);
-                        m1.mode = LinearMode::Disabled;
-                        m1.actuator.set_speed(s);
-                        led_green.on();
-                    }
-                    Command::M1Retract(speed) => {
-                        writeln!(usart, "cmd: M1Retract speed={}\r", speed).ok();
-                        let s = speed_to_float(speed);
-                        m1.mode = LinearMode::Disabled;
-                        m1.actuator.set_speed(-s);
-                        led_green.on();
-                    }
-                    Command::M1Brake => {
-                        writeln!(usart, "cmd: M1Brake\r").ok();
-                        m1.mode = LinearMode::Disabled;
-                        m1.actuator.brake();
-                        led_green.off();
-                    }
-                    Command::M1SetPosition(mm) => {
-                        writeln!(usart, "cmd: M1SetPosition mm={}\r", mm).ok();
-                        m1.mode = LinearMode::PositionControl;
-                        m1.set_target_position_mm(mm as f32);
-                        led_green.on();
-                    }
-                    Command::M2Extend(speed) => {
-                        writeln!(usart, "cmd: M2Extend speed={}\r", speed).ok();
-                        let s = speed_to_float(speed);
-                        m2.mode = LinearMode::Disabled;
-                        m2.actuator.set_speed(s);
-                        led_yellow.on();
-                    }
-                    Command::M2Retract(speed) => {
-                        writeln!(usart, "cmd: M2Retract speed={}\r", speed).ok();
-                        let s = speed_to_float(speed);
-                        m2.mode = LinearMode::Disabled;
-                        m2.actuator.set_speed(-s);
-                        led_yellow.on();
-                    }
-                    Command::M2Brake => {
-                        writeln!(usart, "cmd: M2Brake\r").ok();
-                        m2.mode = LinearMode::Disabled;
-                        m2.actuator.brake();
-                        led_yellow.off();
-                    }
-                    Command::M2SetPosition(mm) => {
-                        writeln!(usart, "cmd: M2SetPosition mm={}\r", mm).ok();
-                        m2.mode = LinearMode::PositionControl;
-                        m2.set_target_position_mm(mm as f32);
-                        led_yellow.on();
-                    }
-                    #[cfg(feature = "mobile-base")]
-                    Command::BaseVelocity { vx, vy, omega } => {
-                        writeln!(usart, "cmd: BaseVelocity vx={} vy={} omega={}\r", vx, vy, omega).ok();
-                        base.set_velocity(vx as f32 / 127.0, vy as f32 / 127.0, omega as f32 / 127.0);
-                    }
-                    #[cfg(feature = "mobile-base")]
-                    Command::BaseBrake => {
-                        writeln!(usart, "cmd: BaseBrake\r").ok();
-                        base.brake();
-                    }
-                    #[cfg(not(feature = "mobile-base"))]
-                    _ => {}
-                }
-            }
-        }
     }
 }
