@@ -20,9 +20,8 @@ types from `stm32f7xx-hal` — there are examples throughout the codebase.
 ## Pin configuration
 
 Multiple pin configs exist in `src/hw/`: `pins_f767zi.rs` (Nucleo dev board),
-`pins_devboard.rs` (custom PCB — may be renamed), `pins_v1.rs` (PCB v1 with RP2040
-USB-UART bridge). The active config is selected in `src/hw/mod.rs`. Currently using
-`pins_f767zi` but transitioning to `pins_devboard`.
+`pins_v1.rs` (PCB v1 with RP2040 USB-UART bridge), `pins_v2.rs` (current custom PCB).
+The active config is selected in `src/hw/mod.rs`. Currently using `pins_v2`.
 
 ## Code structure
 

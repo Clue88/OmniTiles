@@ -7,7 +7,8 @@
       "Bash(find /Users/christopherliu/Programming/OmniTiles -name *test* -o -name *tests*)",
       "Bash(git -C /Users/christopherliu/Programming/OmniTiles log --oneline)",
       "WebFetch(domain:www.st.com)",
-      "Bash(cargo check:*)"
+      "Bash(cargo check:*)",
+      "Bash(ls -la /Users/christopherliu/Programming/OmniTiles/omnitiles/src/hw/pins*.rs)"
     ]
   }
 }
