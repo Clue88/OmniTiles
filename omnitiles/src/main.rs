@@ -130,12 +130,16 @@ fn main() -> ! {
 
     let adc1 = RefCell::new(Adc::adc1(dp.ADC1));
 
-    let pwm = dp.TIM3.pwm::<_, _, 1_000_000>(
-        (pins.m1.in1, pins.m1.in2, pins.m2.in1, pins.m2.in2),
+    let pwm_tim1 = dp
+        .TIM1
+        .pwm::<_, _, 1_000_000>(pins.m2.in2, 50.micros(), &clocks);
+    let pwm_tim3 = dp.TIM3.pwm::<_, _, 1_000_000>(
+        (pins.m1.in1, pins.m1.in2, pins.m2.in1),
         50.micros(), // 20 kHz
         &clocks,
     );
-    let (m1_in1, m1_in2, m2_in1, m2_in2) = pwm.split();
+    let (m1_in1, m1_in2, m2_in1) = pwm_tim3.split();
+    let m2_in2 = pwm_tim1.split();
 
     // M1 gangs four P16 actuators on one driver. adc1/adc2 are wired normally;
     // adc3/adc4 are mechanically opposed, so their pot wiring is reversed.
