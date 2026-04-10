@@ -22,7 +22,6 @@ use hal::{
 };
 use stm32f7xx_hal as hal;
 
-// --- Nucleo F767ZI pin config ---
 #[cfg(feature = "mobile-base")]
 use omnitiles::{control::BaseController, drivers::Tb6612};
 use omnitiles::{
@@ -176,21 +175,21 @@ fn main() -> ! {
     let mut base = {
         let wheel_pwm = dp.TIM4.pwm::<_, _, 1_000_000>(
             (
-                pins.wheels.w1_pwm,
-                pins.wheels.w2_pwm,
-                pins.wheels.w3_pwm,
-                pins.wheels.w4_pwm,
+                pins.wheels.fl_pwm,
+                pins.wheels.fr_pwm,
+                pins.wheels.bl_pwm,
+                pins.wheels.br_pwm,
             ),
             50.micros(), // 20 kHz
             &clocks,
         );
-        let (w1_pwm, w2_pwm, w3_pwm, w4_pwm) = wheel_pwm.split();
+        let (fl_pwm, fr_pwm, bl_pwm, br_pwm) = wheel_pwm.split();
 
         let mut base = BaseController::new(
-            Tb6612::new(pins.wheels.w1_in1, pins.wheels.w1_in2, w1_pwm),
-            Tb6612::new(pins.wheels.w2_in1, pins.wheels.w2_in2, w2_pwm),
-            Tb6612::new(pins.wheels.w3_in1, pins.wheels.w3_in2, w3_pwm),
-            Tb6612::new(pins.wheels.w4_in1, pins.wheels.w4_in2, w4_pwm),
+            Tb6612::new(pins.wheels.fl_in1, pins.wheels.fl_in2, fl_pwm),
+            Tb6612::new(pins.wheels.fr_in1, pins.wheels.fr_in2, fr_pwm),
+            Tb6612::new(pins.wheels.bl_in1, pins.wheels.bl_in2, bl_pwm),
+            Tb6612::new(pins.wheels.br_in1, pins.wheels.br_in2, br_pwm),
         );
         base.brake();
         base
