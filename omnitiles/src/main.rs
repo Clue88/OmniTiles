@@ -155,6 +155,7 @@ fn main() -> ! {
         20.0,  // 20 mm buffer at bottom (retracted)
         35.0,  // 35 mm buffer at top (extended)
     );
+    m1_actuator.set_channel_enabled(0, false);
     m1_actuator.enable_outputs();
     let mut m1 = LinearController::new(
         m1_actuator,
@@ -177,6 +178,7 @@ fn main() -> ! {
         25.0,  // 25 mm buffer at bottom (retracted)
         15.0,  // 15 mm buffer at top (extended)
     );
+    m2_actuator.set_channel_enabled(0, false);
     m2_actuator.enable_outputs();
     let mut m2 = LinearController::new(
         m2_actuator,
