@@ -86,19 +86,19 @@ fn main() -> ! {
         10_000, // data_timeout_us
     );
     let i2c_bus = I2cBus::new(i2c_raw);
-    let mut tof = Vl53l0x::new(i2c_bus)
-        .and_then(|mut s| {
-            s.static_init()?;
-            s.load_tuning()?;
-            s.calibrate()?;
-            Ok(s)
-        })
-        .ok();
-    if tof.is_some() {
-        usart.println("ToF: VL53L0X initialized");
-    } else {
-        usart.println("ToF: not detected, skipping");
-    }
+    // let mut tof = Vl53l0x::new(i2c_bus)
+    //     .and_then(|mut s| {
+    //         s.static_init()?;
+    //         s.load_tuning()?;
+    //         s.calibrate()?;
+    //         Ok(s)
+    //     })
+    //     .ok();
+    // if tof.is_some() {
+    //     usart.println("ToF: VL53L0X initialized");
+    // } else {
+    //     usart.println("ToF: not detected, skipping");
+    // }
 
     let mut spi_bus = {
         let spi_mode = Mode {
@@ -235,16 +235,16 @@ fn main() -> ! {
             watchdog_braked = true;
         }
 
-        let tof_elapsed_ms = now.wrapping_sub(last_tof_cycle) as f32 / (sysclk_hz / 1000.0);
-        if tof_elapsed_ms >= TOF_INTERVAL_MS {
-            last_tof_cycle = now;
-            if let Some(ref mut sensor) = tof {
-                match sensor.read_range_mm() {
-                    Ok(mm) => tof_range_mm = mm,
-                    Err(_) => tof_range_mm = 0xFFFF,
-                }
-            }
-        }
+        // let tof_elapsed_ms = now.wrapping_sub(last_tof_cycle) as f32 / (sysclk_hz / 1000.0);
+        // if tof_elapsed_ms >= TOF_INTERVAL_MS {
+        //     last_tof_cycle = now;
+        //     if let Some(ref mut sensor) = tof {
+        //         match sensor.read_range_mm() {
+        //             Ok(mm) => tof_range_mm = mm,
+        //             Err(_) => tof_range_mm = 0xFFFF,
+        //         }
+        //     }
+        // }
 
         if m1.actuator.is_limit_braking() || m2.actuator.is_limit_braking() {
             led_red.on();
