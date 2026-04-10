@@ -25,25 +25,36 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Install stable Rust toolchain
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rust-docs
           targets: thumbv7em-none-eabihf
 
-      # Build docs inside the omnitiles directory
-      - name: Build docs
+      - name: Build Rust docs
         working-directory: ./omnitiles
         run: cargo doc --no-deps --target-dir doc
 
-      # Upload the generated docs (now located at omnitiles/doc/<target>/doc)
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Build Python SDK docs
+        working-directory: ./sdk
+        run: |
+          uv sync --extra docs
+          uv run sphinx-build -b html docs docs/_build
+
+      - name: Stage site
+        run: |
+          mkdir -p _site/rust _site/python
+          cp -r omnitiles/doc/thumbv7em-none-eabihf/doc/. _site/rust/
+          cp -r sdk/docs/_build/. _site/python/
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./omnitiles/doc/thumbv7em-none-eabihf/doc
+          path: ./_site
 
-      # Deploy to GitHub Pages
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
