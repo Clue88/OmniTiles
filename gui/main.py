@@ -197,6 +197,7 @@ def main():
 
     # 2. Viser Server Setup
     server = viser.ViserServer(label="OmniTiles Debugger")
+    server.gui.configure_theme(control_width="large")
     server.scene.add_grid("ground", width=0.5, height=0.5, cell_size=0.05)
 
     def load_mesh(name, filename, color, pos, rotation=None):
