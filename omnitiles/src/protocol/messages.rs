@@ -21,6 +21,9 @@ pub const MSG_PING: u8 = 0x50;
 
 pub const MSG_TELEMETRY: u8 = 0x60;
 
+pub const MSG_BASE_VELOCITY: u8 = 0x70;
+pub const MSG_BASE_BRAKE: u8 = 0x71;
+
 /// Direct motor commands.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Command {
@@ -33,4 +36,6 @@ pub enum Command {
     M2Retract(u8),
     M2Brake,
     M2SetPosition(u8),
+    BaseVelocity { vx: i8, vy: i8, omega: i8 },
+    BaseBrake,
 }

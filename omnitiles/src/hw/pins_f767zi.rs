@@ -5,7 +5,8 @@
 
 use stm32f7xx_hal::{
     gpio::{
-        gpioa, gpiob, gpioc, gpiod, Alternate, Analog, Floating, Input, OpenDrain, Output, PushPull,
+        gpioa, gpiob, gpioc, gpiod, gpioe, Alternate, Analog, Floating, Input, OpenDrain, Output,
+        PushPull,
     },
     pac,
     prelude::*,
@@ -18,6 +19,8 @@ pub struct BoardPins {
     pub m1: Motor1Pins,
     pub m2: Motor2Pins,
     pub i2c1: I2c1Pins,
+    #[cfg(feature = "mobile-base")]
+    pub wheels: WheelPins,
 }
 
 pub struct Leds {
@@ -62,12 +65,35 @@ pub struct Motor2Pins {
     pub adc: gpioc::PC2<Analog>,
 }
 
+#[cfg(feature = "mobile-base")]
+pub struct WheelPins {
+    pub fl_pwm: gpiod::PD12<Alternate<2>>, // TIM4_CH1
+    pub fl_in1: gpiod::PD6<Output<PushPull>>,
+    pub fl_in2: gpiod::PD7<Output<PushPull>>,
+    pub fr_pwm: gpiod::PD13<Alternate<2>>, // TIM4_CH2
+    pub fr_in1: gpiod::PD11<Output<PushPull>>,
+    pub fr_in2: gpioe::PE2<Output<PushPull>>,
+    pub bl_pwm: gpiod::PD14<Alternate<2>>, // TIM4_CH3
+    pub bl_in1: gpioa::PA1<Output<PushPull>>,
+    pub bl_in2: gpioa::PA2<Output<PushPull>>,
+    pub br_pwm: gpiod::PD15<Alternate<2>>, // TIM4_CH4
+    pub br_in1: gpioa::PA4<Output<PushPull>>,
+    pub br_in2: gpioa::PA8<Output<PushPull>>,
+}
+
 impl BoardPins {
-    pub fn new(gpioa: pac::GPIOA, gpiob: pac::GPIOB, gpioc: pac::GPIOC, gpiod: pac::GPIOD) -> Self {
+    pub fn new(
+        gpioa: pac::GPIOA,
+        gpiob: pac::GPIOB,
+        gpioc: pac::GPIOC,
+        gpiod: pac::GPIOD,
+        gpioe: pac::GPIOE,
+    ) -> Self {
         let gpioa = gpioa.split();
         let gpiob = gpiob.split();
         let gpioc = gpioc.split();
         let gpiod = gpiod.split();
+        let gpioe = gpioe.split();
 
         Self {
             leds: Leds {
@@ -110,6 +136,22 @@ impl BoardPins {
             i2c1: I2c1Pins {
                 scl: gpiob.pb8.into_alternate_open_drain::<4>(),
                 sda: gpiob.pb9.into_alternate_open_drain::<4>(),
+            },
+
+            #[cfg(feature = "mobile-base")]
+            wheels: WheelPins {
+                fl_pwm: gpiod.pd12.into_alternate::<2>(),
+                fl_in1: gpiod.pd6.into_push_pull_output(),
+                fl_in2: gpiod.pd7.into_push_pull_output(),
+                fr_pwm: gpiod.pd13.into_alternate::<2>(),
+                fr_in1: gpiod.pd11.into_push_pull_output(),
+                fr_in2: gpioe.pe2.into_push_pull_output(),
+                bl_pwm: gpiod.pd14.into_alternate::<2>(),
+                bl_in1: gpioa.pa1.into_push_pull_output(),
+                bl_in2: gpioa.pa2.into_push_pull_output(),
+                br_pwm: gpiod.pd15.into_alternate::<2>(),
+                br_in1: gpioa.pa4.into_push_pull_output(),
+                br_in2: gpioa.pa8.into_push_pull_output(),
             },
         }
     }

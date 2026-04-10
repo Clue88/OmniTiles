@@ -54,6 +54,8 @@ MSG_M2_BRAKE = 0x42
 MSG_M2_SET_POSITION = 0x43
 MSG_PING = 0x50
 MSG_TELEMETRY = 0x60
+MSG_BASE_VELOCITY = 0x70
+MSG_BASE_BRAKE = 0x71
 
 CMD_NAMES = {
     MSG_M1_EXTEND: f"{M1_CONFIG['name']}_EXTEND",
@@ -65,6 +67,8 @@ CMD_NAMES = {
     MSG_M2_BRAKE: f"{M2_CONFIG['name']}_BRAKE",
     MSG_M2_SET_POSITION: f"{M2_CONFIG['name']}_SET_POSITION",
     MSG_PING: "PING",
+    MSG_BASE_VELOCITY: "BASE_VELOCITY",
+    MSG_BASE_BRAKE: "BASE_BRAKE",
 }
 
 # --- UWB Anchor Positions (meters) — measure and update per setup ---
@@ -116,13 +120,22 @@ ble_loop = None
 
 
 def create_packet(msg_id, payload=None):
-    """Creates a binary packet. 3 bytes if no payload, 4 bytes if payload."""
-    if payload is not None:
-        payload = max(0, min(255, int(payload)))
-        checksum = (msg_id + payload) & 0xFF
-        return bytes([START_BYTE, msg_id, payload, checksum])
-    checksum = msg_id & 0xFF
-    return bytes([START_BYTE, msg_id, checksum])
+    """Creates a binary packet: [START_BYTE, msg_id, payload..., checksum].
+
+    payload can be None (0 bytes), an int (1 byte), or a list of ints (N bytes).
+    """
+    if payload is None:
+        checksum = msg_id & 0xFF
+        return bytes([START_BYTE, msg_id, checksum])
+    if isinstance(payload, (list, tuple)):
+        payload_bytes = [p & 0xFF for p in payload]
+        checksum = msg_id
+        for p in payload_bytes:
+            checksum = (checksum + p) & 0xFF
+        return bytes([START_BYTE, msg_id] + payload_bytes + [checksum])
+    payload = max(0, min(255, int(payload)))
+    checksum = (msg_id + payload) & 0xFF
+    return bytes([START_BYTE, msg_id, payload, checksum])
 
 
 async def connect_ble(telemetry_callback):
@@ -378,7 +391,10 @@ def main():
         global ble_client, ble_loop
         packet = create_packet(cmd_id, payload)
         cmd_name = CMD_NAMES.get(cmd_id, f"UNKNOWN_{cmd_id:02X}")
-        payload_str = f" payload={payload}" if payload is not None else ""
+        if payload is not None:
+            payload_str = f" payload={payload}"
+        else:
+            payload_str = ""
 
         if ble_client and ble_client.is_connected and ble_loop is not None:
             asyncio.run_coroutine_threadsafe(
@@ -444,6 +460,29 @@ def main():
             initial_value=int(_min_position_mm(M2_CONFIG)),
         )
         m2_slider.on_update(lambda event: send_cmd(MSG_M2_SET_POSITION, int(event.target.value)))
+
+    with server.gui.add_folder("Mobile Base"):
+        server.gui.add_markdown("Open-loop velocity control")
+        base_vx = server.gui.add_slider("Forward (vx) %", min=-100, max=100, step=1, initial_value=0)
+        base_vy = server.gui.add_slider("Strafe (vy) %", min=-100, max=100, step=1, initial_value=0)
+        base_omega = server.gui.add_slider("Rotate (omega) %", min=-100, max=100, step=1, initial_value=0)
+
+        def send_base_velocity(_=None):
+            vx = int(base_vx.value * 1.27)
+            vy = int(base_vy.value * 1.27)
+            omega = int(base_omega.value * 1.27)
+            send_cmd(MSG_BASE_VELOCITY, [vx & 0xFF, vy & 0xFF, omega & 0xFF])
+
+        server.gui.add_button("Send Velocity", color="green").on_click(send_base_velocity)
+        server.gui.add_button("Brake", color="red").on_click(lambda _: send_cmd(MSG_BASE_BRAKE))
+
+        def reset_sliders(_):
+            base_vx.value = 0
+            base_vy.value = 0
+            base_omega.value = 0
+            send_cmd(MSG_BASE_BRAKE)
+
+        server.gui.add_button("Stop & Reset", color="yellow").on_click(reset_sliders)
 
     with server.gui.add_folder("UWB Localization"):
         uwb_md = server.gui.add_markdown("Waiting for UWB data...")
