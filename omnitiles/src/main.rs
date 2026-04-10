@@ -171,7 +171,7 @@ fn main() -> ! {
     m1.actuator.brake();
     m2.actuator.brake();
     led_red.off();
-    led_blue.off();
+    led_yellow.off();
     led_green.off();
 
     #[cfg(feature = "mobile-base")]
