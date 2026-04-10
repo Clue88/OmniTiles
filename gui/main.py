@@ -310,19 +310,26 @@ def main():
         m1_pos_adc, m2_pos_adc = struct.unpack_from("<HH", data, 2)
         tof_val = None
         imu_sample = None  # (ax, ay, az, gx, gy, gz) in m/s² and rad/s
+        m1_adc_all = None  # (adc1, adc2, adc3, adc4)
+        m2_adc_all = None  # (adc1, adc2)
 
         # Determine packet format by length
-        if len(data) == 39:
-            # Full with IMU: [0xA5, 0x60, m1(2), m2(2), d0(2), d1(2), d2(2), tof(2),
-            #                 ax(4), ay(4), az(4), gx(4), gy(4), gz(4), csum]
+        if len(data) == 51:
+            # Full with IMU + raw motor ADCs:
+            # [0xA5, 0x60, m1_pos(2), m2_pos(2), d0(2), d1(2), d2(2), tof(2),
+            #  ax(4), ay(4), az(4), gx(4), gy(4), gz(4),
+            #  m1_adc1(2), m1_adc2(2), m1_adc3(2), m1_adc4(2),
+            #  m2_adc1(2), m2_adc2(2), csum]
             csum = 0
-            for i in range(1, 38):
+            for i in range(1, 50):
                 csum = (csum + data[i]) & 0xFF
-            if data[38] != csum:
+            if data[50] != csum:
                 return
 
             d0, d1, d2, tof_raw = struct.unpack_from("<HHHH", data, 6)
             imu_sample = struct.unpack_from("<6f", data, 14)
+            m1_adc_all = struct.unpack_from("<4H", data, 38)
+            m2_adc_all = struct.unpack_from("<2H", data, 46)
 
             if tof_raw != 0xFFFF:
                 tof_val = tof_raw
@@ -407,8 +414,19 @@ def main():
         m1_mm = (m1_pos_adc / 4095.0) * M1_CONFIG["stroke_mm"]
         m2_mm = (m2_pos_adc / 4095.0) * M2_CONFIG["stroke_mm"]
 
-        m1_md.content = f"**ADC:** {m1_pos_adc} | **Est. Pos:** {m1_mm:.1f} mm"
-        m2_md.content = f"**ADC:** {m2_pos_adc} | **Est. Pos:** {m2_mm:.1f} mm"
+        m1_lines = [f"**Pos ADC:** {m1_pos_adc} | **Est. Pos:** {m1_mm:.1f} mm"]
+        if m1_adc_all is not None:
+            for i, raw in enumerate(m1_adc_all, start=1):
+                mm = (raw / 4095.0) * M1_CONFIG["stroke_mm"]
+                m1_lines.append(f"**adc{i}:** {raw} ({mm:.1f} mm)")
+        m1_md.content = "  \n".join(m1_lines)
+
+        m2_lines = [f"**Pos ADC:** {m2_pos_adc} | **Est. Pos:** {m2_mm:.1f} mm"]
+        if m2_adc_all is not None:
+            for i, raw in enumerate(m2_adc_all, start=1):
+                mm = (raw / 4095.0) * M2_CONFIG["stroke_mm"]
+                m2_lines.append(f"**adc{i}:** {raw} ({mm:.1f} mm)")
+        m2_md.content = "  \n".join(m2_lines)
 
         m1_z = (m1_mm - 13) / 1000.0 if m1_is_t16 else m1_mm / 1000.0
         m1b_mm = M1_CONFIG["stroke_mm"] - m1_mm

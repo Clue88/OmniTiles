@@ -14,6 +14,12 @@ pub enum LinearMode {
     Disabled,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum ControlError {
+    /// PID was requested but no pot channels are enabled on the actuator.
+    NoPositionFeedback,
+}
+
 /// PID position controller for an Actuonix linear actuator. Call [`step`](Self::step) periodically.
 pub struct LinearController<
     CS: CsControl,
@@ -24,8 +30,9 @@ pub struct LinearController<
     Pwm1,
     Pwm2,
     ReadPos,
+    const N: usize,
 > {
-    pub actuator: ActuonixLinear<CS, SLP_P, SLP_N, DIS_P, DIS_N, Pwm1, Pwm2, ReadPos>,
+    pub actuator: ActuonixLinear<CS, SLP_P, SLP_N, DIS_P, DIS_N, Pwm1, Pwm2, ReadPos, N>,
     pub pid: Pid,
     pub mode: LinearMode,
 
@@ -44,15 +51,16 @@ impl<
         Pwm1,
         Pwm2,
         ReadPos,
-    > LinearController<CS, SLP_P, SLP_N, DIS_P, DIS_N, Pwm1, Pwm2, ReadPos>
+        const N: usize,
+    > LinearController<CS, SLP_P, SLP_N, DIS_P, DIS_N, Pwm1, Pwm2, ReadPos, N>
 where
     Pwm1: _embedded_hal_PwmPin<Duty = u16>,
     Pwm2: _embedded_hal_PwmPin<Duty = u16>,
-    ReadPos: FnMut() -> u16,
+    ReadPos: FnMut() -> [u16; N],
 {
     /// Create a new linear controller with PID gains and limits.
     pub fn new(
-        actuator: ActuonixLinear<CS, SLP_P, SLP_N, DIS_P, DIS_N, Pwm1, Pwm2, ReadPos>,
+        actuator: ActuonixLinear<CS, SLP_P, SLP_N, DIS_P, DIS_N, Pwm1, Pwm2, ReadPos, N>,
         pid: Pid,
         min_position_mm: f32,
         max_position_mm: f32,
@@ -75,15 +83,20 @@ where
         self.pid.reset();
     }
 
-    /// Run one control step.
-    pub fn step(&mut self, dt: f32) {
+    /// Run one control step. Returns `Err(NoPositionFeedback)` if the mode is
+    /// `PositionControl` but the actuator has no enabled pot channels; in that
+    /// case the actuator is braked for safety.
+    pub fn step(&mut self, dt: f32) -> Result<(), ControlError> {
         self.actuator.enforce_limits();
 
         match self.mode {
-            LinearMode::Disabled => return,
+            LinearMode::Disabled => Ok(()),
 
             LinearMode::PositionControl => {
-                let position_mm = self.actuator.position_mm();
+                let Some(position_mm) = self.actuator.position_mm() else {
+                    self.actuator.brake();
+                    return Err(ControlError::NoPositionFeedback);
+                };
                 let target = self
                     .target_position_mm
                     .clamp(self.min_position_mm, self.max_position_mm);
@@ -91,11 +104,12 @@ where
 
                 if error.abs() <= self.on_target_tolerance_mm {
                     self.actuator.brake();
-                    return;
+                    return Ok(());
                 }
 
                 let output = self.pid.update(target, position_mm, dt);
                 self.actuator.set_speed(output);
+                Ok(())
             }
         }
     }

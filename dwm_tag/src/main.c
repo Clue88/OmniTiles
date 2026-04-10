@@ -73,6 +73,9 @@ static volatile uint16_t last_tof_mm = 0xFFFF;
 /* Raw IMU telemetry bytes from STM32, forwarded as-is in BLE telemetry.
  * Layout: 6 × f32 little-endian = ax, ay, az (m/s²), gx, gy, gz (rad/s). */
 static uint8_t last_imu_bytes[24];
+/* Raw motor ADC telemetry bytes from STM32, forwarded as-is.
+ * Layout: 6 × u16 little-endian = m1_adc1..4, m2_adc1..2. */
+static uint8_t last_motor_adc_bytes[12];
 
 static uint16_t uwb_scratch[UWB_FILTER_LEN];
 
@@ -490,6 +493,7 @@ int main(void) {
           last_m2_adc = (uint16_t)rx_buffer[4] | ((uint16_t)rx_buffer[5] << 8);
           last_tof_mm = (uint16_t)rx_buffer[6] | ((uint16_t)rx_buffer[7] << 8);
           memcpy(last_imu_bytes, &rx_buffer[8], 24);
+          memcpy(last_motor_adc_bytes, &rx_buffer[32], 12);
 
           if (spi_was_timing_out) {
             LOG_INF("SPI: STM32 reconnected, clearing stale brake flags");
@@ -564,6 +568,7 @@ int main(void) {
           last_m2_adc = (uint16_t)rx_buffer[4] | ((uint16_t)rx_buffer[5] << 8);
           last_tof_mm = (uint16_t)rx_buffer[6] | ((uint16_t)rx_buffer[7] << 8);
           memcpy(last_imu_bytes, &rx_buffer[8], 24);
+          memcpy(last_motor_adc_bytes, &rx_buffer[32], 12);
 
           if (spi_was_timing_out) {
             LOG_INF("SPI: STM32 reconnected, clearing stale brake flags");
@@ -598,7 +603,7 @@ int main(void) {
       bool rate_ok = (now - last_nus_send_ms >= NUS_SEND_INTERVAL_MS);
 
       if (!in_backoff && rate_ok) {
-        uint8_t telem[39];
+        uint8_t telem[51];
         telem[0] = 0xA5;
         telem[1] = 0x60;
         telem[2] = (uint8_t)(m1_adc);
@@ -620,12 +625,13 @@ int main(void) {
         telem[13] = (uint8_t)(tof_mm >> 8);
 
         memcpy(&telem[14], last_imu_bytes, 24);
+        memcpy(&telem[38], last_motor_adc_bytes, 12);
 
         uint8_t csum = 0;
-        for (int i = 1; i < 38; i++) {
+        for (int i = 1; i < 50; i++) {
           csum += telem[i];
         }
-        telem[38] = csum;
+        telem[50] = csum;
 
         int err = bt_nus_send(current_conn, telem, sizeof(telem));
         if (err == 0) {

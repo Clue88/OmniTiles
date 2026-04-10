@@ -216,6 +216,22 @@ where
     pub fn make_reader<'a>(adc_ref: &'a RefCell<Self>, channel: u8) -> impl FnMut() -> u16 + 'a {
         move || adc_ref.borrow_mut().read_channel(channel)
     }
+
+    /// Create a closure that reads `N` channels from the ADC reference in a
+    /// single invocation, returning them as a fixed-size array.
+    pub fn make_multi_reader<'a, const N: usize>(
+        adc_ref: &'a RefCell<Self>,
+        channels: [u8; N],
+    ) -> impl FnMut() -> [u16; N] + 'a {
+        move || {
+            let mut adc = adc_ref.borrow_mut();
+            let mut out = [0u16; N];
+            for i in 0..N {
+                out[i] = adc.read_channel(channels[i]);
+            }
+            out
+        }
+    }
 }
 
 /// Convert raw ADC value to voltage, assuming 12-bit resolution.

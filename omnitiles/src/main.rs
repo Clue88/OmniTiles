@@ -137,16 +137,19 @@ fn main() -> ! {
     );
     let (m1_in1, m1_in2, m2_in1, m2_in2) = pwm.split();
 
+    // M1 gangs four P16 actuators on one driver. adc1/adc2 are wired normally;
+    // adc3/adc4 are mechanically opposed, so their pot wiring is reversed.
     let mut m1_actuator = ActuonixLinear::new(
         Drv8873::new(NoChipSelect),
         m1_in1,
         m1_in2,
         pins.m1.nsleep,
         pins.m1.disable,
-        Adc::make_reader(&adc1, 9), // ADC1_IN9 (m1_adc2)
-        150.0,                      // P16 has 150 mm stroke length
-        20.0,                       // 20 mm buffer at bottom (retracted)
-        35.0,                       // 35 mm buffer at top (extended)
+        Adc::make_multi_reader(&adc1, [8, 9, 10, 11]),
+        [false, false, true, true],
+        150.0, // P16 has 150 mm stroke length
+        20.0,  // 20 mm buffer at bottom (retracted)
+        35.0,  // 35 mm buffer at top (extended)
     );
     m1_actuator.enable_outputs();
     let mut m1 = LinearController::new(
@@ -157,16 +160,18 @@ fn main() -> ! {
         2.0,                     // on_target_tolerance_mm
     );
 
+    // M2 gangs two T16 actuators on one driver. Both pots are wired normally.
     let mut m2_actuator = ActuonixLinear::new(
         Drv8873::new(NoChipSelect),
         m2_in1,
         m2_in2,
         pins.m2.nsleep,
         pins.m2.disable,
-        Adc::make_reader(&adc1, 13), // ADC1_IN13 (m2_adc2)
-        100.0,                       // T16 has 100 mm stroke length
-        25.0,                        // 25 mm buffer at bottom (retracted)
-        15.0,                        // 15 mm buffer at top (extended)
+        Adc::make_multi_reader(&adc1, [12, 13]),
+        [false, false],
+        100.0, // T16 has 100 mm stroke length
+        25.0,  // 25 mm buffer at bottom (retracted)
+        15.0,  // 15 mm buffer at top (extended)
     );
     m2_actuator.enable_outputs();
     let mut m2 = LinearController::new(
@@ -230,8 +235,8 @@ fn main() -> ! {
         let pid_elapsed_ms = now.wrapping_sub(last_pid_cycle) as f32 / (sysclk_hz / 1000.0);
         if pid_elapsed_ms >= PID_INTERVAL_MS {
             let dt = pid_elapsed_ms / 1000.0;
-            m1.step(dt);
-            m2.step(dt);
+            let _ = m1.step(dt);
+            let _ = m2.step(dt);
             last_pid_cycle = now;
         }
 
@@ -276,8 +281,9 @@ fn main() -> ! {
 
             let mut buf = [0u8; 128];
 
-            let p16_raw = m1.actuator.position_raw();
-            let t16_raw = m2.actuator.position_raw();
+            // Fused position (what the PID sees). 0xFFFF = no feedback.
+            let p16_raw = m1.actuator.position_raw().unwrap_or(0xFFFF);
+            let t16_raw = m2.actuator.position_raw().unwrap_or(0xFFFF);
 
             let p16_lo = p16_raw as u8;
             let p16_hi = (p16_raw >> 8) as u8;
@@ -286,6 +292,10 @@ fn main() -> ! {
 
             let tof_lo = tof_range_mm as u8;
             let tof_hi = (tof_range_mm >> 8) as u8;
+
+            // Per-channel raw ADC values (after median filter)
+            let m1_adc_raw = *m1.actuator.channel_medians();
+            let m2_adc_raw = *m2.actuator.channel_medians();
 
             buf[0] = omnitiles::protocol::messages::START_BYTE;
             buf[1] = omnitiles::protocol::messages::MSG_TELEMETRY;
@@ -312,11 +322,20 @@ fn main() -> ! {
                 buf[11 + i * 4] = bytes[3];
             }
 
+            for (i, v) in m1_adc_raw.iter().enumerate() {
+                buf[32 + i * 2] = *v as u8;
+                buf[33 + i * 2] = (*v >> 8) as u8;
+            }
+            for (i, v) in m2_adc_raw.iter().enumerate() {
+                buf[40 + i * 2] = *v as u8;
+                buf[41 + i * 2] = (*v >> 8) as u8;
+            }
+
             let mut csum: u8 = 0;
-            for b in &buf[1..32] {
+            for b in &buf[1..44] {
                 csum = csum.wrapping_add(*b);
             }
-            buf[32] = csum;
+            buf[44] = csum;
 
             cs1.select();
             delay.delay_us(50_u32);
