@@ -224,9 +224,9 @@ fn main() -> ! {
     let mut parser = Parser::new();
     let mut drdy_prev = false;
 
-    // Communication watchdog: brake motors if no SPI command in 500 ms (real time).
+    // Communication watchdog: brake motors if no SPI command in this window.
     let mut last_spi_cycle: u32 = DWT::cycle_count();
-    const SPI_WATCHDOG_CYCLES: u32 = 500; // milliseconds — compared after conversion
+    const SPI_WATCHDOG_MS: f32 = 1500.0;
     let mut watchdog_braked = false;
     let mut last_tof_cycle: u32 = DWT::cycle_count();
     const TOF_INTERVAL_MS: f32 = 100.0;
@@ -247,8 +247,8 @@ fn main() -> ! {
         }
 
         let ms_since_spi = now.wrapping_sub(last_spi_cycle) as f32 / (sysclk_hz / 1000.0);
-        if ms_since_spi >= SPI_WATCHDOG_CYCLES as f32 && !watchdog_braked {
-            writeln!(usart, "WATCHDOG: no SPI in 500ms, braking motors\r").ok();
+        if ms_since_spi >= SPI_WATCHDOG_MS && !watchdog_braked {
+            writeln!(usart, "WATCHDOG: no SPI in {}ms, braking motors\r", SPI_WATCHDOG_MS).ok();
             m1.mode = LinearMode::Disabled;
             m2.mode = LinearMode::Disabled;
             m1.actuator.brake();
@@ -377,10 +377,12 @@ fn main() -> ! {
                             m1.actuator.brake();
                             led_green.off();
                         }
-                        Command::M1SetPosition(mm) => {
-                            writeln!(usart, "cmd: M1SetPosition mm={}\r", mm).ok();
+                        Command::M1SetPosition(scaled) => {
+                            let mm = m1.actuator.stroke_len_mm() * (scaled as f32) / 255.0;
+                            writeln!(usart, "cmd: M1SetPosition scaled={} mm={}\r", scaled, mm)
+                                .ok();
                             m1.mode = LinearMode::PositionControl;
-                            m1.set_target_position_mm(mm as f32);
+                            m1.set_target_position_mm(mm);
                             led_green.on();
                         }
                         Command::M2Extend(speed) => {
@@ -403,10 +405,12 @@ fn main() -> ! {
                             m2.actuator.brake();
                             led_yellow.off();
                         }
-                        Command::M2SetPosition(mm) => {
-                            writeln!(usart, "cmd: M2SetPosition mm={}\r", mm).ok();
+                        Command::M2SetPosition(scaled) => {
+                            let mm = m2.actuator.stroke_len_mm() * (scaled as f32) / 255.0;
+                            writeln!(usart, "cmd: M2SetPosition scaled={} mm={}\r", scaled, mm)
+                                .ok();
                             m2.mode = LinearMode::PositionControl;
-                            m2.set_target_position_mm(mm as f32);
+                            m2.set_target_position_mm(mm);
                             led_yellow.on();
                         }
                         #[cfg(feature = "mobile-base")]

@@ -348,6 +348,11 @@ def main() -> None:
     try:
         while True:
             time.sleep(1)
+            if tile is not None and tile.connected:
+                try:
+                    tile.ping()
+                except Exception as e:
+                    print(f"[SDK] heartbeat ping failed: {e}")
     except KeyboardInterrupt:
         print("Exiting...")
         if tile is not None:
