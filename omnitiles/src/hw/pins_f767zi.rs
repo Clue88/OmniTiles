@@ -5,12 +5,13 @@
 
 use stm32f7xx_hal::{
     gpio::{
-        gpioa, gpiob, gpioc, gpiod, gpioe, Alternate, Analog, Floating, Input, OpenDrain, Output,
-        PushPull,
+        gpioa, gpiob, gpioc, gpiod, Alternate, Analog, Floating, Input, OpenDrain, Output, PushPull,
     },
     pac,
     prelude::*,
 };
+#[cfg(feature = "mobile-base")]
+use stm32f7xx_hal::gpio::gpioe;
 
 pub struct BoardPins {
     pub leds: Leds,
@@ -87,12 +88,13 @@ impl BoardPins {
         gpiob: pac::GPIOB,
         gpioc: pac::GPIOC,
         gpiod: pac::GPIOD,
-        gpioe: pac::GPIOE,
+        #[cfg(feature = "mobile-base")] gpioe: pac::GPIOE,
     ) -> Self {
         let gpioa = gpioa.split();
         let gpiob = gpiob.split();
         let gpioc = gpioc.split();
         let gpiod = gpiod.split();
+        #[cfg(feature = "mobile-base")]
         let gpioe = gpioe.split();
 
         Self {
