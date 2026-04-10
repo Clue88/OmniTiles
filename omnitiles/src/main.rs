@@ -26,8 +26,8 @@ use stm32f7xx_hal as hal;
 use omnitiles::{control::BaseController, drivers::Tb6612};
 use omnitiles::{
     control::{LinearController, LinearMode, Pid},
-    drivers::{ActuonixLinear, Drv8873, Vl53l0x},
-    hw::{pins_v2::BoardPins, spi::NoChipSelect, Adc, ChipSelect, I2cBus, Led, SpiBus, Usart},
+    drivers::{ActuonixLinear, Drv8873, ImuSample, Lsm6dsv16x, Vl53l0x},
+    hw::{Adc, BoardPins, ChipSelect, I2cBus, Led, NoChipSelect, SpiBus, Usart},
     protocol::{Command, Parser},
 };
 
@@ -115,6 +115,18 @@ fn main() -> ! {
 
     let mut cs2 = ChipSelect::active_low(pins.spi4.cs2);
     cs2.deselect();
+
+    let mut imu = match Lsm6dsv16x::new(&mut spi_bus, &mut cs2) {
+        Ok(d) => {
+            writeln!(usart, "IMU: LSM6DSV16X initialized\r").ok();
+            Some(d)
+        }
+        Err(e) => {
+            writeln!(usart, "IMU: LSM6DSV16X init failed: {:?}\r", e).ok();
+            None
+        }
+    };
+    let mut last_imu = ImuSample::default();
 
     let adc1 = RefCell::new(Adc::adc1(dp.ADC1));
 
@@ -256,6 +268,12 @@ fn main() -> ! {
         if drdy_now && !drdy_prev {
             delay.delay_ms(2_u32);
 
+            if let Some(ref mut dev) = imu {
+                if let Ok(s) = dev.read_sample(&mut spi_bus, &mut cs2) {
+                    last_imu = s;
+                }
+            }
+
             let mut buf = [0u8; 128];
 
             let p16_raw = m1.actuator.position_raw();
@@ -277,13 +295,28 @@ fn main() -> ! {
             buf[5] = t16_hi;
             buf[6] = tof_lo;
             buf[7] = tof_hi;
-            buf[8] = buf[1]
-                .wrapping_add(buf[2])
-                .wrapping_add(buf[3])
-                .wrapping_add(buf[4])
-                .wrapping_add(buf[5])
-                .wrapping_add(buf[6])
-                .wrapping_add(buf[7]);
+
+            let imu_floats = [
+                last_imu.ax,
+                last_imu.ay,
+                last_imu.az,
+                last_imu.gx,
+                last_imu.gy,
+                last_imu.gz,
+            ];
+            for (i, v) in imu_floats.iter().enumerate() {
+                let bytes = v.to_le_bytes();
+                buf[8 + i * 4] = bytes[0];
+                buf[9 + i * 4] = bytes[1];
+                buf[10 + i * 4] = bytes[2];
+                buf[11 + i * 4] = bytes[3];
+            }
+
+            let mut csum: u8 = 0;
+            for b in &buf[1..32] {
+                csum = csum.wrapping_add(*b);
+            }
+            buf[32] = csum;
 
             cs1.select();
             delay.delay_us(50_u32);

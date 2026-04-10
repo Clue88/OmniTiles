@@ -70,6 +70,9 @@ static volatile uint16_t uwb_dist_mm[NUM_ANCHORS] = {0xFFFF, 0xFFFF, 0xFFFF};
 static volatile uint16_t last_m1_adc;
 static volatile uint16_t last_m2_adc;
 static volatile uint16_t last_tof_mm = 0xFFFF;
+/* Raw IMU telemetry bytes from STM32, forwarded as-is in BLE telemetry.
+ * Layout: 6 × f32 little-endian = ax, ay, az (m/s²), gx, gy, gz (rad/s). */
+static uint8_t last_imu_bytes[24];
 
 static uint16_t uwb_scratch[UWB_FILTER_LEN];
 
@@ -486,6 +489,7 @@ int main(void) {
           last_m1_adc = (uint16_t)rx_buffer[2] | ((uint16_t)rx_buffer[3] << 8);
           last_m2_adc = (uint16_t)rx_buffer[4] | ((uint16_t)rx_buffer[5] << 8);
           last_tof_mm = (uint16_t)rx_buffer[6] | ((uint16_t)rx_buffer[7] << 8);
+          memcpy(last_imu_bytes, &rx_buffer[8], 24);
 
           if (spi_was_timing_out) {
             LOG_INF("SPI: STM32 reconnected, clearing stale brake flags");
@@ -559,6 +563,7 @@ int main(void) {
           last_m1_adc = (uint16_t)rx_buffer[2] | ((uint16_t)rx_buffer[3] << 8);
           last_m2_adc = (uint16_t)rx_buffer[4] | ((uint16_t)rx_buffer[5] << 8);
           last_tof_mm = (uint16_t)rx_buffer[6] | ((uint16_t)rx_buffer[7] << 8);
+          memcpy(last_imu_bytes, &rx_buffer[8], 24);
 
           if (spi_was_timing_out) {
             LOG_INF("SPI: STM32 reconnected, clearing stale brake flags");
@@ -593,7 +598,7 @@ int main(void) {
       bool rate_ok = (now - last_nus_send_ms >= NUS_SEND_INTERVAL_MS);
 
       if (!in_backoff && rate_ok) {
-        uint8_t telem[15];
+        uint8_t telem[39];
         telem[0] = 0xA5;
         telem[1] = 0x60;
         telem[2] = (uint8_t)(m1_adc);
@@ -614,11 +619,13 @@ int main(void) {
         telem[12] = (uint8_t)(tof_mm);
         telem[13] = (uint8_t)(tof_mm >> 8);
 
+        memcpy(&telem[14], last_imu_bytes, 24);
+
         uint8_t csum = 0;
-        for (int i = 1; i < 14; i++) {
+        for (int i = 1; i < 38; i++) {
           csum += telem[i];
         }
-        telem[14] = csum;
+        telem[38] = csum;
 
         int err = bt_nus_send(current_conn, telem, sizeof(telem));
         if (err == 0) {

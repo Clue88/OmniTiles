@@ -293,11 +293,14 @@ def main():
     m2_carriage.position = (0.1, m2_carriage_offset_y + m2_y_init, m2_carriage_offset_z)
     m2b_carriage.position = (0.16, m2_carriage_offset_y + m2_y_init, m2_carriage_offset_z)
 
-    # UWB tile position marker
+    # UWB tile position marker (also shows IMU-derived orientation)
     tile_marker = server.scene.add_icosphere(
         "tile_position", radius=0.03, color=(0, 200, 255), position=(0.0, 0.0, 0.0)
     )
     tile_marker.visible = False
+
+    # Smoothed roll/pitch for attitude visualization (accel-only, low-pass).
+    attitude_state = {"roll": 0.0, "pitch": 0.0, "init": False}
 
     # 3. Telemetry Callback Logic
     def handle_telemetry(sender, data: bytearray):
@@ -306,9 +309,38 @@ def main():
 
         m1_pos_adc, m2_pos_adc = struct.unpack_from("<HH", data, 2)
         tof_val = None
+        imu_sample = None  # (ax, ay, az, gx, gy, gz) in m/s² and rad/s
 
         # Determine packet format by length
-        if len(data) == 15:
+        if len(data) == 39:
+            # Full with IMU: [0xA5, 0x60, m1(2), m2(2), d0(2), d1(2), d2(2), tof(2),
+            #                 ax(4), ay(4), az(4), gx(4), gy(4), gz(4), csum]
+            csum = 0
+            for i in range(1, 38):
+                csum = (csum + data[i]) & 0xFF
+            if data[38] != csum:
+                return
+
+            d0, d1, d2, tof_raw = struct.unpack_from("<HHHH", data, 6)
+            imu_sample = struct.unpack_from("<6f", data, 14)
+
+            if tof_raw != 0xFFFF:
+                tof_val = tof_raw
+
+            if d0 != 0xFFFF and d1 != 0xFFFF and d2 != 0xFFFF:
+                dists_m = np.array([d0 / 1000.0, d1 / 1000.0, d2 / 1000.0])
+                pos = trilaterate(ANCHOR_POSITIONS, dists_m)
+                if pos is not None:
+                    tile_marker.position = (pos[0], pos[1], 0.0)
+                    tile_marker.visible = True
+                    uwb_md.content = (
+                        f"**Pos:** ({pos[0]:.2f}, {pos[1]:.2f}) m  \n"
+                        f"**Ranges:** {d0} / {d1} / {d2} mm"
+                    )
+            else:
+                uwb_md.content = f"**Ranges:** {d0} / {d1} / {d2} mm (incomplete)"
+
+        elif len(data) == 15:
             # Full: [0xA5, 0x60, m1_lo, m1_hi, m2_lo, m2_hi, d0_lo, d0_hi, d1_lo, d1_hi, d2_lo, d2_hi, tof_lo, tof_hi, csum]
             csum = 0
             for i in range(1, 14):
@@ -387,6 +419,42 @@ def main():
         m2_carriage.position = (0.1, m2_carriage_offset_y + m2_y, m2_carriage_offset_z)
         m2b_carriage.position = (0.16, m2_carriage_offset_y + m2_y, m2_carriage_offset_z)
 
+        if imu_sample is not None:
+            ax, ay, az, gx, gy, gz = imu_sample
+            g = 9.80665
+            imu_md.content = (
+                f"**Accel (g):** {ax/g:+.2f} {ay/g:+.2f} {az/g:+.2f}  \n"
+                f"**Gyro (dps):** {math.degrees(gx):+.1f} "
+                f"{math.degrees(gy):+.1f} {math.degrees(gz):+.1f}"
+            )
+
+            # Accel-only attitude estimate. Valid when |a| ≈ g (device not in free-fall
+            # or high acceleration). Low-pass filter the roll/pitch to reduce jitter.
+            norm = math.sqrt(ax * ax + ay * ay + az * az)
+            if norm > 1e-3:
+                roll_meas = math.atan2(ay, az)
+                pitch_meas = math.atan2(-ax, math.sqrt(ay * ay + az * az))
+                if not attitude_state["init"]:
+                    attitude_state["roll"] = roll_meas
+                    attitude_state["pitch"] = pitch_meas
+                    attitude_state["init"] = True
+                else:
+                    alpha = 0.2
+                    attitude_state["roll"] += alpha * (roll_meas - attitude_state["roll"])
+                    attitude_state["pitch"] += alpha * (pitch_meas - attitude_state["pitch"])
+
+                roll = attitude_state["roll"]
+                pitch = attitude_state["pitch"]
+                cr, sr = math.cos(roll / 2), math.sin(roll / 2)
+                cp, sp = math.cos(pitch / 2), math.sin(pitch / 2)
+                # ZYX intrinsic (yaw=0): q = qz(0) * qy(pitch) * qx(roll)
+                w = cr * cp
+                x = sr * cp
+                y = cr * sp
+                z = -sr * sp
+                tile_marker.wxyz = (w, x, y, z)
+                tile_marker.visible = True
+
     # 4. GUI Commands
     def send_cmd(cmd_id, payload=None):
         global ble_client, ble_loop
@@ -464,9 +532,13 @@ def main():
 
     with server.gui.add_folder("Mobile Base"):
         server.gui.add_markdown("Open-loop velocity control")
-        base_vx = server.gui.add_slider("Forward (vx) %", min=-100, max=100, step=1, initial_value=0)
+        base_vx = server.gui.add_slider(
+            "Forward (vx) %", min=-100, max=100, step=1, initial_value=0
+        )
         base_vy = server.gui.add_slider("Strafe (vy) %", min=-100, max=100, step=1, initial_value=0)
-        base_omega = server.gui.add_slider("Rotate (omega) %", min=-100, max=100, step=1, initial_value=0)
+        base_omega = server.gui.add_slider(
+            "Rotate (omega) %", min=-100, max=100, step=1, initial_value=0
+        )
 
         def send_base_velocity(_=None):
             vx = int(base_vx.value * 1.27)
@@ -490,6 +562,9 @@ def main():
 
     with server.gui.add_folder("ToF Sensor"):
         tof_md = server.gui.add_markdown("Waiting for ToF data...")
+
+    with server.gui.add_folder("IMU (LSM6DSV16X)"):
+        imu_md = server.gui.add_markdown("Waiting for IMU data...")
 
     # 5. Start BLE (after GUI is fully set up so callbacks can reference all widgets)
     start_ble_thread(handle_telemetry)
