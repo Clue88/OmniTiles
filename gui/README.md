@@ -1,12 +1,9 @@
 # OmniTiles GUI
 
-Python GUI for driving the tile during development. It runs a Viser server (web UI at
-http://localhost:8080) with various controls.
-
-The GUI prefers BLE: it scans for the DWM tag and sends command packets over the Nordic UART
-Service. If you pass `--port`, it also opens that serial port; when BLE isn’t connected it will send
-commands over UART instead. When a serial port is open, the GUI reads lines from UART and prints
-them to the console so you can see STM32 debug output.
+Viser web UI (http://localhost:8080) for driving a tile during development.
+Built as a thin presentation layer on top of the [omnitiles
+SDK](../sdk/README.md) — all BLE, protocol, and telemetry-parsing logic lives
+in the SDK. This file only handles 3D meshes, Viser widgets, and visualization.
 
 **Requirements:** Python 3.12+. Dependencies are in [pyproject.toml](pyproject.toml).
 
@@ -14,8 +11,10 @@ them to the console so you can see STM32 debug output.
 
 ```bash
 uv sync
-uv run python main.py
+uv run python main.py                   # connect to the first OmniTile found
+uv run python main.py --tile OmniTile_2 # connect to a specific tile by name
 ```
 
-Optional: `--port <device>` to attach a serial port (e.g. `/dev/tty.usbmodem*`), `--baud <rate>`
-(default 115200).
+The GUI currently targets a single tile at a time. To coordinate multiple
+tiles without a GUI, use the SDK directly — see
+[`sdk/examples/multi_tile_wave.py`](../sdk/examples/multi_tile_wave.py).

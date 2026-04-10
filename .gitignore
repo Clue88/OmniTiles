@@ -22,3 +22,21 @@ target
 
 # Build directories
 */build*/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments (uv, venv)
+.venv/
+uv.lock.bak
+
+# Sphinx build output
+sdk/docs/_build/
+
+# OS cruft
+.DS_Store

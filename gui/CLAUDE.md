@@ -4,24 +4,28 @@
 
 ```bash
 uv sync
-uv run python main.py                  # BLE only
-uv run python main.py --port /dev/tty.usbmodem*  # BLE + UART fallback
+uv run python main.py                    # connect to the first OmniTile found
+uv run python main.py --tile OmniTile_2  # connect to a specific tile by name
 ```
 
 Use **uv** exclusively for package management (not pip).
 
 ## What it does
 
-Viser web UI on localhost:8080. Connects to a DWM tag over BLE (Nordic UART Service)
-and optionally over serial. Sends command packets, displays telemetry, and renders 3D
-actuator positions and a 2D UWB trilateration map. Currently targets a single tile;
-will need to support multiple tiles.
+Viser web UI on localhost:8080. Thin presentation layer on top of the
+[`omnitiles-sdk`](../sdk) package: the SDK handles BLE discovery, the binary
+protocol, and telemetry parsing, while this file handles Viser widgets, 3D
+actuator meshes, and the UWB trilateration map. Currently targets a single
+tile at a time; use the SDK directly for multi-tile scripting.
 
 ## Code structure
 
-- `main.py` — single-file application
-- `pyproject.toml` — dependencies (viser, bleak, pyserial, trimesh, numpy)
+- `main.py` — Viser widgets, mesh rendering, telemetry→UI updates
+- `pyproject.toml` — dependencies (`omnitiles-sdk`, viser, trimesh, numpy)
 - `*.stl` — 3D models for actuator visualization
+
+All BLE, packet encoding, checksum, and telemetry parsing logic lives in the
+SDK at `../sdk/src/omnitiles/`. Don't re-implement those here.
 
 ## Style
 
@@ -29,6 +33,12 @@ Formatted with `black`. Python 3.12+.
 
 ## Notes
 
-- Protocol changes must stay in sync with `omnitiles` and `dwm_tag`.
-- BLE is preferred; UART is a fallback when BLE isn't connected.
-- Trilateration uses 3 anchor positions (hardcoded in `ANCHOR_POSITIONS`).
+- Protocol changes happen in three places in lockstep: the Rust firmware
+  (`omnitiles/src/protocol/`), the Python SDK (`sdk/src/omnitiles/protocol/`),
+  and `dwm_tag`. The GUI should not need protocol edits — if you're tempted
+  to change bytes here, change the SDK instead.
+- Trilateration and anchor positions come from the SDK
+  (`omnitiles.trilaterate`, `omnitiles.DEFAULT_ANCHOR_POSITIONS`).
+- The UART fallback was removed when the SDK landed. If you need bench
+  testing without a DWM tag, add a mock `Transport` to the SDK rather than
+  re-adding pyserial here.

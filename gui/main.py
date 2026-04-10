@@ -1,201 +1,57 @@
 import argparse
-import asyncio
 import math
 import os
-import struct
-import threading
 import time
 
-import numpy as np
-import serial
 import trimesh
 import viser
-from bleak import BleakClient, BleakScanner
 from trimesh.visual import to_rgba
 from trimesh.visual.color import ColorVisuals
 
-# --- Hardware Configuration ---
-M1_CONFIG = {
-    "name": "P16 Linear Actuator",
-    "stroke_mm": 150.0,
-    "buffer_bottom_mm": 20.0,
-    "buffer_top_mm": 35.0,
-    "base_stl": "p16_base.stl",
-    "move_stl": "p16_shaft.stl",
-}
-
-M2_CONFIG = {
-    "name": "T16 Track Actuator",
-    "stroke_mm": 100.0,
-    "buffer_bottom_mm": 25.0,
-    "buffer_top_mm": 15.0,
-    "base_stl": "t16_base.stl",
-    "move_stl": "t16_carriage.stl",
-}
-
-
-def _min_position_mm(config):
-    return config["buffer_bottom_mm"]
-
-
-def _max_position_mm(config):
-    return config["stroke_mm"] - config["buffer_top_mm"]
-
-
-# --- Protocol Constants ---
-START_BYTE = 0xA5
-MSG_M1_EXTEND = 0x30
-MSG_M1_RETRACT = 0x31
-MSG_M1_BRAKE = 0x32
-MSG_M1_SET_POSITION = 0x33
-MSG_M2_EXTEND = 0x40
-MSG_M2_RETRACT = 0x41
-MSG_M2_BRAKE = 0x42
-MSG_M2_SET_POSITION = 0x43
-MSG_PING = 0x50
-MSG_TELEMETRY = 0x60
-MSG_BASE_VELOCITY = 0x70
-MSG_BASE_BRAKE = 0x71
-
-CMD_NAMES = {
-    MSG_M1_EXTEND: f"{M1_CONFIG['name']}_EXTEND",
-    MSG_M1_RETRACT: f"{M1_CONFIG['name']}_RETRACT",
-    MSG_M1_BRAKE: f"{M1_CONFIG['name']}_BRAKE",
-    MSG_M1_SET_POSITION: f"{M1_CONFIG['name']}_SET_POSITION",
-    MSG_M2_EXTEND: f"{M2_CONFIG['name']}_EXTEND",
-    MSG_M2_RETRACT: f"{M2_CONFIG['name']}_RETRACT",
-    MSG_M2_BRAKE: f"{M2_CONFIG['name']}_BRAKE",
-    MSG_M2_SET_POSITION: f"{M2_CONFIG['name']}_SET_POSITION",
-    MSG_PING: "PING",
-    MSG_BASE_VELOCITY: "BASE_VELOCITY",
-    MSG_BASE_BRAKE: "BASE_BRAKE",
-}
-
-# --- UWB Anchor Positions (meters) — measure and update per setup ---
-ANCHOR_POSITIONS = np.array(
-    [
-        [0.0, 0.0],  # Anchor 0
-        [3.0, 0.0],  # Anchor 1
-        [0.0, 2.5],  # Anchor 2
-    ]
+from omnitiles import (
+    DEFAULT_ANCHOR_POSITIONS,
+    M1_CONFIG,
+    M2_CONFIG,
+    SyncTile,
+    Telemetry,
+    TileInfo,
+    scan_sync,
+    trilaterate,
 )
 
 
-def trilaterate(anchors: np.ndarray, dists: np.ndarray):
-    """2D trilateration from 3 anchor distances. Returns (x, y) or None."""
-    # Subtract circle equation 0 from equations 1 and 2 to get a linear system:
-    #   2*(x1-x0)*x + 2*(y1-y0)*y = d0^2 - d1^2 - x0^2 + x1^2 - y0^2 + y1^2
-    #   2*(x2-x0)*x + 2*(y2-y0)*y = d0^2 - d2^2 - x0^2 + x2^2 - y0^2 + y2^2
-    x0, y0 = anchors[0]
-    x1, y1 = anchors[1]
-    x2, y2 = anchors[2]
-    d0, d1, d2 = dists
+def _select_tile(name: str | None) -> SyncTile:
+    infos = scan_sync()
+    if not infos:
+        print("[SDK] No OmniTile devices found. Starting GUI with no tile.")
+        return None  # type: ignore[return-value]
 
-    A = np.array(
-        [
-            [2 * (x1 - x0), 2 * (y1 - y0)],
-            [2 * (x2 - x0), 2 * (y2 - y0)],
-        ]
-    )
-    b = np.array(
-        [
-            d0**2 - d1**2 - x0**2 + x1**2 - y0**2 + y1**2,
-            d0**2 - d2**2 - x0**2 + x2**2 - y0**2 + y2**2,
-        ]
-    )
+    if name is not None:
+        matches = [i for i in infos if i.name == name]
+        if not matches:
+            print(f"[SDK] Tile {name!r} not found. Available: {[i.name for i in infos]}")
+            return None  # type: ignore[return-value]
+        info: TileInfo = matches[0]
+    else:
+        info = infos[0]
 
-    try:
-        return np.linalg.solve(A, b)
-    except np.linalg.LinAlgError:
-        return None
+    print(f"[SDK] Connecting to {info.name} ({info.address})...")
+    return SyncTile.connect(info)
 
 
-# Nordic UART Service UUIDs
-NUS_RX_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"
-NUS_TX_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
-
-# Global State
-ble_client = None
-ble_loop = None
-
-
-def create_packet(msg_id, payload=None):
-    """Creates a binary packet: [START_BYTE, msg_id, payload..., checksum].
-
-    payload can be None (0 bytes), an int (1 byte), or a list of ints (N bytes).
-    """
-    if payload is None:
-        checksum = msg_id & 0xFF
-        return bytes([START_BYTE, msg_id, checksum])
-    if isinstance(payload, (list, tuple)):
-        payload_bytes = [p & 0xFF for p in payload]
-        checksum = msg_id
-        for p in payload_bytes:
-            checksum = (checksum + p) & 0xFF
-        return bytes([START_BYTE, msg_id] + payload_bytes + [checksum])
-    payload = max(0, min(255, int(payload)))
-    checksum = (msg_id + payload) & 0xFF
-    return bytes([START_BYTE, msg_id, payload, checksum])
-
-
-async def connect_ble(telemetry_callback):
-    global ble_client
-
-    def match_device(device, adv):
-        has_name = (device.name == "OmniTile_1") or (adv.local_name == "OmniTile_1")
-        has_uuid = "6e400001-b5a3-f393-e0a9-e50e24dcca9e" in adv.service_uuids
-        return has_name or has_uuid
-
-    while True:
-        if ble_client is None or not ble_client.is_connected:
-            print("[BLE] Scanning for OmniTile_1 (or NUS UUID)...")
-            target = await BleakScanner.find_device_by_filter(match_device, timeout=5.0)
-
-            if target:
-                print(f"[BLE] Found {target.name or 'Device'}! Connecting...")
-                client = BleakClient(target.address)
-                try:
-                    await client.connect()
-                    print("[BLE] Connected successfully!")
-                    await client.start_notify(NUS_TX_UUID, telemetry_callback)
-                    ble_client = client
-                except Exception as e:
-                    print(f"[BLE] Failed to connect: {e}")
-        await asyncio.sleep(2.0)
-
-
-def start_ble_thread(telemetry_callback):
-    """Starts a dedicated asyncio event loop for Bleak in a background thread."""
-    global ble_loop
-    ble_loop = asyncio.new_event_loop()
-
-    def run_loop():
-        if ble_loop is not None:
-            asyncio.set_event_loop(ble_loop)
-            ble_loop.run_forever()
-
-    t = threading.Thread(target=run_loop, daemon=True)
-    t.start()
-
-    asyncio.run_coroutine_threadsafe(connect_ble(telemetry_callback), ble_loop)
-
-
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="OmniTiles Debug GUI")
-    parser.add_argument("--port", type=str, default=None, help="Serial port")
-    parser.add_argument("--baud", type=int, default=115200, help="Baud rate")
+    parser.add_argument(
+        "--tile",
+        type=str,
+        default=None,
+        help="Specific tile name to connect to (default: first discovered).",
+    )
     args = parser.parse_args()
 
-    # 1. Start Serial
-    ser = None
-    if args.port:
-        try:
-            ser = serial.Serial(args.port, args.baud, timeout=0.1)
-            print(f"[UART] Connected to {args.port} at {args.baud} baud")
-        except serial.SerialException as e:
-            print(f"[UART] Could not open serial port: {e}")
+    tile = _select_tile(args.tile)
 
-    # 2. Viser Server Setup
+    # --- Viser Server Setup ---
     server = viser.ViserServer(label="OmniTiles Debugger")
     server.gui.configure_theme(control_width="large")
     server.scene.add_grid("ground", width=0.5, height=0.5, cell_size=0.05)
@@ -219,72 +75,69 @@ def main():
             )
 
     # Load M1 Models
-    m1_is_t16 = "t16" in M1_CONFIG["move_stl"].lower()
+    m1_is_t16 = "t16" in M1_CONFIG.move_stl.lower()
     m1_carriage_offset_z = -0.013 if m1_is_t16 else 0.0
 
     # Primary M1
-    load_mesh("m1_base", M1_CONFIG["base_stl"], color=(50, 50, 50), pos=(0.0, 0.0, 0.0))
+    load_mesh("m1_base", M1_CONFIG.base_stl, color=(50, 50, 50), pos=(0.0, 0.0, 0.0))
     m1_shaft = load_mesh(
         "m1_shaft",
-        M1_CONFIG["move_stl"],
+        M1_CONFIG.move_stl,
         color=(200, 200, 200),
         pos=(0.0, 0.0, m1_carriage_offset_z),
     )
 
     # Secondary M1, mirrored in height (150 - x) and offset in X
-    load_mesh("m1b_base", M1_CONFIG["base_stl"], color=(50, 50, 50), pos=(-0.06, 0.0, 0.0))
+    load_mesh("m1b_base", M1_CONFIG.base_stl, color=(50, 50, 50), pos=(-0.06, 0.0, 0.0))
     m1b_shaft = load_mesh(
         "m1b_shaft",
-        M1_CONFIG["move_stl"],
+        M1_CONFIG.move_stl,
         color=(200, 200, 200),
         pos=(-0.06, 0.0, m1_carriage_offset_z),
     )
 
     # Load M2 Models (horizontal orientation along Y)
-    m2_is_t16 = "t16" in M2_CONFIG["move_stl"].lower()
-    # For M2 T16, apply the 13 mm adjustment as a constant offset along the horizontal travel axis
+    m2_is_t16 = "t16" in M2_CONFIG.move_stl.lower()
     m2_carriage_offset_y = -0.013 if m2_is_t16 else 0.0
     m2_carriage_offset_z = 0.0
     m2_rotation = trimesh.transformations.rotation_matrix(math.radians(-90.0), [1.0, 0.0, 0.0])
 
-    # First M2
     load_mesh(
         "m2_base",
-        M2_CONFIG["base_stl"],
+        M2_CONFIG.base_stl,
         color=(50, 50, 80),
         pos=(0.1, 0.0, 0.0),
         rotation=m2_rotation,
     )
     m2_carriage = load_mesh(
         "m2_carriage",
-        M2_CONFIG["move_stl"],
+        M2_CONFIG.move_stl,
         color=(200, 200, 200),
         pos=(0.1, m2_carriage_offset_y, m2_carriage_offset_z),
         rotation=m2_rotation,
     )
 
-    # Second M2, mirrored in length
     load_mesh(
         "m2b_base",
-        M2_CONFIG["base_stl"],
+        M2_CONFIG.base_stl,
         color=(50, 50, 80),
         pos=(0.16, 0.0, 0.0),
         rotation=m2_rotation,
     )
     m2b_carriage = load_mesh(
         "m2b_carriage",
-        M2_CONFIG["move_stl"],
+        M2_CONFIG.move_stl,
         color=(200, 200, 200),
         pos=(0.16, m2_carriage_offset_y, m2_carriage_offset_z),
         rotation=m2_rotation,
     )
 
-    # Initialize actuators to known positions with no telemetry
+    # Initialize actuators to known positions
     m1_mm_init = 0.0
     m1_z_init = (m1_mm_init - 13) / 1000.0 if m1_is_t16 else m1_mm_init / 1000.0
     m1_shaft.position = (0.0, 0.0, m1_z_init)
 
-    m1b_mm_init = M1_CONFIG["stroke_mm"] - m1_mm_init
+    m1b_mm_init = M1_CONFIG.stroke_mm - m1_mm_init
     m1b_z_init = (m1b_mm_init - 13) / 1000.0 if m1_is_t16 else m1b_mm_init / 1000.0
     m1b_shaft.position = (-0.06, 0.0, m1b_z_init)
 
@@ -299,208 +152,26 @@ def main():
     )
     tile_marker.visible = False
 
-    # Smoothed roll/pitch for attitude visualization (accel-only, low-pass).
     attitude_state = {"roll": 0.0, "pitch": 0.0, "init": False}
 
-    # 3. Telemetry Callback Logic
-    def handle_telemetry(sender, data: bytearray):
-        if len(data) < 7 or data[0] != START_BYTE or data[1] != MSG_TELEMETRY:
+    # --- Command dispatch ---
+    def send(fn_name: str, *args) -> None:
+        if tile is None:
+            print(f"[MOCK] {fn_name}{args}")
             return
+        try:
+            getattr(tile, fn_name)(*args)
+        except Exception as e:
+            print(f"[SDK] {fn_name} failed: {e}")
 
-        m1_pos_adc, m2_pos_adc = struct.unpack_from("<HH", data, 2)
-        tof_val = None
-        imu_sample = None  # (ax, ay, az, gx, gy, gz) in m/s² and rad/s
-        m1_adc_all = None  # (adc1, adc2, adc3, adc4)
-        m2_adc_all = None  # (adc1, adc2)
-
-        # Determine packet format by length
-        if len(data) == 51:
-            # Full with IMU + raw motor ADCs:
-            # [0xA5, 0x60, m1_pos(2), m2_pos(2), d0(2), d1(2), d2(2), tof(2),
-            #  ax(4), ay(4), az(4), gx(4), gy(4), gz(4),
-            #  m1_adc1(2), m1_adc2(2), m1_adc3(2), m1_adc4(2),
-            #  m2_adc1(2), m2_adc2(2), csum]
-            csum = 0
-            for i in range(1, 50):
-                csum = (csum + data[i]) & 0xFF
-            if data[50] != csum:
-                return
-
-            d0, d1, d2, tof_raw = struct.unpack_from("<HHHH", data, 6)
-            imu_sample = struct.unpack_from("<6f", data, 14)
-            m1_adc_all = struct.unpack_from("<4H", data, 38)
-            m2_adc_all = struct.unpack_from("<2H", data, 46)
-
-            if tof_raw != 0xFFFF:
-                tof_val = tof_raw
-
-            if d0 != 0xFFFF and d1 != 0xFFFF and d2 != 0xFFFF:
-                dists_m = np.array([d0 / 1000.0, d1 / 1000.0, d2 / 1000.0])
-                pos = trilaterate(ANCHOR_POSITIONS, dists_m)
-                if pos is not None:
-                    tile_marker.position = (pos[0], pos[1], 0.0)
-                    tile_marker.visible = True
-                    uwb_md.content = (
-                        f"**Pos:** ({pos[0]:.2f}, {pos[1]:.2f}) m  \n"
-                        f"**Ranges:** {d0} / {d1} / {d2} mm"
-                    )
-            else:
-                uwb_md.content = f"**Ranges:** {d0} / {d1} / {d2} mm (incomplete)"
-
-        elif len(data) == 15:
-            # Full: [0xA5, 0x60, m1_lo, m1_hi, m2_lo, m2_hi, d0_lo, d0_hi, d1_lo, d1_hi, d2_lo, d2_hi, tof_lo, tof_hi, csum]
-            csum = 0
-            for i in range(1, 14):
-                csum = (csum + data[i]) & 0xFF
-            if data[14] != csum:
-                return
-
-            d0, d1, d2, tof_raw = struct.unpack_from("<HHHH", data, 6)
-
-            if tof_raw != 0xFFFF:
-                tof_val = tof_raw
-
-            # Update UWB position if all distances are valid
-            if d0 != 0xFFFF and d1 != 0xFFFF and d2 != 0xFFFF:
-                dists_m = np.array([d0 / 1000.0, d1 / 1000.0, d2 / 1000.0])
-                pos = trilaterate(ANCHOR_POSITIONS, dists_m)
-                if pos is not None:
-                    tile_marker.position = (pos[0], pos[1], 0.0)
-                    tile_marker.visible = True
-                    uwb_md.content = (
-                        f"**Pos:** ({pos[0]:.2f}, {pos[1]:.2f}) m  \n"
-                        f"**Ranges:** {d0} / {d1} / {d2} mm"
-                    )
-            else:
-                uwb_md.content = f"**Ranges:** {d0} / {d1} / {d2} mm (incomplete)"
-
-        elif len(data) == 13:
-            # UWB without ToF: [0xA5, 0x60, m1_lo, m1_hi, m2_lo, m2_hi, d0..d2, csum]
-            csum = 0
-            for i in range(1, 12):
-                csum = (csum + data[i]) & 0xFF
-            if data[12] != csum:
-                return
-
-            d0, d1, d2 = struct.unpack_from("<HHH", data, 6)
-
-            if d0 != 0xFFFF and d1 != 0xFFFF and d2 != 0xFFFF:
-                dists_m = np.array([d0 / 1000.0, d1 / 1000.0, d2 / 1000.0])
-                pos = trilaterate(ANCHOR_POSITIONS, dists_m)
-                if pos is not None:
-                    tile_marker.position = (pos[0], pos[1], 0.0)
-                    tile_marker.visible = True
-                    uwb_md.content = (
-                        f"**Pos:** ({pos[0]:.2f}, {pos[1]:.2f}) m  \n"
-                        f"**Ranges:** {d0} / {d1} / {d2} mm"
-                    )
-            else:
-                uwb_md.content = f"**Ranges:** {d0} / {d1} / {d2} mm (incomplete)"
-
-        elif len(data) >= 7:
-            # Basic packet (no UWB): [0xA5, 0x60, m1_lo, m1_hi, m2_lo, m2_hi, csum]
-            checksum = 0
-            for i in range(1, len(data) - 1):
-                checksum = (checksum + data[i]) & 0xFF
-            if data[-1] != checksum:
-                return
-
-        if tof_val is not None:
-            tof_md.content = f"**Range:** {tof_val} mm"
-        else:
-            tof_md.content = "No sensor / no reading"
-
-        # Motor telemetry update (common to all formats)
-        m1_mm = (m1_pos_adc / 4095.0) * M1_CONFIG["stroke_mm"]
-        m2_mm = (m2_pos_adc / 4095.0) * M2_CONFIG["stroke_mm"]
-
-        m1_lines = [f"**Pos ADC:** {m1_pos_adc} | **Est. Pos:** {m1_mm:.1f} mm"]
-        if m1_adc_all is not None:
-            for i, raw in enumerate(m1_adc_all, start=1):
-                mm = (raw / 4095.0) * M1_CONFIG["stroke_mm"]
-                m1_lines.append(f"**adc{i}:** {raw} ({mm:.1f} mm)")
-        m1_md.content = "  \n".join(m1_lines)
-
-        m2_lines = [f"**Pos ADC:** {m2_pos_adc} | **Est. Pos:** {m2_mm:.1f} mm"]
-        if m2_adc_all is not None:
-            for i, raw in enumerate(m2_adc_all, start=1):
-                mm = (raw / 4095.0) * M2_CONFIG["stroke_mm"]
-                m2_lines.append(f"**adc{i}:** {raw} ({mm:.1f} mm)")
-        m2_md.content = "  \n".join(m2_lines)
-
-        m1_z = (m1_mm - 13) / 1000.0 if m1_is_t16 else m1_mm / 1000.0
-        m1b_mm = M1_CONFIG["stroke_mm"] - m1_mm
-        m1b_z = (m1b_mm - 13) / 1000.0 if m1_is_t16 else m1b_mm / 1000.0
-        m2_y = m2_mm / 1000.0
-        m1_shaft.position = (0.0, 0.0, m1_z)
-        m1b_shaft.position = (-0.06, 0.0, m1b_z)
-        m2_carriage.position = (0.1, m2_carriage_offset_y + m2_y, m2_carriage_offset_z)
-        m2b_carriage.position = (0.16, m2_carriage_offset_y + m2_y, m2_carriage_offset_z)
-
-        if imu_sample is not None:
-            ax, ay, az, gx, gy, gz = imu_sample
-            g = 9.80665
-            imu_md.content = (
-                f"**Accel (g):** {ax/g:+.2f} {ay/g:+.2f} {az/g:+.2f}  \n"
-                f"**Gyro (dps):** {math.degrees(gx):+.1f} "
-                f"{math.degrees(gy):+.1f} {math.degrees(gz):+.1f}"
-            )
-
-            # Accel-only attitude estimate. Valid when |a| ≈ g (device not in free-fall
-            # or high acceleration). Low-pass filter the roll/pitch to reduce jitter.
-            norm = math.sqrt(ax * ax + ay * ay + az * az)
-            if norm > 1e-3:
-                roll_meas = math.atan2(ay, az)
-                pitch_meas = math.atan2(-ax, math.sqrt(ay * ay + az * az))
-                if not attitude_state["init"]:
-                    attitude_state["roll"] = roll_meas
-                    attitude_state["pitch"] = pitch_meas
-                    attitude_state["init"] = True
-                else:
-                    alpha = 0.2
-                    attitude_state["roll"] += alpha * (roll_meas - attitude_state["roll"])
-                    attitude_state["pitch"] += alpha * (pitch_meas - attitude_state["pitch"])
-
-                roll = attitude_state["roll"]
-                pitch = attitude_state["pitch"]
-                cr, sr = math.cos(roll / 2), math.sin(roll / 2)
-                cp, sp = math.cos(pitch / 2), math.sin(pitch / 2)
-                # ZYX intrinsic (yaw=0): q = qz(0) * qy(pitch) * qx(roll)
-                w = cr * cp
-                x = sr * cp
-                y = cr * sp
-                z = -sr * sp
-                tile_marker.wxyz = (w, x, y, z)
-                tile_marker.visible = True
-
-    # 4. GUI Commands
-    def send_cmd(cmd_id, payload=None):
-        global ble_client, ble_loop
-        packet = create_packet(cmd_id, payload)
-        cmd_name = CMD_NAMES.get(cmd_id, f"UNKNOWN_{cmd_id:02X}")
-        if payload is not None:
-            payload_str = f" payload={payload}"
-        else:
-            payload_str = ""
-
-        if ble_client and ble_client.is_connected and ble_loop is not None:
-            asyncio.run_coroutine_threadsafe(
-                ble_client.write_gatt_char(NUS_RX_UUID, packet, response=False), ble_loop
-            )
-            print(f"[BLE TX] {cmd_name}{payload_str}")
-        elif ser:
-            ser.write(packet)
-            print(f"[UART TX] {cmd_name}{payload_str}")
-        else:
-            print(f"[MOCK TX] {cmd_name}{payload_str}")
-
-    # Shared state for PWM speed (0–255); sliders show 10–100%
     state = {"speed_m1": 255, "speed_m2": 255}
 
     with server.gui.add_folder("System Controls"):
-        server.gui.add_button("Send Ping", color="blue").on_click(lambda _: send_cmd(MSG_PING))
+        title = tile.name if tile is not None else "(no tile)"
+        server.gui.add_markdown(f"**Connected:** {title}")
+        server.gui.add_button("Send Ping", color="blue").on_click(lambda _: send("ping"))
 
-    with server.gui.add_folder(f"M1: {M1_CONFIG['name']}"):
+    with server.gui.add_folder(f"M1: {M1_CONFIG.name}"):
         m1_md = server.gui.add_markdown("Waiting...")
         speed_m1 = server.gui.add_slider("Speed %", min=10, max=100, step=1, initial_value=100)
 
@@ -509,22 +180,22 @@ def main():
             state["speed_m1"] = int(speed_m1.value * 2.55)
 
         server.gui.add_button("Extend", color="green").on_click(
-            lambda _: send_cmd(MSG_M1_EXTEND, state["speed_m1"])
+            lambda _: send("m1_extend", state["speed_m1"])
         )
-        server.gui.add_button("Brake", color="red").on_click(lambda _: send_cmd(MSG_M1_BRAKE))
+        server.gui.add_button("Brake", color="red").on_click(lambda _: send("m1_brake"))
         server.gui.add_button("Retract", color="yellow").on_click(
-            lambda _: send_cmd(MSG_M1_RETRACT, state["speed_m1"])
+            lambda _: send("m1_retract", state["speed_m1"])
         )
         m1_slider = server.gui.add_slider(
             "Target Position (mm)",
-            min=int(_min_position_mm(M1_CONFIG)),
-            max=int(_max_position_mm(M1_CONFIG)),
+            min=int(M1_CONFIG.min_position_mm),
+            max=int(M1_CONFIG.max_position_mm),
             step=1,
-            initial_value=int(_min_position_mm(M1_CONFIG)),
+            initial_value=int(M1_CONFIG.min_position_mm),
         )
-        m1_slider.on_update(lambda event: send_cmd(MSG_M1_SET_POSITION, int(event.target.value)))
+        m1_slider.on_update(lambda event: send("m1_set_position_mm", float(event.target.value)))
 
-    with server.gui.add_folder(f"M2: {M2_CONFIG['name']}"):
+    with server.gui.add_folder(f"M2: {M2_CONFIG.name}"):
         m2_md = server.gui.add_markdown("Waiting...")
         speed_m2 = server.gui.add_slider("Speed %", min=10, max=100, step=1, initial_value=100)
 
@@ -533,20 +204,20 @@ def main():
             state["speed_m2"] = int(speed_m2.value * 2.55)
 
         server.gui.add_button("Extend", color="green").on_click(
-            lambda _: send_cmd(MSG_M2_EXTEND, state["speed_m2"])
+            lambda _: send("m2_extend", state["speed_m2"])
         )
-        server.gui.add_button("Brake", color="red").on_click(lambda _: send_cmd(MSG_M2_BRAKE))
+        server.gui.add_button("Brake", color="red").on_click(lambda _: send("m2_brake"))
         server.gui.add_button("Retract", color="yellow").on_click(
-            lambda _: send_cmd(MSG_M2_RETRACT, state["speed_m2"])
+            lambda _: send("m2_retract", state["speed_m2"])
         )
         m2_slider = server.gui.add_slider(
             "Target Position (mm)",
-            min=int(_min_position_mm(M2_CONFIG)),
-            max=int(_max_position_mm(M2_CONFIG)),
+            min=int(M2_CONFIG.min_position_mm),
+            max=int(M2_CONFIG.max_position_mm),
             step=1,
-            initial_value=int(_min_position_mm(M2_CONFIG)),
+            initial_value=int(M2_CONFIG.min_position_mm),
         )
-        m2_slider.on_update(lambda event: send_cmd(MSG_M2_SET_POSITION, int(event.target.value)))
+        m2_slider.on_update(lambda event: send("m2_set_position_mm", float(event.target.value)))
 
     with server.gui.add_folder("Mobile Base"):
         server.gui.add_markdown("Open-loop velocity control")
@@ -562,16 +233,16 @@ def main():
             vx = int(base_vx.value * 1.27)
             vy = int(base_vy.value * 1.27)
             omega = int(base_omega.value * 1.27)
-            send_cmd(MSG_BASE_VELOCITY, [vx & 0xFF, vy & 0xFF, omega & 0xFF])
+            send("base_velocity", vx, vy, omega)
 
         server.gui.add_button("Send Velocity", color="green").on_click(send_base_velocity)
-        server.gui.add_button("Brake", color="red").on_click(lambda _: send_cmd(MSG_BASE_BRAKE))
+        server.gui.add_button("Brake", color="red").on_click(lambda _: send("base_brake"))
 
         def reset_sliders(_):
             base_vx.value = 0
             base_vy.value = 0
             base_omega.value = 0
-            send_cmd(MSG_BASE_BRAKE)
+            send("base_brake")
 
         server.gui.add_button("Stop & Reset", color="yellow").on_click(reset_sliders)
 
@@ -584,22 +255,94 @@ def main():
     with server.gui.add_folder("IMU (LSM6DSV16X)"):
         imu_md = server.gui.add_markdown("Waiting for IMU data...")
 
-    # 5. Start BLE (after GUI is fully set up so callbacks can reference all widgets)
-    start_ble_thread(handle_telemetry)
+    # --- Telemetry handler ---
+    def update_ui(frame: Telemetry) -> None:
+        # Motor positions
+        m1_lines = [
+            f"**Pos ADC:** {frame.m1_pos_adc} | **Est. Pos:** {frame.m1_pos_mm:.1f} mm"
+        ]
+        for i, raw in enumerate(frame.m1_adcs, start=1):
+            mm = (raw / 4095.0) * M1_CONFIG.stroke_mm
+            m1_lines.append(f"**adc{i}:** {raw} ({mm:.1f} mm)")
+        m1_md.content = "  \n".join(m1_lines)
 
-    def read_loop():
-        while True:
-            if ser and ser.in_waiting:
-                try:
-                    line = ser.readline().decode("utf-8", errors="ignore").strip()
-                    if line:
-                        print(f"[STM32] {line}")
-                except Exception:
-                    pass
-            time.sleep(0.01)
+        m2_lines = [
+            f"**Pos ADC:** {frame.m2_pos_adc} | **Est. Pos:** {frame.m2_pos_mm:.1f} mm"
+        ]
+        for i, raw in enumerate(frame.m2_adcs, start=1):
+            mm = (raw / 4095.0) * M2_CONFIG.stroke_mm
+            m2_lines.append(f"**adc{i}:** {raw} ({mm:.1f} mm)")
+        m2_md.content = "  \n".join(m2_lines)
 
-    t = threading.Thread(target=read_loop, daemon=True)
-    t.start()
+        m1_mm = frame.m1_pos_mm
+        m2_mm = frame.m2_pos_mm
+        m1_z = (m1_mm - 13) / 1000.0 if m1_is_t16 else m1_mm / 1000.0
+        m1b_mm = M1_CONFIG.stroke_mm - m1_mm
+        m1b_z = (m1b_mm - 13) / 1000.0 if m1_is_t16 else m1b_mm / 1000.0
+        m2_y = m2_mm / 1000.0
+        m1_shaft.position = (0.0, 0.0, m1_z)
+        m1b_shaft.position = (-0.06, 0.0, m1b_z)
+        m2_carriage.position = (0.1, m2_carriage_offset_y + m2_y, m2_carriage_offset_z)
+        m2b_carriage.position = (0.16, m2_carriage_offset_y + m2_y, m2_carriage_offset_z)
+
+        # ToF
+        if frame.tof_mm is not None:
+            tof_md.content = f"**Range:** {frame.tof_mm} mm"
+        else:
+            tof_md.content = "No sensor / no reading"
+
+        # UWB
+        if frame.uwb_mm is not None:
+            d0, d1, d2 = frame.uwb_mm
+            if d0 is not None and d1 is not None and d2 is not None:
+                pos = trilaterate(frame.uwb_mm, DEFAULT_ANCHOR_POSITIONS)
+                if pos is not None:
+                    tile_marker.position = (pos[0], pos[1], 0.0)
+                    tile_marker.visible = True
+                    uwb_md.content = (
+                        f"**Pos:** ({pos[0]:.2f}, {pos[1]:.2f}) m  \n"
+                        f"**Ranges:** {d0} / {d1} / {d2} mm"
+                    )
+            else:
+                uwb_md.content = (
+                    f"**Ranges:** {d0} / {d1} / {d2} mm (incomplete)"
+                )
+
+        # IMU + attitude
+        if frame.imu is not None:
+            imu = frame.imu
+            g = 9.80665
+            imu_md.content = (
+                f"**Accel (g):** {imu.ax/g:+.2f} {imu.ay/g:+.2f} {imu.az/g:+.2f}  \n"
+                f"**Gyro (dps):** {math.degrees(imu.gx):+.1f} "
+                f"{math.degrees(imu.gy):+.1f} {math.degrees(imu.gz):+.1f}"
+            )
+            norm = math.sqrt(imu.ax * imu.ax + imu.ay * imu.ay + imu.az * imu.az)
+            if norm > 1e-3:
+                roll_meas = math.atan2(imu.ay, imu.az)
+                pitch_meas = math.atan2(-imu.ax, math.sqrt(imu.ay * imu.ay + imu.az * imu.az))
+                if not attitude_state["init"]:
+                    attitude_state["roll"] = roll_meas
+                    attitude_state["pitch"] = pitch_meas
+                    attitude_state["init"] = True
+                else:
+                    alpha = 0.2
+                    attitude_state["roll"] += alpha * (roll_meas - attitude_state["roll"])
+                    attitude_state["pitch"] += alpha * (pitch_meas - attitude_state["pitch"])
+
+                roll = attitude_state["roll"]
+                pitch = attitude_state["pitch"]
+                cr, sr = math.cos(roll / 2), math.sin(roll / 2)
+                cp, sp = math.cos(pitch / 2), math.sin(pitch / 2)
+                w = cr * cp
+                x = sr * cp
+                y = cr * sp
+                z = -sr * sp
+                tile_marker.wxyz = (w, x, y, z)
+                tile_marker.visible = True
+
+    if tile is not None:
+        tile.on_telemetry(update_ui)
 
     print("GUI Ready at http://localhost:8080")
     try:
@@ -607,6 +350,8 @@ def main():
             time.sleep(1)
     except KeyboardInterrupt:
         print("Exiting...")
+        if tile is not None:
+            tile.disconnect()
 
 
 if __name__ == "__main__":

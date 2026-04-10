@@ -1,13 +1,15 @@
 [project]
 name = "gui"
 version = "0.1.0"
-description = "Add your description here"
+description = "OmniTiles debug GUI (Viser web UI on top of the omnitiles SDK)"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "bleak>=2.1.1",
+    "omnitiles-sdk",
     "numpy>=1.26",
-    "pyserial>=3.5",
     "trimesh>=4.11.1",
     "viser>=1.0.19",
 ]
+
+[tool.uv.sources]
+omnitiles-sdk = { path = "../sdk", editable = true }
