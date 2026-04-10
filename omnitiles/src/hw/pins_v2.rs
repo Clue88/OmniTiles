@@ -130,8 +130,8 @@ impl BoardPins {
                 disable: gpiod.pd1.into_push_pull_output(),
                 adc1: gpiob.pb0.into_analog(),
                 adc2: gpiob.pb1.into_analog(),
-                adc3: gpioc.pc0.into_analog(),
-                adc4: gpioc.pc1.into_analog(),
+                adc3: gpioc.pc0.into_analog(), // Inverted
+                adc4: gpioc.pc1.into_analog(), // Inverted
             },
 
             m2: Motor2Pins {
