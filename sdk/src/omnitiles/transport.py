@@ -22,6 +22,7 @@ NUS_TX_UUID = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
 DEFAULT_TILE_NAME_PREFIX = "OmniTile_"
 
 NotifyHandler = Callable[[bytes], None]
+DisconnectHandler = Callable[[], None]
 
 
 class Transport(Protocol):
@@ -31,6 +32,7 @@ class Transport(Protocol):
     async def disconnect(self) -> None: ...
     async def send(self, data: bytes) -> None: ...
     def set_notify_handler(self, handler: NotifyHandler | None) -> None: ...
+    def set_disconnect_handler(self, handler: DisconnectHandler | None) -> None: ...
     @property
     def connected(self) -> bool: ...
 
@@ -42,6 +44,7 @@ class BleakTransport:
         self._address = address
         self._client: BleakClient | None = None
         self._notify_handler: NotifyHandler | None = None
+        self._disconnect_handler: DisconnectHandler | None = None
 
     @property
     def address(self) -> str:
@@ -54,12 +57,23 @@ class BleakTransport:
     def set_notify_handler(self, handler: NotifyHandler | None) -> None:
         self._notify_handler = handler
 
+    def set_disconnect_handler(self, handler: DisconnectHandler | None) -> None:
+        self._disconnect_handler = handler
+
     async def connect(self) -> None:
-        if self._client is None:
-            self._client = BleakClient(self._address)
-        if not self._client.is_connected:
-            await self._client.connect()
+        # Always build a fresh client on (re)connect — bleak's client is not
+        # reliably reusable after the peer drops.
+        self._client = BleakClient(
+            self._address,
+            disconnected_callback=self._on_bleak_disconnect,
+        )
+        await self._client.connect()
         await self._client.start_notify(NUS_TX_UUID, self._on_notify)
+
+    def _on_bleak_disconnect(self, _client: BleakClient) -> None:
+        handler = self._disconnect_handler
+        if handler is not None:
+            handler()
 
     async def disconnect(self) -> None:
         if self._client is not None and self._client.is_connected:

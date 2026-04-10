@@ -46,6 +46,10 @@ class Tile:
         self._callbacks: list[TelemetryCallback] = []
         self._new_frame_event = asyncio.Event()
         self._transport.set_notify_handler(self._on_bytes)
+        self._transport.set_disconnect_handler(self._on_transport_disconnect)
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._reconnect_task: asyncio.Task[None] | None = None
+        self._user_disconnected = False
 
     # ---- identity ----
 
@@ -67,10 +71,39 @@ class Tile:
     # ---- connection ----
 
     async def connect(self) -> None:
+        self._loop = asyncio.get_running_loop()
+        self._user_disconnected = False
         await self._transport.connect()
 
     async def disconnect(self) -> None:
+        self._user_disconnected = True
+        if self._reconnect_task is not None and not self._reconnect_task.done():
+            self._reconnect_task.cancel()
         await self._transport.disconnect()
+
+    def _on_transport_disconnect(self) -> None:
+        """Called from bleak's disconnect callback (runs on the SDK loop)."""
+        if self._user_disconnected:
+            return
+        if self._loop is None or self._loop.is_closed():
+            return
+        if self._reconnect_task is not None and not self._reconnect_task.done():
+            return
+        self._reconnect_task = self._loop.create_task(self._reconnect_loop())
+
+    async def _reconnect_loop(self) -> None:
+        """Retry :meth:`Transport.connect` with bounded exponential backoff."""
+        delay = 1.0
+        max_delay = 10.0
+        while not self._user_disconnected:
+            try:
+                await self._transport.connect()
+                return
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                await asyncio.sleep(delay)
+                delay = min(delay * 2.0, max_delay)
 
     async def __aenter__(self) -> "Tile":
         await self.connect()
