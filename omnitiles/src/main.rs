@@ -174,11 +174,6 @@ fn main() -> ! {
 
     #[cfg(feature = "mobile-base")]
     let mut base = {
-        let mut stby_a = pins.wheels.stby_a;
-        let mut stby_b = pins.wheels.stby_b;
-        stby_a.set_high();
-        stby_b.set_high();
-
         let wheel_pwm = dp.TIM4.pwm::<_, _, 1_000_000>(
             (
                 pins.wheels.w1_pwm,

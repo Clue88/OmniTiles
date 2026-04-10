@@ -73,14 +73,12 @@ pub struct WheelPins {
     pub w2_pwm: gpiod::PD13<Alternate<2>>, // TIM4_CH2
     pub w2_in1: gpiod::PD11<Output<PushPull>>,
     pub w2_in2: gpioe::PE2<Output<PushPull>>,
-    pub stby_a: gpioa::PA0<Output<PushPull>>,
     pub w3_pwm: gpiod::PD14<Alternate<2>>, // TIM4_CH3
     pub w3_in1: gpioa::PA1<Output<PushPull>>,
     pub w3_in2: gpioa::PA2<Output<PushPull>>,
     pub w4_pwm: gpiod::PD15<Alternate<2>>, // TIM4_CH4
     pub w4_in1: gpioa::PA4<Output<PushPull>>,
     pub w4_in2: gpioa::PA8<Output<PushPull>>,
-    pub stby_b: gpioa::PA9<Output<PushPull>>,
 }
 
 impl BoardPins {
@@ -148,14 +146,12 @@ impl BoardPins {
                 w2_pwm: gpiod.pd13.into_alternate::<2>(),
                 w2_in1: gpiod.pd11.into_push_pull_output(),
                 w2_in2: gpioe.pe2.into_push_pull_output(),
-                stby_a: gpioa.pa0.into_push_pull_output(),
                 w3_pwm: gpiod.pd14.into_alternate::<2>(),
                 w3_in1: gpioa.pa1.into_push_pull_output(),
                 w3_in2: gpioa.pa2.into_push_pull_output(),
                 w4_pwm: gpiod.pd15.into_alternate::<2>(),
                 w4_in1: gpioa.pa4.into_push_pull_output(),
                 w4_in2: gpioa.pa8.into_push_pull_output(),
-                stby_b: gpioa.pa9.into_push_pull_output(),
             },
         }
     }

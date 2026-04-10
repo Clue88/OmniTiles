@@ -6,8 +6,6 @@
 //! Each TB6612 channel controls one DC motor via:
 //! - One PWM pin for speed (duty cycle)
 //! - Two GPIO pins (IN1/IN2) for direction
-//!
-//! The STBY pin is shared per chip and managed externally (set high at init).
 
 use stm32f7xx_hal::{
     gpio::{self, Output, PushPull},
