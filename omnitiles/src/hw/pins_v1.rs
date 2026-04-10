@@ -12,11 +12,7 @@ use stm32f7xx_hal::{
     prelude::*,
 };
 
-/// All board pins. Construct this once at startup using:
-///
-/// ```rust
-/// let pins = BoardPins::new(dp.GPIOA, dp.GPIOB, dp.GPIOD, dp.GPIOE);
-/// ```
+/// All board pins. Construct this once at startup.
 pub struct BoardPins {
     pub leds: LedPins,
     pub usart1: Usart1Pins,
