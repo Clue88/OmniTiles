@@ -39,15 +39,35 @@ LOG_MODULE_REGISTER(main);
 #define CMD_M2_BRAKE   0x42
 
 // ---------------------------------------------------------------------------
+// Per-tile calibration. Edit TILE_ID and rebuild to target a specific tile.
+// Each tile gets its own BLE name and antenna delay, calibrated against the
+// golden anchor (CONFIG_ANCHOR_ID=0, which stays at nominal 16385).
+// ---------------------------------------------------------------------------
+#define TILE_ID 1
+
+#if TILE_ID == 1
+  #define TILE_NAME      "OmniTile_1"
+  #define UWB_TX_ANT_DLY 16650
+  #define UWB_RX_ANT_DLY 16650
+#elif TILE_ID == 2
+  #define TILE_NAME      "OmniTile_2"
+  #define UWB_TX_ANT_DLY 16385
+  #define UWB_RX_ANT_DLY 16385
+#elif TILE_ID == 3
+  #define TILE_NAME      "OmniTile_3"
+  #define UWB_TX_ANT_DLY 16385
+  #define UWB_RX_ANT_DLY 16385
+#else
+  #error "TILE_ID must be 1, 2, or 3"
+#endif
+
+// ---------------------------------------------------------------------------
 // UWB ranging constants — based on Qorvo SS-TWR examples (ex_06a/ex_06b)
 // ---------------------------------------------------------------------------
 #define NUM_ANCHORS 3
 
 #define UWB_FUNC_POLL 0xE0
 #define UWB_FUNC_RESP 0xE1
-
-#define UWB_TX_ANT_DLY 16385
-#define UWB_RX_ANT_DLY 16385
 
 // SDK ex_06a defaults: 240 UUS delay, 400 UUS timeout
 // We need much larger values for 8 MHz SPI (anchor needs 1500 UUS to respond)
@@ -114,7 +134,7 @@ static void uwb_filter_update(int anchor, uint16_t dist_mm) {
 
 static const struct bt_data ad[] = {
     BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
-    BT_DATA(BT_DATA_NAME_COMPLETE, "OmniTile_1", 10),
+    BT_DATA(BT_DATA_NAME_COMPLETE, TILE_NAME, sizeof(TILE_NAME) - 1),
 };
 
 static const struct bt_data sd[] = {
@@ -476,7 +496,10 @@ int main(void) {
       K_NO_WAIT);
   k_thread_name_set(&spi_bridge_thread, "spi_bridge");
 
-  LOG_INF("System Ready. Waiting for BLE data...");
+  LOG_INF("System Ready: %s (UWB_TX_ANT_DLY=%d, UWB_RX_ANT_DLY=%d)",
+      TILE_NAME,
+      UWB_TX_ANT_DLY,
+      UWB_RX_ANT_DLY);
 
   bool spi_in_flight = false;
   bool spi_was_timing_out = false;

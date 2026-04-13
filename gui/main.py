@@ -1,7 +1,9 @@
 import argparse
 import math
 import os
+import statistics
 import time
+from pathlib import Path
 
 import trimesh
 import viser
@@ -9,15 +11,17 @@ from trimesh.visual import to_rgba
 from trimesh.visual.color import ColorVisuals
 
 from omnitiles import (
-    DEFAULT_ANCHOR_POSITIONS,
     M1_CONFIG,
     M2_CONFIG,
     SyncTile,
     Telemetry,
     TileInfo,
+    load_anchor_positions,
     scan_sync,
     trilaterate,
 )
+
+ANCHOR_CONFIG_PATH = Path(__file__).resolve().parent.parent / "configs" / "anchors.toml"
 
 
 def _select_tile(name: str | None) -> SyncTile:
@@ -50,6 +54,9 @@ def main() -> None:
     args = parser.parse_args()
 
     tile = _select_tile(args.tile)
+
+    anchor_positions = load_anchor_positions(ANCHOR_CONFIG_PATH)
+    print(f"[GUI] Loaded {len(anchor_positions)} anchor positions from {ANCHOR_CONFIG_PATH}")
 
     # --- Viser Server Setup ---
     server = viser.ViserServer(label="OmniTiles Debugger")
@@ -249,6 +256,50 @@ def main() -> None:
     with server.gui.add_folder("UWB Localization"):
         uwb_md = server.gui.add_markdown("Waiting for UWB data...")
 
+    CAL_SAMPLE_COUNT = 1000
+    # Bumping both TX_ANT_DLY and RX_ANT_DLY by 1 on one device reduces
+    # the measured distance by ~4.69 mm (1 DTU = 15.65 ps; rtd changes by
+    # 2 DTUs, tof = rtd/2 changes by 1 DTU, distance = c*tof).
+    MM_PER_DTU_BOTH = 4.69
+    cal_state: dict = {
+        "recording": False,
+        "samples": [],
+        "anchor": 0,
+        "truth_mm": 0,
+    }
+
+    with server.gui.add_folder("UWB Calibration"):
+        cal_md = server.gui.add_markdown(
+            "Two-stage calibration:  \n"
+            "1. **Tag:** place tag at a known distance from **anchor 0** "
+            "(golden, fixed at 16385) and adjust the tag's "
+            "`UWB_TX_ANT_DLY` / `UWB_RX_ANT_DLY` in "
+            "`dwm_tag/src/main.c` until residual is near zero.  \n"
+            "2. **Anchors 1 and 2:** using a calibrated tag, adjust each "
+            "anchor's `TX_ANT_DLY` / `RX_ANT_DLY` in "
+            "`dwm_anchor/src/main.c`.  \n"
+            "Select the measurement channel, enter truth, then Record."
+        )
+        cal_anchor = server.gui.add_dropdown(
+            "Measure channel (anchor)",
+            options=("0", "1", "2"),
+            initial_value="0",
+        )
+        cal_truth_m = server.gui.add_number("Truth distance (m)", initial_value=3.000, step=0.001)
+        cal_record_btn = server.gui.add_button("Record 1000 samples")
+
+        @cal_record_btn.on_click
+        def _start_cal(_):
+            if cal_state["recording"]:
+                return
+            cal_state["anchor"] = int(cal_anchor.value)
+            cal_state["truth_mm"] = int(round(float(cal_truth_m.value) * 1000))
+            cal_state["samples"] = []
+            cal_state["recording"] = True
+            cal_md.content = (
+                f"Recording anchor {cal_state['anchor']}... " f"(0 / {CAL_SAMPLE_COUNT})"
+            )
+
     with server.gui.add_folder("ToF Sensor"):
         tof_md = server.gui.add_markdown("Waiting for ToF data...")
 
@@ -258,17 +309,13 @@ def main() -> None:
     # --- Telemetry handler ---
     def update_ui(frame: Telemetry) -> None:
         # Motor positions
-        m1_lines = [
-            f"**Pos ADC:** {frame.m1_pos_adc} | **Est. Pos:** {frame.m1_pos_mm:.1f} mm"
-        ]
+        m1_lines = [f"**Pos ADC:** {frame.m1_pos_adc} | **Est. Pos:** {frame.m1_pos_mm:.1f} mm"]
         for i, raw in enumerate(frame.m1_adcs, start=1):
             mm = (raw / 4095.0) * M1_CONFIG.stroke_mm
             m1_lines.append(f"**adc{i}:** {raw} ({mm:.1f} mm)")
         m1_md.content = "  \n".join(m1_lines)
 
-        m2_lines = [
-            f"**Pos ADC:** {frame.m2_pos_adc} | **Est. Pos:** {frame.m2_pos_mm:.1f} mm"
-        ]
+        m2_lines = [f"**Pos ADC:** {frame.m2_pos_adc} | **Est. Pos:** {frame.m2_pos_mm:.1f} mm"]
         for i, raw in enumerate(frame.m2_adcs, start=1):
             mm = (raw / 4095.0) * M2_CONFIG.stroke_mm
             m2_lines.append(f"**adc{i}:** {raw} ({mm:.1f} mm)")
@@ -291,11 +338,44 @@ def main() -> None:
         else:
             tof_md.content = "No sensor / no reading"
 
+        # UWB calibration capture
+        if cal_state["recording"] and frame.uwb_mm is not None:
+            d = frame.uwb_mm[cal_state["anchor"]]
+            if d is not None:
+                cal_state["samples"].append(d)
+                n = len(cal_state["samples"])
+                if n < CAL_SAMPLE_COUNT:
+                    cal_md.content = (
+                        f"Recording anchor {cal_state['anchor']}... " f"({n} / {CAL_SAMPLE_COUNT})"
+                    )
+                else:
+                    cal_state["recording"] = False
+                    samples = cal_state["samples"]
+                    mean = statistics.fmean(samples)
+                    median = statistics.median(samples)
+                    stdev = statistics.stdev(samples) if len(samples) > 1 else 0.0
+                    err = median - cal_state["truth_mm"]
+                    delta = round(err / MM_PER_DTU_BOTH)
+                    cal_md.content = (
+                        f"**Anchor {cal_state['anchor']}** — truth "
+                        f"{cal_state['truth_mm']} mm  \n"
+                        f"**Median:** {median:.1f} mm  \n"
+                        f"**Mean:** {mean:.1f} mm  \n"
+                        f"**Std:** {stdev:.1f} mm  \n"
+                        f"**Error (median):** {err:+.1f} mm  \n"
+                        f"Suggested: **add Δ{delta:+d}** to both TX and RX "
+                        f"antenna delay on the device being calibrated "
+                        f"(tag for stage 1, anchor {cal_state['anchor']} "
+                        f"for stage 2), then reflash.  \n"
+                        f"_Δ based on median (robust to multipath). "
+                        f"Applying to only one of TX/RX halves effect._"
+                    )
+
         # UWB
         if frame.uwb_mm is not None:
             d0, d1, d2 = frame.uwb_mm
             if d0 is not None and d1 is not None and d2 is not None:
-                pos = trilaterate(frame.uwb_mm, DEFAULT_ANCHOR_POSITIONS)
+                pos = trilaterate(frame.uwb_mm, anchor_positions)
                 if pos is not None:
                     tile_marker.position = (pos[0], pos[1], 0.0)
                     tile_marker.visible = True
@@ -304,9 +384,7 @@ def main() -> None:
                         f"**Ranges:** {d0} / {d1} / {d2} mm"
                     )
             else:
-                uwb_md.content = (
-                    f"**Ranges:** {d0} / {d1} / {d2} mm (incomplete)"
-                )
+                uwb_md.content = f"**Ranges:** {d0} / {d1} / {d2} mm (incomplete)"
 
         # IMU + attitude
         if frame.imu is not None:

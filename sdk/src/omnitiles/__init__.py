@@ -16,6 +16,7 @@ from omnitiles.hardware import (
     M1_CONFIG,
     M2_CONFIG,
     ActuatorConfig,
+    load_anchor_positions,
 )
 from omnitiles.protocol import MessageId, StreamParser, encode
 from omnitiles.sync import SyncFleet, SyncTile, scan_sync

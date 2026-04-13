@@ -44,8 +44,22 @@ static dwt_config_t uwb_config = {
 #define RESP_MSG_POLL_RX_TS_IDX 10
 #define RESP_MSG_RESP_TX_TS_IDX 14
 
-#define TX_ANT_DLY 16385
-#define RX_ANT_DLY 16385
+// Per-anchor antenna delay (calibrated against a reference tag). Anchor 0 is
+// the "golden" reference and stays at nominal 16385; tags are calibrated
+// against it. Anchors 1 and 2 absorb their own residual bias relative to
+// anchor 0, and those values are tag-independent.
+#if CONFIG_ANCHOR_ID == 0
+  #define TX_ANT_DLY 16385
+  #define RX_ANT_DLY 16385
+#elif CONFIG_ANCHOR_ID == 1
+  #define TX_ANT_DLY 16355
+  #define RX_ANT_DLY 16355
+#elif CONFIG_ANCHOR_ID == 2
+  #define TX_ANT_DLY 16350
+  #define RX_ANT_DLY 16350
+#else
+  #error "CONFIG_ANCHOR_ID must be 0, 1, or 2"
+#endif
 
 // Delay from poll RX to response TX — SDK uses 650 at 38MHz SPI, we need more at 8MHz
 #define POLL_RX_TO_RESP_TX_DLY_UUS 1500
@@ -55,8 +69,6 @@ static dwt_config_t uwb_config = {
 // Address format: dst[0] = anchor ID, dst[1] = 'A'; src = 'T','G' (tag)
 // Anchor only responds to polls where dst[0] matches its own ID.
 #define ADDR_DST_IDX 5
-static uint8_t rx_poll_msg[] = {
-    0x41, 0x88, 0, 0xCA, 0xDE, 0, 'A', 'T', 'G', FUNC_POLL, 0, 0};
 static uint8_t tx_resp_msg[] = {
     0x41, 0x88, 0, 0xCA, 0xDE, 'T', 'G', 0, 'A', FUNC_RESP, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
@@ -86,7 +98,10 @@ static void resp_msg_set_ts(uint8_t* ts_field, uint64_t ts) {
 }
 
 int main(void) {
-  LOG_INF("DWM Anchor %d starting...", CONFIG_ANCHOR_ID);
+  LOG_INF("DWM Anchor %d starting (TX_ANT_DLY=%d, RX_ANT_DLY=%d)...",
+      CONFIG_ANCHOR_ID,
+      TX_ANT_DLY,
+      RX_ANT_DLY);
 
   dw3000_hw_init();
   dw3000_hw_reset();
