@@ -38,5 +38,8 @@ uv.lock.bak
 # Sphinx build output
 sdk/docs/_build/
 
+# GUI-local logs
+gui/logs/
+
 # OS cruft
 .DS_Store
