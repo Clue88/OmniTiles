@@ -149,13 +149,12 @@ fn main() -> ! {
         m1_in2,
         pins.m1.nsleep,
         pins.m1.disable,
-        Adc::make_multi_reader(&adc1, [8, 9, 10, 11]),
+        Adc::make_multi_reader(&adc1, [14, 9, 10, 11]),
         [false, false, true, true],
         150.0, // P16 has 150 mm stroke length
         20.0,  // 20 mm buffer at bottom (retracted)
         35.0,  // 35 mm buffer at top (extended)
     );
-    m1_actuator.set_channel_enabled(0, false);
     m1_actuator.enable_outputs();
     let mut m1 = LinearController::new(
         m1_actuator,
@@ -172,13 +171,12 @@ fn main() -> ! {
         m2_in2,
         pins.m2.nsleep,
         pins.m2.disable,
-        Adc::make_multi_reader(&adc1, [12, 13]),
+        Adc::make_multi_reader(&adc1, [15, 13]),
         [false, false],
         100.0, // T16 has 100 mm stroke length
         25.0,  // 25 mm buffer at bottom (retracted)
         15.0,  // 15 mm buffer at top (extended)
     );
-    m2_actuator.set_channel_enabled(0, false);
     m2_actuator.enable_outputs();
     let mut m2 = LinearController::new(
         m2_actuator,
