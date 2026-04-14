@@ -3,7 +3,6 @@ import csv
 import datetime as _dt
 import math
 import os
-import statistics
 import time
 from pathlib import Path
 
@@ -285,50 +284,6 @@ def main() -> None:
     with server.gui.add_folder("UWB Localization"):
         uwb_md = server.gui.add_markdown("Waiting for UWB data...")
 
-    CAL_SAMPLE_COUNT = 1000
-    # Bumping both TX_ANT_DLY and RX_ANT_DLY by 1 on one device reduces
-    # the measured distance by ~4.69 mm (1 DTU = 15.65 ps; rtd changes by
-    # 2 DTUs, tof = rtd/2 changes by 1 DTU, distance = c*tof).
-    MM_PER_DTU_BOTH = 4.69
-    cal_state: dict = {
-        "recording": False,
-        "samples": [],
-        "anchor": 0,
-        "truth_mm": 0,
-    }
-
-    with server.gui.add_folder("UWB Calibration"):
-        cal_md = server.gui.add_markdown(
-            "Two-stage calibration:  \n"
-            "1. **Tag:** place tag at a known distance from **anchor 0** "
-            "(golden, fixed at 16385) and adjust the tag's "
-            "`UWB_TX_ANT_DLY` / `UWB_RX_ANT_DLY` in "
-            "`dwm_tag/src/main.c` until residual is near zero.  \n"
-            "2. **Anchors 1 and 2:** using a calibrated tag, adjust each "
-            "anchor's `TX_ANT_DLY` / `RX_ANT_DLY` in "
-            "`dwm_anchor/src/main.c`.  \n"
-            "Select the measurement channel, enter truth, then Record."
-        )
-        cal_anchor = server.gui.add_dropdown(
-            "Measure channel (anchor)",
-            options=("0", "1", "2"),
-            initial_value="0",
-        )
-        cal_truth_m = server.gui.add_number("Truth distance (m)", initial_value=3.000, step=0.001)
-        cal_record_btn = server.gui.add_button("Record 1000 samples")
-
-        @cal_record_btn.on_click
-        def _start_cal(_):
-            if cal_state["recording"]:
-                return
-            cal_state["anchor"] = int(cal_anchor.value)
-            cal_state["truth_mm"] = int(round(float(cal_truth_m.value) * 1000))
-            cal_state["samples"] = []
-            cal_state["recording"] = True
-            cal_md.content = (
-                f"Recording anchor {cal_state['anchor']}... " f"(0 / {CAL_SAMPLE_COUNT})"
-            )
-
     ANCHOR_COLORS = ("red", "green", "blue")
     noise_state: dict = {
         "recording": False,
@@ -339,7 +294,8 @@ def main() -> None:
         "plot_handle": None,
     }
 
-    with server.gui.add_folder("UWB Noise Characterization"):
+    noise_folder = server.gui.add_folder("UWB Noise Characterization")
+    with noise_folder:
         noise_md = server.gui.add_markdown(
             "Place tag at a fixed position, then Record. "
             "Collects all three anchor ranges for the duration and "
@@ -369,7 +325,7 @@ def main() -> None:
     with server.gui.add_folder("ToF Sensor"):
         tof_md = server.gui.add_markdown("Waiting for ToF data...")
 
-    with server.gui.add_folder("IMU (LSM6DSV16X)"):
+    with server.gui.add_folder("IMU Sensor"):
         imu_md = server.gui.add_markdown("Waiting for IMU data...")
 
     # --- Telemetry handler ---
@@ -478,45 +434,12 @@ def main() -> None:
                     uplot.Series(label="A1 (mm)", stroke=ANCHOR_COLORS[1]),
                     uplot.Series(label="A2 (mm)", stroke=ANCHOR_COLORS[2]),
                 )
-                with server.gui.add_folder("UWB Noise Characterization"):
+                with noise_folder:
                     noise_state["plot_handle"] = server.gui.add_uplot(
                         data=(t_s, d_arrs[0], d_arrs[1], d_arrs[2]),
                         series=series,
                         title="UWB ranges over time",
                         aspect=2.0,
-                    )
-
-        # UWB calibration capture
-        if cal_state["recording"] and frame.uwb_mm is not None:
-            d = frame.uwb_mm[cal_state["anchor"]]
-            if d is not None:
-                cal_state["samples"].append(d)
-                n = len(cal_state["samples"])
-                if n < CAL_SAMPLE_COUNT:
-                    cal_md.content = (
-                        f"Recording anchor {cal_state['anchor']}... " f"({n} / {CAL_SAMPLE_COUNT})"
-                    )
-                else:
-                    cal_state["recording"] = False
-                    samples = cal_state["samples"]
-                    mean = statistics.fmean(samples)
-                    median = statistics.median(samples)
-                    stdev = statistics.stdev(samples) if len(samples) > 1 else 0.0
-                    err = median - cal_state["truth_mm"]
-                    delta = round(err / MM_PER_DTU_BOTH)
-                    cal_md.content = (
-                        f"**Anchor {cal_state['anchor']}** — truth "
-                        f"{cal_state['truth_mm']} mm  \n"
-                        f"**Median:** {median:.1f} mm  \n"
-                        f"**Mean:** {mean:.1f} mm  \n"
-                        f"**Std:** {stdev:.1f} mm  \n"
-                        f"**Error (median):** {err:+.1f} mm  \n"
-                        f"Suggested: **add Δ{delta:+d}** to both TX and RX "
-                        f"antenna delay on the device being calibrated "
-                        f"(tag for stage 1, anchor {cal_state['anchor']} "
-                        f"for stage 2), then reflash.  \n"
-                        f"_Δ based on median (robust to multipath). "
-                        f"Applying to only one of TX/RX halves effect._"
                     )
 
         # UWB
