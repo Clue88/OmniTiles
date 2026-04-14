@@ -46,8 +46,8 @@ M2_CONFIG = ActuatorConfig(
 
 DEFAULT_ANCHOR_POSITIONS: tuple[tuple[float, float], ...] = (
     (0.0, 0.0),
-    (3.0, 0.0),
-    (0.0, 2.5),
+    (1.8, 0.0),
+    (1.0, 1.7),
 )
 """Default UWB anchor coordinates in meters. Override per test-setup."""
 

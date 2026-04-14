@@ -2,6 +2,6 @@
 # Index 0 → anchor built with -DCONFIG_ANCHOR_ID=0, etc.
 positions = [
     [0.0, 0.0],
-    [3.0, 0.0],
-    [0.0, 2.5],
+    [1.8, 0.0],
+    [1.0, 1.7],
 ]
