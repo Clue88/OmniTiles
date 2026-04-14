@@ -47,8 +47,8 @@ LOG_MODULE_REGISTER(main);
 
 #if TILE_ID == 1
   #define TILE_NAME      "OmniTile_1"
-  #define UWB_TX_ANT_DLY 16650
-  #define UWB_RX_ANT_DLY 16650
+  #define UWB_TX_ANT_DLY 16385
+  #define UWB_RX_ANT_DLY 16385
 #elif TILE_ID == 2
   #define TILE_NAME      "OmniTile_2"
   #define UWB_TX_ANT_DLY 16385
@@ -76,13 +76,26 @@ LOG_MODULE_REGISTER(main);
 
 #define SPEED_OF_LIGHT 299702547.0
 
-// Median filter for UWB distances
-#define UWB_FILTER_LEN  200
-#define UWB_MAX_DIST_MM 20000  // reject readings > 20m
+// Two-stage UWB range filter: per-anchor Hampel outlier rejection followed
+// by an EMA smoother. Tuned for ~32 Hz static data (see spec in PR).
+#define UWB_HAMPEL_WINDOW        21
+#define UWB_HAMPEL_NSIGMA        3.0f
+#define UWB_EMA_ALPHA            0.02f
+#define UWB_MAX_DIST_MM          20000
+// Reset filter state after this many consecutive missed responses so stale
+// buffer contents don't pollute outputs when an anchor comes back.
+#define UWB_FILTER_MISS_THRESHOLD 10
 
-static uint16_t uwb_filter_buf[NUM_ANCHORS][UWB_FILTER_LEN];
-static uint16_t uwb_filter_idx[NUM_ANCHORS];
-static uint16_t uwb_filter_count[NUM_ANCHORS];
+typedef struct {
+  uint16_t ring[UWB_HAMPEL_WINDOW];
+  uint8_t  ring_idx;
+  uint8_t  ring_filled;
+  float    ema_value;
+  bool     ema_initialized;
+  uint8_t  miss_count;
+} uwb_filter_t;
+
+static uwb_filter_t uwb_filters[NUM_ANCHORS];
 
 // Shared UWB distance data (written by UWB thread, read by main loop for BLE TX)
 // 0xFFFF = no valid measurement
@@ -97,34 +110,93 @@ static uint8_t last_imu_bytes[24];
  * Layout: 6 × u16 little-endian = m1_adc1..4, m2_adc1..2. */
 static uint8_t last_motor_adc_bytes[12];
 
-static uint16_t uwb_scratch[UWB_FILTER_LEN];
+static uint16_t median_u16(uint16_t* buf, int n) {
+  for (int i = 1; i < n; i++) {
+    uint16_t key = buf[i];
+    int j = i - 1;
+    while (j >= 0 && buf[j] > key) {
+      buf[j + 1] = buf[j];
+      j--;
+    }
+    buf[j + 1] = key;
+  }
+  return buf[n / 2];
+}
+
+static void uwb_filter_reset(int anchor) {
+  uwb_filter_t* f = &uwb_filters[anchor];
+  f->ring_idx = 0;
+  f->ring_filled = 0;
+  f->ema_value = 0.0f;
+  f->ema_initialized = false;
+  f->miss_count = 0;
+}
+
+static void uwb_filter_note_miss(int anchor) {
+  uwb_filter_t* f = &uwb_filters[anchor];
+  if (f->miss_count < 0xFF) {
+    f->miss_count++;
+  }
+  if (f->miss_count >= UWB_FILTER_MISS_THRESHOLD) {
+    uwb_filter_reset(anchor);
+  }
+}
 
 static void uwb_filter_update(int anchor, uint16_t dist_mm) {
   if (dist_mm > UWB_MAX_DIST_MM) {
     return;
   }
 
-  uwb_filter_buf[anchor][uwb_filter_idx[anchor]] = dist_mm;
-  uwb_filter_idx[anchor] = (uwb_filter_idx[anchor] + 1) % UWB_FILTER_LEN;
-  if (uwb_filter_count[anchor] < UWB_FILTER_LEN) {
-    uwb_filter_count[anchor]++;
+  uwb_filter_t* f = &uwb_filters[anchor];
+  f->miss_count = 0;
+
+  f->ring[f->ring_idx] = dist_mm;
+  f->ring_idx = (f->ring_idx + 1) % UWB_HAMPEL_WINDOW;
+  if (f->ring_filled < UWB_HAMPEL_WINDOW) {
+    f->ring_filled++;
   }
 
-  uint16_t n = uwb_filter_count[anchor];
-  memcpy(uwb_scratch, uwb_filter_buf[anchor], n * sizeof(uint16_t));
+  // Stage 1: Hampel outlier rejection. Tests the newest sample (zero lag)
+  // against the local median/MAD computed over the full window.
+  uint16_t y_hampel = dist_mm;
+  if (f->ring_filled >= UWB_HAMPEL_WINDOW) {
+    uint16_t scratch[UWB_HAMPEL_WINDOW];
+    memcpy(scratch, f->ring, sizeof(scratch));
+    uint16_t m = median_u16(scratch, UWB_HAMPEL_WINDOW);
 
-  // Insertion sort
-  for (int i = 1; i < n; i++) {
-    uint16_t key = uwb_scratch[i];
-    int j = i - 1;
-    while (j >= 0 && uwb_scratch[j] > key) {
-      uwb_scratch[j + 1] = uwb_scratch[j];
-      j--;
+    uint16_t dev[UWB_HAMPEL_WINDOW];
+    for (int i = 0; i < UWB_HAMPEL_WINDOW; i++) {
+      int32_t diff = (int32_t)f->ring[i] - (int32_t)m;
+      dev[i] = (uint16_t)(diff < 0 ? -diff : diff);
     }
-    uwb_scratch[j + 1] = key;
+    uint16_t mad = median_u16(dev, UWB_HAMPEL_WINDOW);
+    float sigma = 1.4826f * (float)mad;
+
+    if (sigma > 0.0f) {
+      float d = (float)dist_mm - (float)m;
+      if (d < 0.0f) {
+        d = -d;
+      }
+      if (d > UWB_HAMPEL_NSIGMA * sigma) {
+        y_hampel = m;
+      }
+    }
   }
 
-  uwb_dist_mm[anchor] = uwb_scratch[n / 2];
+  // Stage 2: EMA smoothing.
+  if (!f->ema_initialized) {
+    f->ema_value = (float)y_hampel;
+    f->ema_initialized = true;
+  } else {
+    f->ema_value =
+        UWB_EMA_ALPHA * (float)y_hampel + (1.0f - UWB_EMA_ALPHA) * f->ema_value;
+  }
+
+  float rounded = f->ema_value + 0.5f;
+  if (rounded > (float)UWB_MAX_DIST_MM) {
+    rounded = (float)UWB_MAX_DIST_MM;
+  }
+  uwb_dist_mm[anchor] = (uint16_t)rounded;
 }
 
 /* Define NUS UUID so scanners can see us in Scan Response */
@@ -145,7 +217,7 @@ static struct k_work adv_work;
 static struct bt_conn* current_conn;
 
 /* Avoid flooding BLE and stressing stack: rate-limit NUS send and back off on failure */
-#define NUS_SEND_INTERVAL_MS 50
+#define NUS_SEND_INTERVAL_MS 25
 #define NUS_SEND_BACKOFF_MS  3000
 static uint32_t last_nus_send_ms;
 static uint32_t nus_send_backoff_until_ms;
@@ -437,6 +509,7 @@ static void uwb_ranging_thread_fn(void* p1, void* p2, void* p3) {
       }
     } else {
       dwt_writesysstatuslo(SYS_STATUS_ALL_RX_TO | SYS_STATUS_ALL_RX_ERR);
+      uwb_filter_note_miss(cur_anchor);
     }
 
     // Cycle to next anchor
@@ -446,7 +519,7 @@ static void uwb_ranging_thread_fn(void* p1, void* p2, void* p3) {
     // which includes both motor ADC values and UWB distances.
 
     // Brief delay between ranging exchanges
-    k_sleep(K_MSEC(30));
+    k_sleep(K_MSEC(10));
   }
 }
 
@@ -507,7 +580,7 @@ int main(void) {
   while (1) {
     // --- Collect SPI response from previous transaction ---
     if (spi_in_flight) {
-      ret = k_sem_take(&spi_done_sem, K_MSEC(50));
+      ret = k_sem_take(&spi_done_sem, K_MSEC(10));
       if (ret == 0) {
         spi_in_flight = false;
 

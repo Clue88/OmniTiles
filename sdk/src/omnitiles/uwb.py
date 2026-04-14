@@ -34,7 +34,7 @@ def trilaterate(
     if len(anchors) != 3:
         raise ValueError("trilaterate requires exactly 3 anchors")
 
-    d_3d = np.array([mm / 1000.0 for mm in distances_mm], dtype=float)
+    d_3d = np.array([mm / 1000.0 for mm in distances_mm if mm is not None], dtype=float)
     horiz_sq = d_3d**2 - z_offset_m**2
     if np.any(horiz_sq < 0):
         return None

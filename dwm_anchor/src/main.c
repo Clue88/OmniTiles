@@ -52,11 +52,11 @@ static dwt_config_t uwb_config = {
   #define TX_ANT_DLY 16385
   #define RX_ANT_DLY 16385
 #elif CONFIG_ANCHOR_ID == 1
-  #define TX_ANT_DLY 16355
-  #define RX_ANT_DLY 16355
+  #define TX_ANT_DLY 16385
+  #define RX_ANT_DLY 16385
 #elif CONFIG_ANCHOR_ID == 2
-  #define TX_ANT_DLY 16350
-  #define RX_ANT_DLY 16350
+  #define TX_ANT_DLY 16385
+  #define RX_ANT_DLY 16385
 #else
   #error "CONFIG_ANCHOR_ID must be 0, 1, or 2"
 #endif

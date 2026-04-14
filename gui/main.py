@@ -1,14 +1,18 @@
 import argparse
+import csv
+import datetime as _dt
 import math
 import os
 import statistics
 import time
 from pathlib import Path
 
+import numpy as np
 import trimesh
 import viser
 from trimesh.visual import to_rgba
 from trimesh.visual.color import ColorVisuals
+from viser import uplot
 
 from omnitiles import (
     M1_CONFIG,
@@ -24,7 +28,7 @@ from omnitiles import (
 ANCHOR_CONFIG_PATH = Path(__file__).resolve().parent.parent / "configs" / "anchors.toml"
 
 ANCHOR_HEIGHT_M = 0.75
-TAG_HEIGHT_M = 0.40
+TAG_HEIGHT_M = 0.75
 
 
 def _select_tile(name: str | None) -> SyncTile:
@@ -64,7 +68,29 @@ def main() -> None:
     # --- Viser Server Setup ---
     server = viser.ViserServer(label="OmniTiles Debugger")
     server.gui.configure_theme(control_width="large")
-    server.scene.add_grid("ground", width=0.5, height=0.5, cell_size=0.05)
+    xs = [a[0] for a in anchor_positions] + [0.0]
+    ys = [a[1] for a in anchor_positions] + [0.0]
+    grid_margin = 0.5
+    grid_w = max(xs) - min(xs) + 2 * grid_margin
+    grid_h = max(ys) - min(ys) + 2 * grid_margin
+    grid_cx = (max(xs) + min(xs)) / 2
+    grid_cy = (max(ys) + min(ys)) / 2
+    server.scene.add_grid(
+        "ground",
+        width=grid_w,
+        height=grid_h,
+        cell_size=0.1,
+        position=(grid_cx, grid_cy, 0.0),
+    )
+
+    for i, (ax, ay) in enumerate(anchor_positions):
+        server.scene.add_icosphere(
+            f"anchor_{i}",
+            radius=0.04,
+            color=(255, 120, 0),
+            position=(ax, ay, ANCHOR_HEIGHT_M),
+        )
+        server.scene.add_label(f"anchor_{i}_label", f"A{i}", position=(ax, ay, ANCHOR_HEIGHT_M + 0.08))
 
     def load_mesh(name, filename, color, pos, rotation=None):
         if not os.path.exists(filename):
@@ -303,6 +329,43 @@ def main() -> None:
                 f"Recording anchor {cal_state['anchor']}... " f"(0 / {CAL_SAMPLE_COUNT})"
             )
 
+    ANCHOR_COLORS = ("red", "green", "blue")
+    noise_state: dict = {
+        "recording": False,
+        "start_ms": 0,
+        "duration_ms": 60_000,
+        "t_ms": [],
+        "d": ([], [], []),
+        "plot_handle": None,
+    }
+
+    with server.gui.add_folder("UWB Noise Characterization"):
+        noise_md = server.gui.add_markdown(
+            "Place tag at a fixed position, then Record. "
+            "Collects all three anchor ranges for the duration and "
+            "plots them over time."
+        )
+        noise_duration_s = server.gui.add_number(
+            "Duration (s)", initial_value=60.0, step=1.0
+        )
+        noise_record_btn = server.gui.add_button("Record")
+
+        @noise_record_btn.on_click
+        def _start_noise(_):
+            if noise_state["recording"]:
+                return
+            noise_state["duration_ms"] = int(round(float(noise_duration_s.value) * 1000))
+            noise_state["start_ms"] = int(round(time.monotonic() * 1000))
+            noise_state["t_ms"] = []
+            noise_state["d"] = ([], [], [])
+            if noise_state["plot_handle"] is not None:
+                noise_state["plot_handle"].remove()
+                noise_state["plot_handle"] = None
+            noise_state["recording"] = True
+            noise_md.content = (
+                f"Recording 0.0 / {noise_state['duration_ms']/1000:.0f} s..."
+            )
+
     with server.gui.add_folder("ToF Sensor"):
         tof_md = server.gui.add_markdown("Waiting for ToF data...")
 
@@ -340,6 +403,88 @@ def main() -> None:
             tof_md.content = f"**Range:** {frame.tof_mm} mm"
         else:
             tof_md.content = "No sensor / no reading"
+
+        # UWB noise characterization capture
+        if noise_state["recording"] and frame.uwb_mm is not None:
+            now_ms = int(round(time.monotonic() * 1000))
+            elapsed_ms = now_ms - noise_state["start_ms"]
+            noise_state["t_ms"].append(elapsed_ms)
+            for i in range(3):
+                val = frame.uwb_mm[i]
+                noise_state["d"][i].append(
+                    float("nan") if val is None else float(val)
+                )
+            if elapsed_ms < noise_state["duration_ms"]:
+                noise_md.content = (
+                    f"Recording {elapsed_ms/1000:.1f} / "
+                    f"{noise_state['duration_ms']/1000:.0f} s... "
+                    f"({len(noise_state['t_ms'])} samples)"
+                )
+            else:
+                noise_state["recording"] = False
+                t_s = np.array(noise_state["t_ms"], dtype=float) / 1000.0
+                d_arrs = [np.array(noise_state["d"][i], dtype=float) for i in range(3)]
+
+                n_samples = len(t_s)
+                duration_s = float(t_s[-1]) if n_samples > 0 else 0.0
+                sample_rate = n_samples / duration_s if duration_s > 0 else 0.0
+
+                log_dir = Path(__file__).resolve().parent / "logs"
+                log_dir.mkdir(exist_ok=True)
+                ts = _dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+                csv_path = log_dir / f"uwb_noise_{ts}.csv"
+                with csv_path.open("w", newline="") as f:
+                    w = csv.writer(f)
+                    w.writerow([f"# recorded_at={_dt.datetime.now().isoformat()}"])
+                    w.writerow([f"# tile={tile.name if tile is not None else 'unknown'}"])
+                    w.writerow(
+                        [
+                            f"# anchors_m={[list(a) for a in anchor_positions]}"
+                        ]
+                    )
+                    w.writerow([f"# n_samples={n_samples}"])
+                    w.writerow([f"# duration_s={duration_s:.3f}"])
+                    w.writerow([f"# sample_rate_hz={sample_rate:.2f}"])
+                    w.writerow(["t_s", "d0_mm", "d1_mm", "d2_mm"])
+                    for k in range(n_samples):
+                        row = [f"{t_s[k]:.3f}"]
+                        for i in range(3):
+                            v = d_arrs[i][k]
+                            row.append("" if not np.isfinite(v) else f"{int(v)}")
+                        w.writerow(row)
+
+                lines = [
+                    f"**UWB noise over {duration_s:.1f} s "
+                    f"({n_samples} samples, {sample_rate:.1f} Hz)**"
+                ]
+                for i, d in enumerate(d_arrs):
+                    finite = d[np.isfinite(d)]
+                    if finite.size == 0:
+                        lines.append(f"- **A{i}:** no samples")
+                        continue
+                    lines.append(
+                        f"- **A{i}:** mean {finite.mean():.1f} mm, "
+                        f"median {float(np.median(finite)):.1f} mm, "
+                        f"std {finite.std(ddof=1) if finite.size > 1 else 0.0:.1f} mm, "
+                        f"range {finite.min():.0f}–{finite.max():.0f} mm, "
+                        f"n={finite.size}"
+                    )
+                lines.append(f"Saved: `{csv_path}`")
+                noise_md.content = "  \n".join(lines)
+
+                series = (
+                    uplot.Series(label="t (s)"),
+                    uplot.Series(label="A0 (mm)", stroke=ANCHOR_COLORS[0]),
+                    uplot.Series(label="A1 (mm)", stroke=ANCHOR_COLORS[1]),
+                    uplot.Series(label="A2 (mm)", stroke=ANCHOR_COLORS[2]),
+                )
+                with server.gui.add_folder("UWB Noise Characterization"):
+                    noise_state["plot_handle"] = server.gui.add_uplot(
+                        data=(t_s, d_arrs[0], d_arrs[1], d_arrs[2]),
+                        series=series,
+                        title="UWB ranges over time",
+                        aspect=2.0,
+                    )
 
         # UWB calibration capture
         if cal_state["recording"] and frame.uwb_mm is not None:
@@ -386,6 +531,10 @@ def main() -> None:
                     uwb_md.content = (
                         f"**Pos:** ({pos[0]:.2f}, {pos[1]:.2f}) m  \n"
                         f"**Ranges:** {d0} / {d1} / {d2} mm"
+                    )
+                else:
+                    uwb_md.content = (
+                        f"**Ranges:** {d0} / {d1} / {d2} mm (no solution)"
                     )
             else:
                 uwb_md.content = f"**Ranges:** {d0} / {d1} / {d2} mm (incomplete)"
