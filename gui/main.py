@@ -23,6 +23,9 @@ from omnitiles import (
 
 ANCHOR_CONFIG_PATH = Path(__file__).resolve().parent.parent / "configs" / "anchors.toml"
 
+ANCHOR_HEIGHT_M = 0.75
+TAG_HEIGHT_M = 0.40
+
 
 def _select_tile(name: str | None) -> SyncTile:
     infos = scan_sync()
@@ -375,7 +378,8 @@ def main() -> None:
         if frame.uwb_mm is not None:
             d0, d1, d2 = frame.uwb_mm
             if d0 is not None and d1 is not None and d2 is not None:
-                pos = trilaterate(frame.uwb_mm, anchor_positions)
+                z_offset_m = ANCHOR_HEIGHT_M - TAG_HEIGHT_M
+                pos = trilaterate(frame.uwb_mm, anchor_positions, z_offset_m=z_offset_m)
                 if pos is not None:
                     tile_marker.position = (pos[0], pos[1], 0.0)
                     tile_marker.visible = True
