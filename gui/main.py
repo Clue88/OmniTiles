@@ -67,18 +67,31 @@ def main() -> None:
     # --- Viser Server Setup ---
     server = viser.ViserServer(label="OmniTiles Debugger")
     server.gui.configure_theme(control_width="large")
+    server.scene.set_up_direction("+z")
     xs = [a[0] for a in anchor_positions] + [0.0]
     ys = [a[1] for a in anchor_positions] + [0.0]
-    grid_margin = 0.5
-    grid_w = max(xs) - min(xs) + 2 * grid_margin
-    grid_h = max(ys) - min(ys) + 2 * grid_margin
-    grid_cx = (max(xs) + min(xs)) / 2
-    grid_cy = (max(ys) + min(ys)) / 2
+    grid_cell = 0.1
+    grid_section = 1.0
+    grid_pad = 0.6
+    # Snap center to a multiple of the section size so major gridlines land
+    # on integer meter coordinates (including the origin).
+    grid_cx = round(((max(xs) + min(xs)) / 2) / grid_section) * grid_section
+    grid_cy = round(((max(ys) + min(ys)) / 2) / grid_section) * grid_section
+    # Width/height must cover every anchor measured from the snapped center.
+    half_w = max(max(xs) - grid_cx, grid_cx - min(xs)) + grid_pad
+    half_h = max(max(ys) - grid_cy, grid_cy - min(ys)) + grid_pad
+    grid_w = 2 * half_w
+    grid_h = 2 * half_h
+
+    server.initial_camera.up = (0.0, 0.0, 1.0)
+    server.initial_camera.look_at = (grid_cx, grid_cy, 0.0)
+    server.initial_camera.position = (grid_cx - 3.0, grid_cy, 3.0)
     server.scene.add_grid(
         "ground",
         width=grid_w,
         height=grid_h,
-        cell_size=0.1,
+        cell_size=grid_cell,
+        section_size=grid_section,
         position=(grid_cx, grid_cy, 0.0),
     )
 
@@ -87,10 +100,10 @@ def main() -> None:
             f"anchor_{i}",
             radius=0.04,
             color=(255, 120, 0),
-            position=(ax, ay, ANCHOR_HEIGHT_M),
+            position=(ax, ay, 0.0),
         )
         server.scene.add_label(
-            f"anchor_{i}_label", f"A{i}", position=(ax, ay, ANCHOR_HEIGHT_M + 0.08)
+            f"anchor_{i}_label", f"A{i}", position=(ax, ay, 0.08)
         )
 
     def load_mesh(name, filename, color, pos, rotation=None):
