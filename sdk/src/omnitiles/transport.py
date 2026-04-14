@@ -6,7 +6,7 @@ The SDK exposes a small :class:`Transport` protocol so alternative transports
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from typing import Protocol
 
 from bleak import BleakClient, BleakScanner
@@ -112,9 +112,7 @@ async def discover_tiles(
             return True
         return NUS_SERVICE_UUID in (adv.service_uuids or [])
 
-    devices = await BleakScanner.discover(
-        timeout=timeout, return_adv=True
-    )
+    devices = await BleakScanner.discover(timeout=timeout, return_adv=True)
     for address, (device, adv) in devices.items():
         if _matches(device, adv):
             name = device.name or adv.local_name or address

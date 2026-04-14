@@ -31,6 +31,7 @@ __all__ = [
     "ActuatorConfig",
     "DEFAULT_ANCHOR_POSITIONS",
     "ImuSample",
+    "load_anchor_positions",
     "M1_CONFIG",
     "M2_CONFIG",
     "MessageId",

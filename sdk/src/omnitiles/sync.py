@@ -11,7 +11,7 @@ import asyncio
 import threading
 from collections.abc import Awaitable, Callable
 from concurrent.futures import Future
-from typing import Any, TypeVar
+from typing import TypeVar
 
 from omnitiles.fleet import TileFleet, scan as async_scan
 from omnitiles.telemetry import Telemetry
@@ -39,9 +39,7 @@ def _ensure_loop() -> asyncio.AbstractEventLoop:
             started.set()
             _loop.run_forever()
 
-        thread = threading.Thread(
-            target=_runner, name="omnitiles-sdk-loop", daemon=True
-        )
+        thread = threading.Thread(target=_runner, name="omnitiles-sdk-loop", daemon=True)
         thread.start()
         started.wait()
         return _loop
@@ -89,9 +87,7 @@ class SyncTile:
         """Scan, take the first match, and return a connected SyncTile."""
         infos = scan_sync(timeout=timeout, name_prefix=name_prefix)
         if not infos:
-            raise RuntimeError(
-                f"No tiles found with name prefix {name_prefix!r}"
-            )
+            raise RuntimeError(f"No tiles found with name prefix {name_prefix!r}")
         return cls.connect(infos[0])
 
     # ---- identity ----
@@ -181,9 +177,7 @@ class SyncFleet:
 
     def __init__(self, fleet: TileFleet) -> None:
         self._fleet = fleet
-        self._tiles: dict[str, SyncTile] = {
-            tile.name: SyncTile(tile) for tile in fleet
-        }
+        self._tiles: dict[str, SyncTile] = {tile.name: SyncTile(tile) for tile in fleet}
 
     @classmethod
     def discover(

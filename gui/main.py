@@ -89,7 +89,9 @@ def main() -> None:
             color=(255, 120, 0),
             position=(ax, ay, ANCHOR_HEIGHT_M),
         )
-        server.scene.add_label(f"anchor_{i}_label", f"A{i}", position=(ax, ay, ANCHOR_HEIGHT_M + 0.08))
+        server.scene.add_label(
+            f"anchor_{i}_label", f"A{i}", position=(ax, ay, ANCHOR_HEIGHT_M + 0.08)
+        )
 
     def load_mesh(name, filename, color, pos, rotation=None):
         if not os.path.exists(filename):
@@ -301,9 +303,7 @@ def main() -> None:
             "Collects all three anchor ranges for the duration and "
             "plots them over time."
         )
-        noise_duration_s = server.gui.add_number(
-            "Duration (s)", initial_value=60.0, step=1.0
-        )
+        noise_duration_s = server.gui.add_number("Duration (s)", initial_value=60.0, step=1.0)
         noise_record_btn = server.gui.add_button("Record")
 
         @noise_record_btn.on_click
@@ -318,9 +318,7 @@ def main() -> None:
                 noise_state["plot_handle"].remove()
                 noise_state["plot_handle"] = None
             noise_state["recording"] = True
-            noise_md.content = (
-                f"Recording 0.0 / {noise_state['duration_ms']/1000:.0f} s..."
-            )
+            noise_md.content = f"Recording 0.0 / {noise_state['duration_ms']/1000:.0f} s..."
 
     with server.gui.add_folder("ToF Sensor"):
         tof_md = server.gui.add_markdown("Waiting for ToF data...")
@@ -367,9 +365,7 @@ def main() -> None:
             noise_state["t_ms"].append(elapsed_ms)
             for i in range(3):
                 val = frame.uwb_mm[i]
-                noise_state["d"][i].append(
-                    float("nan") if val is None else float(val)
-                )
+                noise_state["d"][i].append(float("nan") if val is None else float(val))
             if elapsed_ms < noise_state["duration_ms"]:
                 noise_md.content = (
                     f"Recording {elapsed_ms/1000:.1f} / "
@@ -393,11 +389,7 @@ def main() -> None:
                     w = csv.writer(f)
                     w.writerow([f"# recorded_at={_dt.datetime.now().isoformat()}"])
                     w.writerow([f"# tile={tile.name if tile is not None else 'unknown'}"])
-                    w.writerow(
-                        [
-                            f"# anchors_m={[list(a) for a in anchor_positions]}"
-                        ]
-                    )
+                    w.writerow([f"# anchors_m={[list(a) for a in anchor_positions]}"])
                     w.writerow([f"# n_samples={n_samples}"])
                     w.writerow([f"# duration_s={duration_s:.3f}"])
                     w.writerow([f"# sample_rate_hz={sample_rate:.2f}"])
@@ -456,9 +448,7 @@ def main() -> None:
                         f"**Ranges:** {d0} / {d1} / {d2} mm"
                     )
                 else:
-                    uwb_md.content = (
-                        f"**Ranges:** {d0} / {d1} / {d2} mm (no solution)"
-                    )
+                    uwb_md.content = f"**Ranges:** {d0} / {d1} / {d2} mm (no solution)"
             else:
                 uwb_md.content = f"**Ranges:** {d0} / {d1} / {d2} mm (incomplete)"
 
