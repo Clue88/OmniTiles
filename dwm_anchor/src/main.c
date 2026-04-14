@@ -66,11 +66,16 @@ static dwt_config_t uwb_config = {
 
 #define UUS_TO_DWT_TIME 63898
 
-// Address format: dst[0] = anchor ID, dst[1] = 'A'; src = 'T','G' (tag)
-// Anchor only responds to polls where dst[0] matches its own ID.
+// Address format:
+//   Poll (incoming):  dst[0]=anchor ID, dst[1]='A', src[0]=TILE_ID, src[1]='G'
+//   Resp (outgoing):  dst[0]=TILE_ID,   dst[1]='G', src[0]=anchor ID, src[1]='A'
+// The anchor only responds to polls where dst[0] matches its own ID, and
+// echoes the tile ID from src[0] into the response dst[0] so tags can reject
+// responses meant for other tiles.
 #define ADDR_DST_IDX 5
+#define ADDR_SRC_IDX 7
 static uint8_t tx_resp_msg[] = {
-    0x41, 0x88, 0, 0xCA, 0xDE, 'T', 'G', 0, 'A', FUNC_RESP, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    0x41, 0x88, 0, 0xCA, 0xDE, 0, 'G', 0, 'A', FUNC_RESP, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 #define ALL_MSG_COMMON_LEN 5  // Only validate FC + PAN (skip addresses)
 
@@ -155,10 +160,13 @@ int main(void) {
         dwt_readrxdata(rx_buffer, frame_len, 0);
 
         rx_buffer[ALL_MSG_SN_IDX] = 0;
-        // Check FC + PAN + addressed to this anchor + function code is POLL
+        // Check FC + PAN + addressed to this anchor + src magic + function code
         if (rx_buffer[0] == 0x41 && rx_buffer[1] == 0x88 && rx_buffer[3] == 0xCA &&
             rx_buffer[4] == 0xDE && rx_buffer[ADDR_DST_IDX] == CONFIG_ANCHOR_ID &&
-            rx_buffer[9] == FUNC_POLL) {
+            rx_buffer[ADDR_SRC_IDX + 1] == 'G' && rx_buffer[9] == FUNC_POLL) {
+          // Echo the tile ID (poll src[0]) into response dst[0] so the tag
+          // that sent this poll can match the response to itself.
+          tx_resp_msg[ADDR_DST_IDX] = rx_buffer[ADDR_SRC_IDX];
           uint32_t resp_tx_time;
           int ret;
 

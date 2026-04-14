@@ -1,0 +1,11 @@
+source "Kconfig.zephyr"
+
+config TILE_ID
+	int "Tile ID (1, 2, or 3)"
+	default 1
+	range 1 3
+	help
+	  Unique identifier for this tile. Each tile in the system must have a
+	  different ID. Used as the BLE advertising name suffix and as the UWB
+	  source address so anchors can echo it back and tags can reject
+	  responses meant for other tiles.

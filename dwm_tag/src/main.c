@@ -39,26 +39,24 @@ LOG_MODULE_REGISTER(main);
 #define CMD_M2_BRAKE   0x42
 
 // ---------------------------------------------------------------------------
-// Per-tile calibration. Edit TILE_ID and rebuild to target a specific tile.
+// Per-tile calibration. Set with: west build -- -DCONFIG_TILE_ID=<n>
 // Each tile gets its own BLE name and antenna delay, calibrated against the
 // golden anchor (CONFIG_ANCHOR_ID=0, which stays at nominal 16385).
 // ---------------------------------------------------------------------------
-#define TILE_ID 1
-
-#if TILE_ID == 1
+#if CONFIG_TILE_ID == 1
   #define TILE_NAME      "OmniTile_1"
   #define UWB_TX_ANT_DLY 16385
   #define UWB_RX_ANT_DLY 16385
-#elif TILE_ID == 2
+#elif CONFIG_TILE_ID == 2
   #define TILE_NAME      "OmniTile_2"
   #define UWB_TX_ANT_DLY 16385
   #define UWB_RX_ANT_DLY 16385
-#elif TILE_ID == 3
+#elif CONFIG_TILE_ID == 3
   #define TILE_NAME      "OmniTile_3"
   #define UWB_TX_ANT_DLY 16385
   #define UWB_RX_ANT_DLY 16385
 #else
-  #error "TILE_ID must be 1, 2, or 3"
+  #error "CONFIG_TILE_ID must be 1, 2, or 3"
 #endif
 
 // ---------------------------------------------------------------------------
@@ -78,21 +76,21 @@ LOG_MODULE_REGISTER(main);
 
 // Two-stage UWB range filter: per-anchor Hampel outlier rejection followed
 // by an EMA smoother. Tuned for ~32 Hz static data (see spec in PR).
-#define UWB_HAMPEL_WINDOW        21
-#define UWB_HAMPEL_NSIGMA        3.0f
-#define UWB_EMA_ALPHA            0.02f
-#define UWB_MAX_DIST_MM          20000
+#define UWB_HAMPEL_WINDOW 21
+#define UWB_HAMPEL_NSIGMA 3.0f
+#define UWB_EMA_ALPHA     0.02f
+#define UWB_MAX_DIST_MM   20000
 // Reset filter state after this many consecutive missed responses so stale
 // buffer contents don't pollute outputs when an anchor comes back.
 #define UWB_FILTER_MISS_THRESHOLD 10
 
 typedef struct {
   uint16_t ring[UWB_HAMPEL_WINDOW];
-  uint8_t  ring_idx;
-  uint8_t  ring_filled;
-  float    ema_value;
-  bool     ema_initialized;
-  uint8_t  miss_count;
+  uint8_t ring_idx;
+  uint8_t ring_filled;
+  float ema_value;
+  bool ema_initialized;
+  uint8_t miss_count;
 } uwb_filter_t;
 
 static uwb_filter_t uwb_filters[NUM_ANCHORS];
@@ -377,10 +375,14 @@ static dwt_config_t uwb_config = {
     .pdoaMode = DWT_PDOA_M0,
 };
 
-// Address format: dst[0] = target anchor ID, dst[1] = 'A'; src = 'T','G' (tag)
+// Address format: dst[0] = target anchor ID, dst[1] = 'A';
+// src[0] = CONFIG_TILE_ID, src[1] = 'G' (magic). The anchor echoes src[0]
+// back into the response dst[0] so the tag can reject responses meant for
+// other tiles.
 #define ADDR_DST_IDX 5
+#define ADDR_SRC_IDX 7
 static uint8_t tx_poll_msg[] = {
-    0x41, 0x88, 0, 0xCA, 0xDE, 0, 'A', 'T', 'G', UWB_FUNC_POLL, 0, 0};
+    0x41, 0x88, 0, 0xCA, 0xDE, 0, 'A', CONFIG_TILE_ID, 'G', UWB_FUNC_POLL, 0, 0};
 #define ALL_MSG_SN_IDX          2
 #define ALL_MSG_COMMON_LEN      10
 #define RESP_MSG_POLL_RX_TS_IDX 10
@@ -437,6 +439,12 @@ static void uwb_ranging_thread_fn(void* p1, void* p2, void* p3) {
 
   LOG_INF("UWB: ready (SS-TWR, 3 anchors)");
 
+  // Per-tile slot stagger: offset this tile's ranging cycle so three tiles
+  // polling the same anchors are statistically unlikely to collide. Each
+  // exchange is ~3 ms and the inter-exchange sleep is 10 ms, so a 5 ms
+  // offset between tiles keeps their polls out of each other's slots.
+  k_sleep(K_MSEC((CONFIG_TILE_ID - 1) * 5));
+
   int cur_anchor = 0;
 
   while (1) {
@@ -477,7 +485,12 @@ static void uwb_ranging_thread_fn(void* p1, void* p2, void* p3) {
         dwt_readrxdata(uwb_rx_buf, frame_len, 0);
 
         uwb_rx_buf[ALL_MSG_SN_IDX] = 0;
-        if (uwb_rx_buf[9] == UWB_FUNC_RESP) {
+        // Reject responses not addressed to this tile (dst[0] == CONFIG_TILE_ID)
+        // or not from the anchor we just polled (src[0] == cur_anchor).
+        // Without these checks, simultaneous ranging from multiple tiles can
+        // produce phantom distances.
+        if (uwb_rx_buf[9] == UWB_FUNC_RESP && uwb_rx_buf[5] == CONFIG_TILE_ID &&
+            uwb_rx_buf[6] == 'G' && uwb_rx_buf[7] == (uint8_t)cur_anchor) {
           uint32_t poll_tx_ts, resp_rx_ts, poll_rx_ts, resp_tx_ts;
           int32_t rtd_init, rtd_resp;
           float clockOffsetRatio;
@@ -503,8 +516,13 @@ static void uwb_ranging_thread_fn(void* p1, void* p2, void* p3) {
           }
 
           uwb_filter_update(cur_anchor, (uint16_t)dist_mm);
-        } else {
+        } else if (uwb_rx_buf[9] != UWB_FUNC_RESP) {
           LOG_WRN("UWB: anchor %d unexpected func=0x%02X", cur_anchor, uwb_rx_buf[9]);
+        } else {
+          // Response addressed to a different tile or anchor — treat as a
+          // miss for filter-reset purposes but don't log (noisy when tiles
+          // share the UWB channel).
+          uwb_filter_note_miss(cur_anchor);
         }
       }
     } else {
