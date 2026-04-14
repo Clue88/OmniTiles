@@ -6,6 +6,7 @@
 uv sync
 uv run python main.py                    # connect to the first OmniTile found
 uv run python main.py --tile OmniTile_2  # connect to a specific tile by name
+uv run python main.py --all              # connect to every OmniTile discovered
 ```
 
 Use **uv** exclusively for package management (not pip).
@@ -15,8 +16,14 @@ Use **uv** exclusively for package management (not pip).
 Viser web UI on localhost:8080. Thin presentation layer on top of the
 [`omnitiles-sdk`](../sdk) package: the SDK handles BLE discovery, the binary
 protocol, and telemetry parsing, while this file handles Viser widgets, 3D
-actuator meshes, and the UWB trilateration map. Currently targets a single
-tile at a time; use the SDK directly for multi-tile scripting.
+actuator meshes, and the UWB trilateration map.
+
+Supports multiple tiles simultaneously via `--all`. Each connected tile gets
+its own tab (controls + telemetry panels) and its own frame in the 3D scene
+with actuator meshes parented under it — trilateration moves the frame, so
+the whole assembly rides along with the tile's UWB position and IMU attitude.
+The UWB Noise Characterization panel is shared and has a tile dropdown for
+picking which tile to record from.
 
 ## Code structure
 
