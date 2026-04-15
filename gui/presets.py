@@ -68,4 +68,4 @@ def apply_preset(preset: Preset, tiles: list) -> None:
             tile.m1_set_position_mm(tilt_deg_to_m1_mm(target.tilt_deg))
         except Exception as e:
             name = getattr(tile, "name", "?")
-            print(f"[preset] {name}: apply failed: {e}")
+            print(f"[preset] {name}: Apply failed: {e}")

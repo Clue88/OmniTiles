@@ -62,7 +62,7 @@ class _TileRow:
                     try:
                         tile.m2_set_position_mm(height_cm_to_m2_mm(v))
                     except Exception as e:
-                        print(f"[sidebar {self.name}] m2 cmd failed: {e}")
+                        print(f"[sidebar {self.name}] M2 command failed: {e}")
 
             self.tilt_slider = server.gui.add_slider(
                 "Tilt (°)",
@@ -81,7 +81,7 @@ class _TileRow:
                     try:
                         tile.m1_set_position_mm(tilt_deg_to_m1_mm(v))
                     except Exception as e:
-                        print(f"[sidebar {self.name}] m1 cmd failed: {e}")
+                        print(f"[sidebar {self.name}] M1 command failed: {e}")
 
             if index == 0:
                 self._add_mobile_base()
@@ -131,13 +131,13 @@ class _TileRow:
             def send(vx: int, vy: int, omega: int) -> None:
                 tile = self.get_tile(self.name)
                 if tile is None:
-                    print("[base] no tile")
+                    print("[base] No tile connected")
                     return
                 s = self.base_speed_pct.value / 100.0
                 try:
                     tile.base_velocity(int(vx * s), int(vy * s), int(omega * s))
                 except Exception as e:
-                    print(f"[base] velocity failed: {e}")
+                    print(f"[base] Velocity failed: {e}")
 
             def brake() -> None:
                 tile = self.get_tile(self.name)
@@ -146,7 +146,7 @@ class _TileRow:
                 try:
                     tile.base_brake()
                 except Exception as e:
-                    print(f"[base] brake failed: {e}")
+                    print(f"[base] Brake failed: {e}")
 
             # D-pad: [↑] on top, [← ■ →] in the middle, [↓] on bottom. The
             # top/bottom rows use padding options so the arrow is centered.
@@ -180,12 +180,12 @@ class _TileRow:
     def _call(self, method_name: str, *args) -> None:
         tile = self.get_tile(self.name)
         if tile is None:
-            print(f"[sidebar {self.name}] not connected, skipping {method_name}")
+            print(f"[sidebar {self.name}] Not connected, skipping {method_name}")
             return
         try:
             getattr(tile, method_name)(*args)
         except Exception as e:
-            print(f"[sidebar {self.name}] {method_name} failed: {e}")
+            print(f"[sidebar {self.name}] Command {method_name} failed: {e}")
 
     def _status_text(self) -> str:
         st = self.app_state.tiles[self.name]

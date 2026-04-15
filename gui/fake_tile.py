@@ -121,10 +121,10 @@ class FakeTile:
             self._m2_target = max(M2_CONFIG.min_position_mm, min(M2_CONFIG.max_position_mm, mm))
 
     def base_velocity(self, vx: int, vy: int, omega: int) -> None:
-        print(f"[fake {self.name}] base_velocity vx={vx} vy={vy} omega={omega}")
+        print(f"[fake {self.name}] Base velocity vx={vx} vy={vy} omega={omega}")
 
     def base_brake(self) -> None:
-        print(f"[fake {self.name}] base_brake")
+        print(f"[fake {self.name}] Base brake")
 
     def _step_actuator(self, pos: float, target: float | None, vel: float, dt: float, cfg) -> float:
         if target is not None:
@@ -201,7 +201,7 @@ class FakeTile:
                 try:
                     cb(frame)
                 except Exception as e:
-                    print(f"[fake {self.name}] telemetry callback error: {e}")
+                    print(f"[fake {self.name}] Telemetry callback error: {e}")
 
             remaining = period - (time.monotonic() - now)
             if remaining > 0:

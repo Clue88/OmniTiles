@@ -19,7 +19,7 @@ ANCHOR_CONFIG_PATH = Path(__file__).resolve().parent.parent / "configs" / "ancho
 class App:
     def __init__(self, fake: bool) -> None:
         anchors = load_anchor_positions(ANCHOR_CONFIG_PATH)
-        print(f"[gui] loaded {len(anchors)} anchors from {ANCHOR_CONFIG_PATH}")
+        print(f"[gui] Loaded {len(anchors)} anchors from {ANCHOR_CONFIG_PATH}")
 
         self.state = AppState(anchors=tuple(anchors))
         self.server = viser.ViserServer(label="OmniTiles")

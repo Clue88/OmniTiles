@@ -60,7 +60,7 @@ class UwbNoisePanel:
         conn.add_telemetry_listener(self._on_telemetry)
 
     def _tile_options(self) -> tuple[str, ...]:
-        names = [t.name for t in self.conn.list_tiles()]
+        names = [str(t.name) for t in self.conn.list_tiles()]
         return tuple(names) if names else ("(no tile)",)
 
     def refresh(self) -> None:

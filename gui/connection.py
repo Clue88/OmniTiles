@@ -76,7 +76,7 @@ class ConnectionManager:
                 t.disconnect()
             except Exception as e:
                 name = getattr(t, "name", "?")
-                print(f"[conn] disconnect {name} failed: {e}")
+                print(f"[conn] Disconnect {name} failed: {e}")
         for name in list(self.app_state.tiles.keys()):
             self.app_state.tiles[name].connected = False
 
@@ -103,17 +103,17 @@ class ConnectionManager:
             try:
                 infos = scan_sync(timeout=5.0)
             except Exception as e:
-                print(f"[conn] scan failed: {e}")
+                print(f"[conn] Scan failed: {e}")
                 return
             for info in infos:
                 with self._lock:
                     if info.name in self._tiles:
                         continue
-                print(f"[conn] connecting to {info.name} ({info.address})")
+                print(f"[conn] Connecting to {info.name} ({info.address})")
                 try:
                     tile = SyncTile.connect(info)
                 except Exception as e:
-                    print(f"[conn] connect {info.name} failed: {e}")
+                    print(f"[conn] Connect {info.name} failed: {e}")
                     continue
                 self._register(tile)
         finally:
@@ -129,7 +129,7 @@ class ConnectionManager:
     # ----- shared -----
 
     def _register(self, tile) -> None:
-        name = tile.name
+        name = str(tile.name)
         with self._lock:
             self._tiles[name] = tile
         if name not in self.app_state.tiles:
@@ -172,4 +172,4 @@ class ConnectionManager:
             try:
                 cb(name, frame)
             except Exception as e:
-                print(f"[conn] extra listener error: {e}")
+                print(f"[conn] Extra listener error: {e}")
