@@ -13,8 +13,6 @@ class ActuatorConfig:
     stroke_mm: float
     buffer_bottom_mm: float
     buffer_top_mm: float
-    base_stl: str
-    move_stl: str
 
     @property
     def min_position_mm(self) -> float:
@@ -30,8 +28,6 @@ M1_CONFIG = ActuatorConfig(
     stroke_mm=150.0,
     buffer_bottom_mm=20.0,
     buffer_top_mm=35.0,
-    base_stl="p16_base.stl",
-    move_stl="p16_shaft.stl",
 )
 
 M2_CONFIG = ActuatorConfig(
@@ -39,8 +35,6 @@ M2_CONFIG = ActuatorConfig(
     stroke_mm=100.0,
     buffer_bottom_mm=25.0,
     buffer_top_mm=15.0,
-    base_stl="t16_base.stl",
-    move_stl="t16_carriage.stl",
 )
 
 
