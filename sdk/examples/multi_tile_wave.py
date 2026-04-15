@@ -4,7 +4,7 @@ Extends M1 on every tile together, then retracts — the minimal multi-tile
 demo. Replace the body of ``action`` to script any other pattern.
 
 Usage:
-    uv run python sdk/examples/multi_tile_wave.py
+    uv run sdk/examples/multi_tile_wave.py
 """
 
 import asyncio

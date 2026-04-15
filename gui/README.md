@@ -11,8 +11,8 @@ in the SDK. This file only handles 3D meshes, Viser widgets, and visualization.
 
 ```bash
 uv sync
-uv run python main.py                   # connect to the first OmniTile found
-uv run python main.py --tile OmniTile_2 # connect to a specific tile by name
+uv run main.py                   # connect to the first OmniTile found
+uv run main.py --tile OmniTile_2 # connect to a specific tile by name
 ```
 
 The GUI currently targets a single tile at a time. To coordinate multiple

@@ -1,7 +1,7 @@
 """Sync example: extend and retract M1 in a loop.
 
 Usage:
-    uv run python sdk/examples/blink_m1.py
+    uv run sdk/examples/blink_m1.py
 """
 
 import time

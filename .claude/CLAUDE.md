@@ -13,7 +13,7 @@ See [README.md](../README.md) for the system diagram and protocol overview.
 | `omnitiles/` | Rust (no_std) | `cargo run --release` | STM32F7 firmware: command parsing, motor control, sensors |
 | `dwm_tag/` | C (Zephyr) | nRF Connect for VS Code | nRF52 BLE-to-SPI bridge + UWB ranging initiator |
 | `dwm_anchor/` | C (Zephyr) | nRF Connect for VS Code | nRF52 UWB anchor (DS-TWR responder) |
-| `gui/` | Python 3.12+ | `uv sync && uv run python main.py` | Viser web UI on localhost:8080 |
+| `gui/` | Python 3.12+ | `uv sync && uv run main.py` | Viser web UI on localhost:8080 |
 | `zephyr-dw3000-decadriver/` | C | Zephyr module | DW3000 UWB chip driver (external) |
 
 ## Hardware

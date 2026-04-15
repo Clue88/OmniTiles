@@ -4,9 +4,9 @@
 
 ```bash
 uv sync
-uv run python main.py                    # connect to the first OmniTile found
-uv run python main.py --tile OmniTile_2  # connect to a specific tile by name
-uv run python main.py --all              # connect to every OmniTile discovered
+uv run main.py                    # connect to the first OmniTile found
+uv run main.py --tile OmniTile_2  # connect to a specific tile by name
+uv run main.py --all              # connect to every OmniTile discovered
 ```
 
 Use **uv** exclusively for package management (not pip).

@@ -1,7 +1,7 @@
 """Subscribe to telemetry from a tile and print every frame.
 
 Usage:
-    uv run python sdk/examples/log_telemetry.py
+    uv run sdk/examples/log_telemetry.py
 """
 
 import time
@@ -23,9 +23,7 @@ def main() -> None:
         if frame.tof_mm is not None:
             parts.append(f"tof={frame.tof_mm}mm")
         if frame.imu is not None:
-            parts.append(
-                f"imu_a=({frame.imu.ax:+.2f},{frame.imu.ay:+.2f},{frame.imu.az:+.2f})"
-            )
+            parts.append(f"imu_a=({frame.imu.ax:+.2f},{frame.imu.ay:+.2f},{frame.imu.az:+.2f})")
         print(" | ".join(parts))
 
     tile.on_telemetry(on_frame)
