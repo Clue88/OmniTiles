@@ -598,7 +598,7 @@ int main(void) {
   while (1) {
     // --- Collect SPI response from previous transaction ---
     if (spi_in_flight) {
-      ret = k_sem_take(&spi_done_sem, K_MSEC(10));
+      ret = k_sem_take(&spi_done_sem, K_MSEC(50));
       if (ret == 0) {
         spi_in_flight = false;
 
