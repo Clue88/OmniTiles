@@ -151,6 +151,10 @@ class ConnectionManager:
         st.connected = True
         st.m1_mm = frame.m1_pos_mm
         st.m2_mm = frame.m2_pos_mm
+        st.m1_pos_adc = frame.m1_pos_adc
+        st.m2_pos_adc = frame.m2_pos_adc
+        st.m1_adcs = tuple(frame.m1_adcs)
+        st.m2_adcs = tuple(frame.m2_adcs)
         st.tof_mm = frame.tof_mm
 
         if frame.uwb_mm is not None and all(v is not None for v in frame.uwb_mm):

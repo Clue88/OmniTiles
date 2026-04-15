@@ -107,6 +107,8 @@ class _TileRow:
                 )
                 m2_bg.on_click(lambda _e, bg=m2_bg: self._on_motor_button("m2", bg))
 
+                self.adc_md = server.gui.add_markdown(self._adc_text())
+
                 server.gui.add_button("Ping").on_click(lambda _: self._call("ping"))
 
     def _on_motor_button(self, prefix: str, bg) -> None:
@@ -223,8 +225,32 @@ class _TileRow:
 
         return "  \n".join(lines)
 
+    def _adc_text(self) -> str:
+        from omnitiles import M1_CONFIG, M2_CONFIG
+
+        st = self.app_state.tiles[self.name]
+        if st.m1_pos_adc is None and st.m2_pos_adc is None:
+            return "**ADC readings**  \n_no telemetry yet_"
+
+        def _section(label: str, pos_adc: int, adcs: tuple[int, ...], stroke_mm: float) -> str:
+            rows = [f"**{label}** pos_adc={pos_adc}"]
+            for i, raw in enumerate(adcs, start=1):
+                mm = (raw / 4095.0) * stroke_mm
+                rows.append(f"- adc{i}: {raw}  ({mm:.1f} mm)")
+            return "  \n".join(rows)
+
+        sections = ["**ADC readings**"]
+        if st.m1_pos_adc is not None:
+            sections.append(_section("M1 (tilt)", st.m1_pos_adc, st.m1_adcs, M1_CONFIG.stroke_mm))
+        if st.m2_pos_adc is not None:
+            sections.append(_section("M2 (lift)", st.m2_pos_adc, st.m2_adcs, M2_CONFIG.stroke_mm))
+        # Blank line between sections so each bullet list terminates cleanly
+        # and the next heading doesn't get parsed as a list continuation.
+        return "\n\n".join(sections)
+
     def refresh(self) -> None:
         self.status_md.content = self._status_text()
+        self.adc_md.content = self._adc_text()
 
 
 class Sidebar:

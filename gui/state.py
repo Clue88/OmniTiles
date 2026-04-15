@@ -16,6 +16,10 @@ class TileState:
     # Current telemetry-derived values.
     m1_mm: float | None = None
     m2_mm: float | None = None
+    m1_pos_adc: int | None = None
+    m2_pos_adc: int | None = None
+    m1_adcs: tuple[int, ...] = ()
+    m2_adcs: tuple[int, ...] = ()
     xy_m: tuple[float, float] | None = None
     imu_roll_deg: float | None = None
     imu_pitch_deg: float | None = None
