@@ -87,6 +87,10 @@ class _TileRow:
                 self._add_mobile_base()
 
             with server.gui.add_folder("Debug", expand_by_default=False):
+                self.debug_speed = server.gui.add_slider(
+                    "Speed", min=0, max=255, step=1, initial_value=255
+                )
+
                 m1_bg = server.gui.add_button_group(
                     "Tilt (M1)",
                     options=(
@@ -121,7 +125,10 @@ class _TileRow:
             verb = "retract"
         else:
             return
-        self._call(f"{prefix}_{verb}")
+        if verb == "brake":
+            self._call(f"{prefix}_{verb}")
+        else:
+            self._call(f"{prefix}_{verb}", int(self.debug_speed.value))
 
     def _add_mobile_base(self) -> None:
         server = self.server
