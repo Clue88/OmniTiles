@@ -65,6 +65,7 @@ pub struct ActuonixLinear<
     inverted: [bool; N],
     enabled: [bool; N],
     stroke_len_mm: f32,
+    inverted_pair_sum_mm: f32,
     buffer_bottom_mm: f32,
     buffer_top_mm: f32,
     current_speed: f32,
@@ -101,6 +102,7 @@ where
         mut read_positions: ReadPos,
         inverted: [bool; N],
         stroke_len_mm: f32,
+        inverted_pair_sum_mm: f32,
         buffer_bottom_mm: f32,
         buffer_top_mm: f32,
     ) -> Self {
@@ -126,6 +128,7 @@ where
             inverted,
             enabled: [true; N],
             stroke_len_mm,
+            inverted_pair_sum_mm,
             buffer_bottom_mm,
             buffer_top_mm,
             current_speed: 0.0,
@@ -180,7 +183,12 @@ where
         for i in 0..N {
             if self.enabled[i] {
                 let m = self.last_medians[i] as u32;
-                let logical = if self.inverted[i] { 4095 - m } else { m };
+                let logical = if self.inverted[i] {
+                    let offset = (self.inverted_pair_sum_mm / self.stroke_len_mm * 4095.0) as u32;
+                    offset.saturating_sub(m)
+                } else {
+                    m
+                };
                 sum += logical;
                 count += 1;
             }

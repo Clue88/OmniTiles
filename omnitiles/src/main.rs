@@ -152,6 +152,7 @@ fn main() -> ! {
         Adc::make_multi_reader(&adc1, [14, 9, 10, 11]),
         [false, false, true, true],
         150.0, // P16 has 150 mm stroke length
+        123.0, // opposed-pair mechanical sum (normal + inverted extensions)
         20.0,  // 20 mm buffer at bottom (retracted)
         35.0,  // 35 mm buffer at top (extended)
     );
@@ -174,6 +175,7 @@ fn main() -> ! {
         Adc::make_multi_reader(&adc1, [15, 13]),
         [false, false],
         100.0, // T16 has 100 mm stroke length
+        100.0, // no inverted channels; value unused
         25.0,  // 25 mm buffer at bottom (retracted)
         15.0,  // 15 mm buffer at top (extended)
     );
