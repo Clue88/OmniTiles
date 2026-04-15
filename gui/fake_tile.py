@@ -7,7 +7,6 @@ synthetic telemetry so the GUI can be built and reviewed without hardware.
 from __future__ import annotations
 
 import math
-import random
 import threading
 import time
 from collections.abc import Callable
@@ -165,7 +164,7 @@ class FakeTile:
                 ranges: list[int | None] = []
                 for ax, ay in self._anchors[:3]:
                     d_m = math.hypot(ax - self._xy[0], ay - self._xy[1])
-                    d_mm = int(d_m * 1000.0 + random.gauss(0.0, 2.0))
+                    d_mm = int(d_m * 1000.0)
                     ranges.append(max(0, d_mm))
                 uwb_tuple = (ranges[0], ranges[1], ranges[2])
             else:
