@@ -493,12 +493,12 @@ static void uwb_ranging_thread_fn(void* p1, void* p2, void* p3) {
             uwb_rx_buf[6] == 'G' && uwb_rx_buf[7] == (uint8_t)cur_anchor) {
           uint32_t poll_tx_ts, resp_rx_ts, poll_rx_ts, resp_tx_ts;
           int32_t rtd_init, rtd_resp;
-          float clockOffsetRatio;
+          double clockOffsetRatio;
 
           poll_tx_ts = dwt_readtxtimestamplo32();
           resp_rx_ts = dwt_readrxtimestamplo32(0);
 
-          clockOffsetRatio = ((float)dwt_readclockoffset()) / (float)(1 << 26);
+          clockOffsetRatio = ((double)dwt_readclockoffset()) / (double)(1 << 26);
 
           resp_msg_get_ts(&uwb_rx_buf[RESP_MSG_POLL_RX_TS_IDX], &poll_rx_ts);
           resp_msg_get_ts(&uwb_rx_buf[RESP_MSG_RESP_TX_TS_IDX], &resp_tx_ts);
@@ -506,8 +506,8 @@ static void uwb_ranging_thread_fn(void* p1, void* p2, void* p3) {
           rtd_init = resp_rx_ts - poll_tx_ts;
           rtd_resp = resp_tx_ts - poll_rx_ts;
 
-          double tof =
-              ((rtd_init - rtd_resp * (1.0 - clockOffsetRatio)) / 2.0) * DWT_TIME_UNITS;
+          double tof = ((rtd_init - rtd_resp * (1.0 - clockOffsetRatio)) / 2.0) *
+                       (double)DWT_TIME_UNITS;
           double distance = tof * SPEED_OF_LIGHT;
           int32_t dist_mm = (int32_t)(distance * 1000.0);
 
