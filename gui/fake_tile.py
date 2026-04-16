@@ -159,14 +159,14 @@ class FakeTile:
             m1_adc = int(4095 * (m1 / M1_CONFIG.stroke_mm))
             m2_adc = int(4095 * (m2 / M2_CONFIG.stroke_mm))
 
-            uwb_tuple: tuple[int | None, int | None, int | None] | None
+            uwb_tuple: tuple[int | None, ...] | None
             if len(self._anchors) >= 3:
                 ranges: list[int | None] = []
-                for ax, ay in self._anchors[:3]:
+                for ax, ay in self._anchors:
                     d_m = math.hypot(ax - self._xy[0], ay - self._xy[1])
                     d_mm = int(d_m * 1000.0)
                     ranges.append(max(0, d_mm))
-                uwb_tuple = (ranges[0], ranges[1], ranges[2])
+                uwb_tuple = tuple(ranges)
             else:
                 uwb_tuple = None
 

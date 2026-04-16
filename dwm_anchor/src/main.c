@@ -57,8 +57,11 @@ static dwt_config_t uwb_config = {
 #elif CONFIG_ANCHOR_ID == 2
   #define TX_ANT_DLY 16385
   #define RX_ANT_DLY 16385
+#elif CONFIG_ANCHOR_ID == 3
+  #define TX_ANT_DLY 16385
+  #define RX_ANT_DLY 16385
 #else
-  #error "CONFIG_ANCHOR_ID must be 0, 1, or 2"
+  #error "CONFIG_ANCHOR_ID must be 0, 1, 2, or 3"
 #endif
 
 // Delay from poll RX to response TX — SDK uses 650 at 38MHz SPI, we need more at 8MHz

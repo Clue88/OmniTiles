@@ -1,3 +1,3 @@
 # UWB anchor positions in meters, ordered by CONFIG_ANCHOR_ID.
 # Index 0 = anchor built with -DCONFIG_ANCHOR_ID=0, etc.
-positions = [ [ 0.0, 0.0 ], [ 1.795, 0.0 ], [ 1.0, 1.73 ] ]
+positions = [ [ 0.0, 0.0 ], [ 1.778, 0.0 ], [ -0.508, 1.7018 ], [ 3.0861, 1.7018 ] ]

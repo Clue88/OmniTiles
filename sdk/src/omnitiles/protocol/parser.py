@@ -11,7 +11,7 @@ from omnitiles.telemetry import ImuSample, Telemetry
 # Known telemetry packet lengths (bytes on the wire, including start byte and
 # checksum). Each variant is distinguished only by length; add new entries
 # here when the firmware grows the packet.
-_TELEMETRY_LENGTHS = (7, 13, 15, 51)
+_TELEMETRY_LENGTHS = (7, 15, 17, 53)
 _MAX_TELEMETRY_LEN = max(_TELEMETRY_LENGTHS)
 
 
@@ -94,29 +94,30 @@ def _try_parse(packet: bytes) -> Telemetry | None:
     m1_pos_mm = (m1_pos_adc / ADC_MAX) * M1_CONFIG.stroke_mm
     m2_pos_mm = (m2_pos_adc / ADC_MAX) * M2_CONFIG.stroke_mm
 
-    uwb_mm: tuple[int | None, int | None, int | None] | None = None
+    uwb_mm: tuple[int | None, int | None, int | None, int | None] | None = None
     tof_mm: int | None = None
     imu: ImuSample | None = None
     m1_adcs: tuple[int, ...] = ()
     m2_adcs: tuple[int, ...] = ()
 
-    if length >= 13:
-        d0, d1, d2 = struct.unpack_from("<HHH", packet, 6)
+    if length >= 15:
+        d0, d1, d2, d3 = struct.unpack_from("<HHHH", packet, 6)
         uwb_mm = (
             None if d0 == 0xFFFF else d0,
             None if d1 == 0xFFFF else d1,
             None if d2 == 0xFFFF else d2,
+            None if d3 == 0xFFFF else d3,
         )
 
-    if length >= 15:
-        (tof_raw,) = struct.unpack_from("<H", packet, 12)
+    if length >= 17:
+        (tof_raw,) = struct.unpack_from("<H", packet, 14)
         tof_mm = None if tof_raw == 0xFFFF else tof_raw
 
-    if length == 51:
-        imu_vals = struct.unpack_from("<6f", packet, 14)
+    if length == 53:
+        imu_vals = struct.unpack_from("<6f", packet, 16)
         imu = ImuSample(*imu_vals)
-        m1_adcs = tuple(struct.unpack_from("<4H", packet, 38))
-        m2_adcs = tuple(struct.unpack_from("<2H", packet, 46))
+        m1_adcs = tuple(struct.unpack_from("<4H", packet, 40))
+        m2_adcs = tuple(struct.unpack_from("<2H", packet, 48))
 
     return Telemetry(
         timestamp=time.monotonic(),

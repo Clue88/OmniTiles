@@ -50,35 +50,36 @@ def test_parse_minimal_packet():
 
 
 def test_parse_uwb_packet():
-    body = struct.pack("<HHHHH", 2000, 1000, 1500, 2500, 0xFFFF)
-    packet = _telemetry_packet(body)
-    assert len(packet) == 13
-
-    parser = StreamParser()
-    [frame] = parser.feed(packet)
-    assert frame.uwb_mm == (1500, 2500, None)
-    assert frame.tof_mm is None
-
-
-def test_parse_uwb_tof_packet():
-    body = struct.pack("<HHHHHH", 2000, 1000, 1500, 2500, 3500, 321)
+    body = struct.pack("<HHHHHH", 2000, 1000, 1500, 2500, 0xFFFF, 3000)
     packet = _telemetry_packet(body)
     assert len(packet) == 15
 
     parser = StreamParser()
     [frame] = parser.feed(packet)
-    assert frame.uwb_mm == (1500, 2500, 3500)
+    assert frame.uwb_mm == (1500, 2500, None, 3000)
+    assert frame.tof_mm is None
+
+
+def test_parse_uwb_tof_packet():
+    body = struct.pack("<HHHHHHH", 2000, 1000, 1500, 2500, 3500, 4500, 321)
+    packet = _telemetry_packet(body)
+    assert len(packet) == 17
+
+    parser = StreamParser()
+    [frame] = parser.feed(packet)
+    assert frame.uwb_mm == (1500, 2500, 3500, 4500)
     assert frame.tof_mm == 321
 
 
 def test_parse_full_packet_with_imu_and_adcs():
     body = struct.pack(
-        "<HHHHHH6f4H2H",
+        "<HHHHHHH6f4H2H",
         2000,
         1000,
         1500,
         2500,
         3500,
+        4500,
         321,
         0.1,
         0.2,
@@ -94,11 +95,11 @@ def test_parse_full_packet_with_imu_and_adcs():
         1002,
     )
     packet = _telemetry_packet(body)
-    assert len(packet) == 51
+    assert len(packet) == 53
 
     parser = StreamParser()
     [frame] = parser.feed(packet)
-    assert frame.uwb_mm == (1500, 2500, 3500)
+    assert frame.uwb_mm == (1500, 2500, 3500, 4500)
     assert frame.tof_mm == 321
     assert frame.imu is not None
     assert abs(frame.imu.az - 9.8) < 1e-6
@@ -149,9 +150,9 @@ def test_parse_skips_garbage_before_start_byte():
 
 
 def test_parser_invalid_sentinels_become_none():
-    body = struct.pack("<HHHHH", 0, 0, 0xFFFF, 0xFFFF, 0xFFFF)
+    body = struct.pack("<HHHHHH", 0, 0, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF)
     packet = _telemetry_packet(body)
 
     parser = StreamParser()
     [frame] = parser.feed(packet)
-    assert frame.uwb_mm == (None, None, None)
+    assert frame.uwb_mm == (None, None, None, None)

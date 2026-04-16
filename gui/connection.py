@@ -157,11 +157,15 @@ class ConnectionManager:
         st.m2_adcs = tuple(frame.m2_adcs)
         st.tof_mm = frame.tof_mm
 
-        if frame.uwb_mm is not None and all(v is not None for v in frame.uwb_mm):
-            z_offset = ANCHOR_HEIGHT_M - TAG_HEIGHT_M
-            pos = trilaterate(frame.uwb_mm, self.app_state.anchors, z_offset_m=z_offset)
-            if pos is not None:
-                st.xy_m = (float(pos[0]), float(pos[1]))
+        if frame.uwb_mm is not None:
+            n_valid = sum(1 for v in frame.uwb_mm if v is not None)
+            if n_valid >= 3:
+                z_offset = ANCHOR_HEIGHT_M - TAG_HEIGHT_M
+                pos = trilaterate(
+                    frame.uwb_mm, self.app_state.anchors, z_offset_m=z_offset
+                )
+                if pos is not None:
+                    st.xy_m = (float(pos[0]), float(pos[1]))
 
         if frame.imu is not None:
             imu = frame.imu

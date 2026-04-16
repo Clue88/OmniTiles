@@ -47,9 +47,9 @@ checksum and returns a typed
 | Length | Fields |
 |-------:|--------|
 | 7 bytes  | `m1_pos`, `m2_pos` |
-| 13 bytes | Above + `d0`, `d1`, `d2` UWB ranges |
-| 15 bytes | Above + `tof` |
-| 51 bytes | Above + 6-axis IMU + 4 M1 ADCs + 2 M2 ADCs |
+| 15 bytes | Above + `d0`, `d1`, `d2`, `d3` UWB ranges |
+| 17 bytes | Above + `tof` |
+| 53 bytes | Above + 6-axis IMU + 4 M1 ADCs + 2 M2 ADCs |
 
 Invalid UWB ranges and ToF readings are encoded on-wire as `0xFFFF`. The
 parser normalizes them to Python `None`.

@@ -62,7 +62,7 @@ LOG_MODULE_REGISTER(main);
 // ---------------------------------------------------------------------------
 // UWB ranging constants — based on Qorvo SS-TWR examples (ex_06a/ex_06b)
 // ---------------------------------------------------------------------------
-#define NUM_ANCHORS 3
+#define NUM_ANCHORS 4
 
 #define UWB_FUNC_POLL 0xE0
 #define UWB_FUNC_RESP 0xE1
@@ -97,7 +97,7 @@ static uwb_filter_t uwb_filters[NUM_ANCHORS];
 
 // Shared UWB distance data (written by UWB thread, read by main loop for BLE TX)
 // 0xFFFF = no valid measurement
-static volatile uint16_t uwb_dist_mm[NUM_ANCHORS] = {0xFFFF, 0xFFFF, 0xFFFF};
+static volatile uint16_t uwb_dist_mm[NUM_ANCHORS] = {0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF};
 static volatile uint16_t last_m1_adc;
 static volatile uint16_t last_m2_adc;
 static volatile uint16_t last_tof_mm = 0xFFFF;
@@ -717,7 +717,7 @@ int main(void) {
       bool rate_ok = (now - last_nus_send_ms >= NUS_SEND_INTERVAL_MS);
 
       if (!in_backoff && rate_ok) {
-        uint8_t telem[51];
+        uint8_t telem[53];
         telem[0] = 0xA5;
         telem[1] = 0x60;
         telem[2] = (uint8_t)(m1_adc);
@@ -728,6 +728,7 @@ int main(void) {
         uint16_t d0 = uwb_dist_mm[0];
         uint16_t d1 = uwb_dist_mm[1];
         uint16_t d2 = uwb_dist_mm[2];
+        uint16_t d3 = uwb_dist_mm[3];
 
         telem[6] = (uint8_t)(d0);
         telem[7] = (uint8_t)(d0 >> 8);
@@ -735,17 +736,19 @@ int main(void) {
         telem[9] = (uint8_t)(d1 >> 8);
         telem[10] = (uint8_t)(d2);
         telem[11] = (uint8_t)(d2 >> 8);
-        telem[12] = (uint8_t)(tof_mm);
-        telem[13] = (uint8_t)(tof_mm >> 8);
+        telem[12] = (uint8_t)(d3);
+        telem[13] = (uint8_t)(d3 >> 8);
+        telem[14] = (uint8_t)(tof_mm);
+        telem[15] = (uint8_t)(tof_mm >> 8);
 
-        memcpy(&telem[14], last_imu_bytes, 24);
-        memcpy(&telem[38], last_motor_adc_bytes, 12);
+        memcpy(&telem[16], last_imu_bytes, 24);
+        memcpy(&telem[40], last_motor_adc_bytes, 12);
 
         uint8_t csum = 0;
-        for (int i = 1; i < 50; i++) {
+        for (int i = 1; i < 52; i++) {
           csum += telem[i];
         }
-        telem[50] = csum;
+        telem[52] = csum;
 
         int err = bt_nus_send(current_conn, telem, sizeof(telem));
         if (err == 0) {

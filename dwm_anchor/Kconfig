@@ -1,9 +1,9 @@
 source "Kconfig.zephyr"
 
 config ANCHOR_ID
-	int "Anchor ID (0, 1, or 2)"
+	int "Anchor ID (0, 1, 2, or 3)"
 	default 0
-	range 0 2
+	range 0 3
 	help
 	  Unique identifier for this anchor board. Each anchor in the system
 	  must have a different ID. Used by the tag to address individual anchors

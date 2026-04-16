@@ -17,7 +17,7 @@ from omnitiles.telemetry import Telemetry
 from connection import ConnectionManager
 from state import AppState
 
-ANCHOR_COLORS = ("red", "green", "blue")
+ANCHOR_COLORS = ("red", "green", "blue", "orange")
 
 
 class UwbNoisePanel:
@@ -36,7 +36,7 @@ class UwbNoisePanel:
             "start_ms": 0,
             "duration_ms": 60_000,
             "t_ms": [],
-            "d": ([], [], []),
+            "d": ([], [], [], []),
             "plot_handle": None,
             "tile_name": None,
         }
@@ -79,7 +79,7 @@ class UwbNoisePanel:
         self._state["duration_ms"] = int(round(float(self.duration_s.value) * 1000))
         self._state["start_ms"] = int(round(time.monotonic() * 1000))
         self._state["t_ms"] = []
-        self._state["d"] = ([], [], [])
+        self._state["d"] = ([], [], [], [])
         self._state["tile_name"] = self.tile_dd.value
         if self._state["plot_handle"] is not None:
             try:
@@ -103,7 +103,7 @@ class UwbNoisePanel:
         now_ms = int(round(time.monotonic() * 1000))
         elapsed_ms = now_ms - self._state["start_ms"]
         self._state["t_ms"].append(elapsed_ms)
-        for i in range(3):
+        for i in range(4):
             val = frame.uwb_mm[i]
             self._state["d"][i].append(float("nan") if val is None else float(val))
         if elapsed_ms < self._state["duration_ms"]:
@@ -120,7 +120,7 @@ class UwbNoisePanel:
 
     def _finalize(self) -> None:
         t_s = np.array(self._state["t_ms"], dtype=float) / 1000.0
-        d_arrs = [np.array(self._state["d"][i], dtype=float) for i in range(3)]
+        d_arrs = [np.array(self._state["d"][i], dtype=float) for i in range(4)]
 
         n_samples = len(t_s)
         duration_s = float(t_s[-1]) if n_samples > 0 else 0.0
@@ -139,10 +139,10 @@ class UwbNoisePanel:
             w.writerow([f"# n_samples={n_samples}"])
             w.writerow([f"# duration_s={duration_s:.3f}"])
             w.writerow([f"# sample_rate_hz={sample_rate:.2f}"])
-            w.writerow(["t_s", "d0_mm", "d1_mm", "d2_mm"])
+            w.writerow(["t_s", "d0_mm", "d1_mm", "d2_mm", "d3_mm"])
             for k in range(n_samples):
                 row = [f"{t_s[k]:.3f}"]
-                for i in range(3):
+                for i in range(4):
                     v = d_arrs[i][k]
                     row.append("" if not np.isfinite(v) else f"{int(v)}")
                 w.writerow(row)
@@ -172,10 +172,11 @@ class UwbNoisePanel:
             uplot.Series(label="A0 (mm)", stroke=ANCHOR_COLORS[0]),
             uplot.Series(label="A1 (mm)", stroke=ANCHOR_COLORS[1]),
             uplot.Series(label="A2 (mm)", stroke=ANCHOR_COLORS[2]),
+            uplot.Series(label="A3 (mm)", stroke=ANCHOR_COLORS[3]),
         )
         with self.folder:
             self._state["plot_handle"] = self.server.gui.add_uplot(
-                data=(t_s, d_arrs[0], d_arrs[1], d_arrs[2]),
+                data=(t_s, d_arrs[0], d_arrs[1], d_arrs[2], d_arrs[3]),
                 series=series,
                 title=f"UWB ranges over time ({self._state['tile_name']})",
                 aspect=2.0,

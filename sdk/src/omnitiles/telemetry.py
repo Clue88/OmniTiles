@@ -45,8 +45,8 @@ class Telemetry:
     m2_adcs: tuple[int, ...] = ()
     """Raw ADC readings for all M2 pots (up to 2). Empty if not reported."""
 
-    uwb_mm: tuple[int | None, int | None, int | None] | None = None
-    """Distances to anchors 0/1/2 in millimeters, or ``None`` if not reported.
+    uwb_mm: tuple[int | None, int | None, int | None, int | None] | None = None
+    """Distances to anchors 0/1/2/3 in millimeters, or ``None`` if not reported.
     Individual entries are ``None`` when the corresponding range was invalid."""
 
     tof_mm: int | None = None
