@@ -96,9 +96,11 @@ impl<
     /// Set body-frame velocity. Inputs are normalized: -1.0..1.0 for each axis.
     pub fn set_velocity(&mut self, vx: f32, vy: f32, omega: f32) {
         let [fl, fr, rl, rr] = mecanum::mecanum_ik(vx, vy, omega);
-        self.fl.set_speed(fl);
+        // Left-side wheels are mounted reversed from the right, so their motor
+        // polarity is inverted to match the IK convention.
+        self.fl.set_speed(-fl);
         self.fr.set_speed(fr);
-        self.rl.set_speed(rl);
+        self.rl.set_speed(-rl);
         self.rr.set_speed(rr);
     }
 
