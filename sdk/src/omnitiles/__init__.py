@@ -23,7 +23,7 @@ from omnitiles.sync import SyncFleet, SyncTile, scan_sync
 from omnitiles.telemetry import ImuSample, Telemetry
 from omnitiles.tile import Tile
 from omnitiles.transport import TileInfo
-from omnitiles.uwb import trilaterate
+from omnitiles.uwb import UwbEkf, trilaterate
 
 __version__ = "0.1.0"
 
@@ -46,5 +46,6 @@ __all__ = [
     "scan",
     "scan_sync",
     "trilaterate",
+    "UwbEkf",
     "__version__",
 ]

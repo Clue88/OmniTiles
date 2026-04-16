@@ -11,7 +11,7 @@ import threading
 import time
 from collections.abc import Callable
 
-from omnitiles import SyncTile, scan_sync, trilaterate
+from omnitiles import SyncTile, UwbEkf, scan_sync
 from omnitiles.telemetry import Telemetry
 
 from fake_tile import FakeTile, make_fake_tiles
@@ -27,6 +27,7 @@ class ConnectionManager:
         self.fake = fake
         self._tiles: dict[str, SyncTile | FakeTile] = {}
         self._unsubs: dict[str, Callable] = {}
+        self._ekfs: dict[str, UwbEkf] = {}
         self._lock = threading.Lock()
         self._stop = threading.Event()
         self._scan_thread: threading.Thread | None = None
@@ -135,6 +136,12 @@ class ConnectionManager:
         if name not in self.app_state.tiles:
             self.app_state.tiles[name] = TileState(name=name)
         self.app_state.tiles[name].connected = bool(getattr(tile, "connected", True))
+        if name not in self._ekfs:
+            # Per-anchor range std from calibration data (stationary, 60s capture).
+            self._ekfs[name] = UwbEkf(
+                anchors=self.app_state.anchors,
+                range_std_m=(0.113, 0.043, 0.055, 0.048),
+            )
 
         def _cb(frame: Telemetry, _name=name) -> None:
             self._on_telemetry(_name, frame)
@@ -158,11 +165,14 @@ class ConnectionManager:
         st.tof_mm = frame.tof_mm
 
         if frame.uwb_mm is not None:
-            n_valid = sum(1 for v in frame.uwb_mm if v is not None)
-            if n_valid >= 3:
+            ekf = self._ekfs.get(name)
+            if ekf is not None:
                 z_offset = ANCHOR_HEIGHT_M - TAG_HEIGHT_M
-                pos = trilaterate(
-                    frame.uwb_mm, self.app_state.anchors, z_offset_m=z_offset
+                pos = ekf.step(
+                    frame.uwb_mm,
+                    frame.timestamp,
+                    imu=frame.imu,
+                    z_offset_m=z_offset,
                 )
                 if pos is not None:
                     st.xy_m = (float(pos[0]), float(pos[1]))
