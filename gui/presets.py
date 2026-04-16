@@ -17,35 +17,33 @@ class Preset:
     tiles: tuple[TilePreset, ...]
 
 
+def _uniform(h: float, t: float = 0.0, n: int = 15) -> tuple[TilePreset, ...]:
+    return tuple(TilePreset(h, t) for _ in range(n))
+
+
+def _by_column(
+    col_heights: list[float],
+    col_tilts: list[float] | None = None,
+    rows: int = 3,
+) -> tuple[TilePreset, ...]:
+    """Build presets for a row-major 3×5 grid, one value per column."""
+    cols = len(col_heights)
+    tilts = col_tilts or [0.0] * cols
+    result: list[TilePreset] = []
+    for _ in range(rows):
+        for c in range(cols):
+            result.append(TilePreset(col_heights[c], tilts[c]))
+    return tuple(result)
+
+
 PRESETS: tuple[Preset, ...] = (
-    Preset(
-        "Home (Flat, Low)",
-        (TilePreset(20, 0), TilePreset(20, 0), TilePreset(20, 0)),
-    ),
-    Preset(
-        "Flat, Mid",
-        (TilePreset(50, 0), TilePreset(50, 0), TilePreset(50, 0)),
-    ),
-    Preset(
-        "Flat, High",
-        (TilePreset(80, 0), TilePreset(80, 0), TilePreset(80, 0)),
-    ),
-    Preset(
-        "Ramp Up",
-        (TilePreset(30, 0), TilePreset(50, 10), TilePreset(70, 20)),
-    ),
-    Preset(
-        "Stairs",
-        (TilePreset(30, 0), TilePreset(50, 0), TilePreset(70, 0)),
-    ),
-    Preset(
-        "Tilt Forward",
-        (TilePreset(50, -20), TilePreset(50, -20), TilePreset(50, -20)),
-    ),
-    Preset(
-        "Tilt Back",
-        (TilePreset(50, 20), TilePreset(50, 20), TilePreset(50, 20)),
-    ),
+    Preset("Home (Flat, Low)", _uniform(20)),
+    Preset("Flat, Mid", _uniform(50)),
+    Preset("Flat, High", _uniform(80)),
+    Preset("Ramp Up", _by_column([30, 40, 50, 60, 70], [0, 5, 10, 15, 20])),
+    Preset("Stairs", _by_column([20, 35, 50, 65, 80])),
+    Preset("Tilt Forward", _uniform(50, -20)),
+    Preset("Tilt Back", _uniform(50, 20)),
 )
 
 
