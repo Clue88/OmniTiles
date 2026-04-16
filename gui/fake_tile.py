@@ -24,14 +24,23 @@ class FakeTile:
         name: str,
         xy_m: tuple[float, float],
         anchors: tuple[tuple[float, float], ...],
+        *,
+        initial_m1_mm: float | None = None,
+        initial_m2_mm: float | None = None,
     ) -> None:
         self.name = name
         self.address = f"FA:KE:{abs(hash(name)) % 0xFFFFFF:06X}"
         self._xy = xy_m
         self._anchors = anchors
 
-        self._m1_mm = M1_CONFIG.min_position_mm
-        self._m2_mm = M2_CONFIG.min_position_mm
+        self._m1_mm = (
+            initial_m1_mm if initial_m1_mm is not None else M1_CONFIG.min_position_mm
+        )
+        self._m2_mm = (
+            initial_m2_mm if initial_m2_mm is not None else M2_CONFIG.min_position_mm
+        )
+        self.initial_m1_mm = self._m1_mm
+        self.initial_m2_mm = self._m2_mm
         self._m1_target: float | None = None
         self._m2_target: float | None = None
         self._m1_vel = 0.0
@@ -211,9 +220,38 @@ class FakeTile:
 def make_fake_tiles(
     anchors: tuple[tuple[float, float], ...],
 ) -> list[FakeTile]:
-    positions = [
-        (0.4, 0.4),
-        (1.0, 0.8),
-        (1.4, 0.3),
+    """Build a 3x5 grid of simulated tiles posed as a flat staircase.
+
+    Each column is one step, evenly spaced across the usable height range.
+    Rows are identical so each step is a full-width plateau; tilts are all
+    zero so every top is flat.
+    """
+    from mapping import HEIGHT_MAX_CM, HEIGHT_MIN_CM, height_cm_to_m2_mm, tilt_deg_to_m1_mm
+
+    rows, cols = 3, 5
+    spacing = 0.27  # match TILE_FOOTPRINT_M so adjacent tiles share an edge
+    origin_x, origin_y = 0.15, 0.20
+
+    step_heights_cm = [
+        HEIGHT_MIN_CM + (HEIGHT_MAX_CM - HEIGHT_MIN_CM) * c / (cols - 1)
+        for c in range(cols)
     ]
-    return [FakeTile(f"OmniTile_{i+1}", pos, anchors) for i, pos in enumerate(positions)]
+
+    tiles: list[FakeTile] = []
+    idx = 1
+    for r in range(rows):
+        for c in range(cols):
+            x = origin_x + c * spacing
+            y = origin_y + r * spacing
+            h_cm = step_heights_cm[c]
+            tiles.append(
+                FakeTile(
+                    f"OmniTile_{idx}",
+                    (x, y),
+                    anchors,
+                    initial_m1_mm=tilt_deg_to_m1_mm(0.0),
+                    initial_m2_mm=height_cm_to_m2_mm(h_cm),
+                )
+            )
+            idx += 1
+    return tiles

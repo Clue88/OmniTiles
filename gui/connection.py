@@ -15,6 +15,7 @@ from omnitiles import SyncTile, scan_sync, trilaterate
 from omnitiles.telemetry import Telemetry
 
 from fake_tile import FakeTile, make_fake_tiles
+from mapping import m1_mm_to_tilt_deg, m2_mm_to_height_cm
 from state import AppState, TileState
 
 ANCHOR_HEIGHT_M = 0.75
@@ -135,6 +136,18 @@ class ConnectionManager:
         if name not in self.app_state.tiles:
             self.app_state.tiles[name] = TileState(name=name)
         self.app_state.tiles[name].connected = bool(getattr(tile, "connected", True))
+
+        # If the (fake) tile has pre-set initial actuator positions, mirror
+        # them into the state so the sidebar sliders start at those values
+        # rather than the default home pose.
+        init_m1 = getattr(tile, "initial_m1_mm", None)
+        init_m2 = getattr(tile, "initial_m2_mm", None)
+        if init_m1 is not None:
+            self.app_state.tiles[name].cmd_tilt_deg = m1_mm_to_tilt_deg(init_m1)
+            self.app_state.tiles[name].m1_mm = init_m1
+        if init_m2 is not None:
+            self.app_state.tiles[name].cmd_height_cm = m2_mm_to_height_cm(init_m2)
+            self.app_state.tiles[name].m2_mm = init_m2
 
         def _cb(frame: Telemetry, _name=name) -> None:
             self._on_telemetry(_name, frame)
