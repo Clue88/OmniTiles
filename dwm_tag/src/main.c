@@ -145,6 +145,10 @@ static void uwb_filter_update(int anchor, uint16_t dist_mm) {
     return;
   }
 
+  // TEMPORARY: bypass filter, send raw readings for 4-anchor calibration
+  uwb_dist_mm[anchor] = dist_mm;
+  return;
+
   uwb_filter_t* f = &uwb_filters[anchor];
   f->miss_count = 0;
 
