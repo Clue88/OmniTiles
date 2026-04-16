@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import datetime as _dt
+import math
 import time
 from pathlib import Path
 from typing import Any
@@ -37,7 +38,11 @@ class UwbNoisePanel:
             "duration_ms": 60_000,
             "t_ms": [],
             "d": ([], [], [], []),
+            "imu_accel_norm": [],
+            "imu_gyro_norm": [],
+            "imu_raw": [],  # list of (ax, ay, az, gx, gy, gz) tuples
             "plot_handle": None,
+            "imu_plot_handle": None,
             "tile_name": None,
         }
 
@@ -80,13 +85,17 @@ class UwbNoisePanel:
         self._state["start_ms"] = int(round(time.monotonic() * 1000))
         self._state["t_ms"] = []
         self._state["d"] = ([], [], [], [])
+        self._state["imu_accel_norm"] = []
+        self._state["imu_gyro_norm"] = []
+        self._state["imu_raw"] = []
         self._state["tile_name"] = self.tile_dd.value
-        if self._state["plot_handle"] is not None:
-            try:
-                self._state["plot_handle"].remove()
-            except Exception:
-                pass
-            self._state["plot_handle"] = None
+        for key in ("plot_handle", "imu_plot_handle"):
+            if self._state[key] is not None:
+                try:
+                    self._state[key].remove()
+                except Exception:
+                    pass
+                self._state[key] = None
         self._state["recording"] = True
         self.md.content = (
             f"Recording 0.0 / {self._state['duration_ms']/1000:.0f} s "
@@ -106,6 +115,17 @@ class UwbNoisePanel:
         for i in range(4):
             val = frame.uwb_mm[i]
             self._state["d"][i].append(float("nan") if val is None else float(val))
+        if frame.imu is not None:
+            imu = frame.imu
+            accel_norm = math.sqrt(imu.ax**2 + imu.ay**2 + imu.az**2)
+            gyro_norm = math.sqrt(imu.gx**2 + imu.gy**2 + imu.gz**2)
+            self._state["imu_accel_norm"].append(accel_norm)
+            self._state["imu_gyro_norm"].append(gyro_norm)
+            self._state["imu_raw"].append((imu.ax, imu.ay, imu.az, imu.gx, imu.gy, imu.gz))
+        else:
+            self._state["imu_accel_norm"].append(float("nan"))
+            self._state["imu_gyro_norm"].append(float("nan"))
+            self._state["imu_raw"].append((float("nan"),) * 6)
         if elapsed_ms < self._state["duration_ms"]:
             self.md.content = (
                 f"Recording {elapsed_ms/1000:.1f} / "
@@ -121,6 +141,9 @@ class UwbNoisePanel:
     def _finalize(self) -> None:
         t_s = np.array(self._state["t_ms"], dtype=float) / 1000.0
         d_arrs = [np.array(self._state["d"][i], dtype=float) for i in range(4)]
+        accel_norm = np.array(self._state["imu_accel_norm"], dtype=float)
+        gyro_norm = np.array(self._state["imu_gyro_norm"], dtype=float)
+        imu_raw = self._state["imu_raw"]
 
         n_samples = len(t_s)
         duration_s = float(t_s[-1]) if n_samples > 0 else 0.0
@@ -139,12 +162,20 @@ class UwbNoisePanel:
             w.writerow([f"# n_samples={n_samples}"])
             w.writerow([f"# duration_s={duration_s:.3f}"])
             w.writerow([f"# sample_rate_hz={sample_rate:.2f}"])
-            w.writerow(["t_s", "d0_mm", "d1_mm", "d2_mm", "d3_mm"])
+            w.writerow([
+                "t_s", "d0_mm", "d1_mm", "d2_mm", "d3_mm",
+                "accel_norm", "gyro_norm", "ax", "ay", "az", "gx", "gy", "gz",
+            ])
             for k in range(n_samples):
                 row = [f"{t_s[k]:.3f}"]
                 for i in range(4):
                     v = d_arrs[i][k]
                     row.append("" if not np.isfinite(v) else f"{int(v)}")
+                row.append(f"{accel_norm[k]:.4f}" if np.isfinite(accel_norm[k]) else "")
+                row.append(f"{gyro_norm[k]:.4f}" if np.isfinite(gyro_norm[k]) else "")
+                for j in range(6):
+                    v = imu_raw[k][j]
+                    row.append(f"{v:.4f}" if np.isfinite(v) else "")
                 w.writerow(row)
 
         lines = [
@@ -164,20 +195,43 @@ class UwbNoisePanel:
                 f"range {finite.min():.0f}–{finite.max():.0f} mm, "
                 f"n={finite.size}"
             )
+        accel_finite = accel_norm[np.isfinite(accel_norm)]
+        gyro_finite = gyro_norm[np.isfinite(gyro_norm)]
+        if accel_finite.size > 0:
+            lines.append(
+                f"- **Accel norm:** mean {accel_finite.mean():.3f} m/s², "
+                f"std {accel_finite.std(ddof=1) if accel_finite.size > 1 else 0.0:.3f}"
+            )
+        if gyro_finite.size > 0:
+            lines.append(
+                f"- **Gyro norm:** mean {gyro_finite.mean():.4f} rad/s, "
+                f"std {gyro_finite.std(ddof=1) if gyro_finite.size > 1 else 0.0:.4f}"
+            )
         lines.append(f"Saved: `{csv_path}`")
         self.md.content = "  \n".join(lines)
 
-        series = (
+        uwb_series = (
             uplot.Series(label="t (s)"),
             uplot.Series(label="A0 (mm)", stroke=ANCHOR_COLORS[0]),
             uplot.Series(label="A1 (mm)", stroke=ANCHOR_COLORS[1]),
             uplot.Series(label="A2 (mm)", stroke=ANCHOR_COLORS[2]),
             uplot.Series(label="A3 (mm)", stroke=ANCHOR_COLORS[3]),
         )
+        imu_series = (
+            uplot.Series(label="t (s)"),
+            uplot.Series(label="Accel norm (m/s²)", stroke="purple"),
+            uplot.Series(label="Gyro norm (rad/s)", stroke="brown"),
+        )
         with self.folder:
             self._state["plot_handle"] = self.server.gui.add_uplot(
                 data=(t_s, d_arrs[0], d_arrs[1], d_arrs[2], d_arrs[3]),
-                series=series,
+                series=uwb_series,
                 title=f"UWB ranges over time ({self._state['tile_name']})",
+                aspect=2.0,
+            )
+            self._state["imu_plot_handle"] = self.server.gui.add_uplot(
+                data=(t_s, accel_norm, gyro_norm),
+                series=imu_series,
+                title=f"IMU during UWB capture ({self._state['tile_name']})",
                 aspect=2.0,
             )
