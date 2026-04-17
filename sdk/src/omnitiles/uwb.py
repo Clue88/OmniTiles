@@ -34,15 +34,14 @@ class UwbEkf:
     """
 
     GRAVITY = 9.81
-    # IMU thresholds for motion detection.  The accel threshold is high
-    # enough to tolerate typical accelerometer bias (~0.15 m/s² offset from
-    # true gravity) without false-triggering.  Only |gz| (yaw rate) is used
-    # for the gyro check because the IMU is mounted on the tilting plate —
-    # tilt actuator motion causes gx/gy spikes that are not translational.
+    # IMU thresholds for translational motion detection.  Only |gz| (yaw
+    # rate) is used for the gyro check because the IMU is on the tilting
+    # plate — tilt actuator motion causes gx/gy spikes that are not
+    # translational.
     ACCEL_MOTION_THRESH = 1.0  # m/s² deviation from gravity norm
     GYRO_YAW_MOTION_THRESH = 0.1  # rad/s (|gz| only)
-    SIGMA_A_STATIONARY = 0.05  # m/s² — tight, heavily smooths
-    SIGMA_A_MOVING = 2.0  # m/s² — loose, tracks motion
+    SIGMA_A_STATIONARY = 0.01  # m/s² — very tight when IMU confirms no motion
+    SIGMA_A_MOVING = 5.0  # m/s² — loose, ~1 s to track new motion
     GATE_CHI2 = 9.0  # chi² gate (1-DOF, ~99.7%)
 
     def __init__(
@@ -131,6 +130,10 @@ class UwbEkf:
         a_factor = (accel_dev / self.ACCEL_MOTION_THRESH) ** 2
         g_factor = (abs(imu.gz) / self.GYRO_YAW_MOTION_THRESH) ** 2
         motion = min(max(a_factor, g_factor), 1.0)
+        # Dead zone: zero out the small residual from accel bias / sensor noise
+        # so stationary Q is truly SIGMA_A_STATIONARY.
+        if motion < 0.05:
+            motion = 0.0
         return self.SIGMA_A_STATIONARY + motion * (self.SIGMA_A_MOVING - self.SIGMA_A_STATIONARY)
 
     def _predict(self, t: float, imu: ImuSample | None) -> None:
