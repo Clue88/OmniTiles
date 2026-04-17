@@ -55,14 +55,9 @@ class _TileRow:
 
             @self.height_slider.on_update
             def _(_event) -> None:
-                v = float(self.height_slider.value)
-                self.app_state.tiles[self.name].cmd_height_cm = v
-                tile = self.get_tile(self.name)
-                if tile is not None:
-                    try:
-                        tile.m2_set_position_mm(height_cm_to_m2_mm(v))
-                    except Exception as e:
-                        print(f"[sidebar {self.name}] M2 command failed: {e}")
+                self.app_state.tiles[self.name].cmd_height_cm = float(
+                    self.height_slider.value
+                )
 
             self.tilt_slider = server.gui.add_slider(
                 "Tilt (°)",
@@ -74,14 +69,19 @@ class _TileRow:
 
             @self.tilt_slider.on_update
             def _(_event) -> None:
-                v = float(self.tilt_slider.value)
-                self.app_state.tiles[self.name].cmd_tilt_deg = v
-                tile = self.get_tile(self.name)
-                if tile is not None:
-                    try:
-                        tile.m1_set_position_mm(tilt_deg_to_m1_mm(v))
-                    except Exception as e:
-                        print(f"[sidebar {self.name}] M1 command failed: {e}")
+                self.app_state.tiles[self.name].cmd_tilt_deg = float(
+                    self.tilt_slider.value
+                )
+
+            set_bg = server.gui.add_button_group("", options=("Set Height", "Set Tilt"))
+
+            def _on_set(_e, bg=set_bg) -> None:
+                if bg.value == "Set Height":
+                    self._send_lift()
+                elif bg.value == "Set Tilt":
+                    self._send_tilt()
+
+            set_bg.on_click(_on_set)
 
             if index == 0:
                 self._add_mobile_base()
@@ -114,6 +114,28 @@ class _TileRow:
                 self.adc_md = server.gui.add_markdown(self._adc_text())
 
                 server.gui.add_button("Ping").on_click(lambda _: self._call("ping"))
+
+    def _send_lift(self) -> None:
+        tile = self.get_tile(self.name)
+        if tile is None:
+            print(f"[sidebar {self.name}] Not connected, skipping Go (Lift)")
+            return
+        h = float(self.height_slider.value)
+        try:
+            tile.m2_set_position_mm(height_cm_to_m2_mm(h))
+        except Exception as e:
+            print(f"[sidebar {self.name}] M2 command failed: {e}")
+
+    def _send_tilt(self) -> None:
+        tile = self.get_tile(self.name)
+        if tile is None:
+            print(f"[sidebar {self.name}] Not connected, skipping Go (Tilt)")
+            return
+        t = float(self.tilt_slider.value)
+        try:
+            tile.m1_set_position_mm(tilt_deg_to_m1_mm(t))
+        except Exception as e:
+            print(f"[sidebar {self.name}] M1 command failed: {e}")
 
     def _on_motor_button(self, prefix: str, bg) -> None:
         action = bg.value
