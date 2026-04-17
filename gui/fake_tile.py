@@ -194,7 +194,7 @@ class FakeTile:
                 m1_adcs=(m1_adc,),
                 m2_adcs=(m2_adc,),
                 uwb_mm=uwb_tuple,
-                tof_mm=int(200.0 + 600.0 * (m2 / M2_CONFIG.stroke_mm)),
+                tof_mm=int(200.0 + 600.0 * (1.0 - m2 / M2_CONFIG.stroke_mm)),
                 imu=imu,
             )
             for cb in cbs:

@@ -15,10 +15,13 @@ from omnitiles import SyncTile, UwbEkf, scan_sync
 from omnitiles.telemetry import Telemetry
 
 from fake_tile import FakeTile, make_fake_tiles
+from mapping import tof_mm_to_height_cm
 from state import AppState, TileState
 
 ANCHOR_HEIGHT_M = 0.75
 TAG_HEIGHT_M = 0.75
+
+TOF_EMA_ALPHA = 0.08
 
 
 class ConnectionManager:
@@ -28,6 +31,7 @@ class ConnectionManager:
         self._tiles: dict[str, SyncTile | FakeTile] = {}
         self._unsubs: dict[str, Callable] = {}
         self._ekfs: dict[str, UwbEkf] = {}
+        self._tof_ema: dict[str, float] = {}
         self._lock = threading.Lock()
         self._stop = threading.Event()
         self._scan_thread: threading.Thread | None = None
@@ -159,6 +163,15 @@ class ConnectionManager:
         st.m1_adcs = tuple(frame.m1_adcs)
         st.m2_adcs = tuple(frame.m2_adcs)
         st.tof_mm = frame.tof_mm
+        if frame.tof_mm is not None:
+            raw = float(frame.tof_mm)
+            prev = self._tof_ema.get(name)
+            if prev is None:
+                filtered = raw
+            else:
+                filtered = prev + TOF_EMA_ALPHA * (raw - prev)
+            self._tof_ema[name] = filtered
+            st.tof_height_cm = tof_mm_to_height_cm(filtered)
 
         if frame.uwb_mm is not None:
             ekf = self._ekfs.get(name)

@@ -9,7 +9,6 @@ import numpy as np
 import trimesh
 import viser
 
-from mapping import m1_mm_to_tilt_deg, m2_mm_to_height_cm
 from state import AppState, TileState
 
 TILE_FOOTPRINT_M = 0.27
@@ -115,10 +114,11 @@ class _TileNode:
         if st.xy_m is not None:
             self.frame.position = (st.xy_m[0], st.xy_m[1], 0.0)
 
-        # Use the actual telemetry-derived values so the 3D view matches
-        # what the actuators are doing, not what the user commanded.
-        height_cm = m2_mm_to_height_cm(st.m2_mm) if st.m2_mm is not None else st.cmd_height_cm
-        tilt_deg = m1_mm_to_tilt_deg(st.m1_mm) if st.m1_mm is not None else st.cmd_tilt_deg
+        # Use ToF for height (direct measurement). M2 position is used for
+        # PID control but its relationship to height is nonlinear, so we
+        # don't use it for visualization.
+        height_cm = st.tof_height_cm if st.tof_height_cm is not None else st.cmd_height_cm
+        tilt_deg = st.imu_roll_deg if st.imu_roll_deg is not None else st.cmd_tilt_deg
         height_m = height_cm / 100.0
 
         if (

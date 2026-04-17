@@ -24,6 +24,7 @@ class TileState:
     imu_roll_deg: float | None = None
     imu_pitch_deg: float | None = None
     tof_mm: int | None = None
+    tof_height_cm: float | None = None
 
 
 @dataclass

@@ -223,8 +223,8 @@ class _TileRow:
             lines.append(f"**Tilt:** {cur_t:+.1f}°  (m1={st.m1_mm:.1f} mm)")
         if st.xy_m is not None:
             lines.append(f"**XY:** ({st.xy_m[0]:.2f}, {st.xy_m[1]:.2f}) m")
-        if st.tof_mm is not None:
-            lines.append(f"**ToF:** {st.tof_mm} mm")
+        if st.tof_height_cm is not None:
+            lines.append(f"**ToF height:** {st.tof_height_cm:.1f} cm  (raw {st.tof_mm} mm)")
         if st.imu_roll_deg is not None and st.imu_pitch_deg is not None:
             lines.append(
                 f"**IMU:** roll {st.imu_roll_deg:+.1f}° " f"pitch {st.imu_pitch_deg:+.1f}°"
