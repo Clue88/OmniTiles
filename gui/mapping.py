@@ -32,8 +32,8 @@ _TILT_SLOPE = sum((x - _mx) * (y - _my) for x, y in _TILT_CAL) / sum(
 )
 _TILT_INTERCEPT = _my - _TILT_SLOPE * _mx
 
-TILT_MIN_DEG = _TILT_SLOPE * M1_CONFIG.max_position_mm + _TILT_INTERCEPT
-TILT_MAX_DEG = _TILT_SLOPE * M1_CONFIG.min_position_mm + _TILT_INTERCEPT
+TILT_MIN_DEG = round(_TILT_SLOPE * M1_CONFIG.max_position_mm + _TILT_INTERCEPT, 1)
+TILT_MAX_DEG = round(_TILT_SLOPE * M1_CONFIG.min_position_mm + _TILT_INTERCEPT, 1)
 
 
 def _lerp(x: float, x0: float, x1: float, y0: float, y1: float) -> float:
