@@ -137,11 +137,7 @@ class ConnectionManager:
             self.app_state.tiles[name] = TileState(name=name)
         self.app_state.tiles[name].connected = bool(getattr(tile, "connected", True))
         if name not in self._ekfs:
-            # Per-anchor range std from calibration data (stationary, 60s capture).
-            self._ekfs[name] = UwbEkf(
-                anchors=self.app_state.anchors,
-                range_std_m=(0.113, 0.043, 0.055, 0.048),
-            )
+            self._ekfs[name] = UwbEkf(anchors=self.app_state.anchors, range_std_m=0.20)
 
         def _cb(frame: Telemetry, _name=name) -> None:
             self._on_telemetry(_name, frame)

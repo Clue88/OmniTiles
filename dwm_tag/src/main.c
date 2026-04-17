@@ -145,10 +145,6 @@ static void uwb_filter_update(int anchor, uint16_t dist_mm) {
     return;
   }
 
-  // TEMPORARY: bypass filter, send raw readings for 4-anchor calibration
-  uwb_dist_mm[anchor] = dist_mm;
-  return;
-
   uwb_filter_t* f = &uwb_filters[anchor];
   f->miss_count = 0;
 
@@ -158,8 +154,9 @@ static void uwb_filter_update(int anchor, uint16_t dist_mm) {
     f->ring_filled++;
   }
 
-  // Stage 1: Hampel outlier rejection. Tests the newest sample (zero lag)
-  // against the local median/MAD computed over the full window.
+  // Hampel outlier rejection only — no EMA.  The GUI-side EKF handles
+  // smoothing with IMU-aware process noise, so we just need to strip
+  // multipath spikes here (zero lag for non-outlier samples).
   uint16_t y_hampel = dist_mm;
   if (f->ring_filled >= UWB_HAMPEL_WINDOW) {
     uint16_t scratch[UWB_HAMPEL_WINDOW];
@@ -185,20 +182,7 @@ static void uwb_filter_update(int anchor, uint16_t dist_mm) {
     }
   }
 
-  // Stage 2: EMA smoothing.
-  if (!f->ema_initialized) {
-    f->ema_value = (float)y_hampel;
-    f->ema_initialized = true;
-  } else {
-    f->ema_value =
-        UWB_EMA_ALPHA * (float)y_hampel + (1.0f - UWB_EMA_ALPHA) * f->ema_value;
-  }
-
-  float rounded = f->ema_value + 0.5f;
-  if (rounded > (float)UWB_MAX_DIST_MM) {
-    rounded = (float)UWB_MAX_DIST_MM;
-  }
-  uwb_dist_mm[anchor] = (uint16_t)rounded;
+  uwb_dist_mm[anchor] = y_hampel;
 }
 
 /* Define NUS UUID so scanners can see us in Scan Response */

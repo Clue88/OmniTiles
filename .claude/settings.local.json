@@ -9,7 +9,8 @@
       "WebFetch(domain:www.st.com)",
       "Bash(cargo check:*)",
       "Bash(ls -la /Users/christopherliu/Programming/OmniTiles/omnitiles/src/hw/pins*.rs)",
-      "Bash(uv run:*)"
+      "Bash(uv run:*)",
+      "Bash(python3 -c ' *)"
     ]
   }
 }

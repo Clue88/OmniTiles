@@ -34,12 +34,13 @@ class UwbEkf:
     """
 
     GRAVITY = 9.81
-    # IMU thresholds for motion detection.  The accel threshold is set high
+    # IMU thresholds for motion detection.  The accel threshold is high
     # enough to tolerate typical accelerometer bias (~0.15 m/s² offset from
-    # true gravity) without false-triggering; real translational motion
-    # produces > 1 m/s² deviation.  The gyro threshold catches rotation.
+    # true gravity) without false-triggering.  Only |gz| (yaw rate) is used
+    # for the gyro check because the IMU is mounted on the tilting plate —
+    # tilt actuator motion causes gx/gy spikes that are not translational.
     ACCEL_MOTION_THRESH = 1.0  # m/s² deviation from gravity norm
-    GYRO_MOTION_THRESH = 0.1  # rad/s
+    GYRO_YAW_MOTION_THRESH = 0.1  # rad/s (|gz| only)
     SIGMA_A_STATIONARY = 0.05  # m/s² — tight, heavily smooths
     SIGMA_A_MOVING = 2.0  # m/s² — loose, tracks motion
     GATE_CHI2 = 9.0  # chi² gate (1-DOF, ~99.7%)
@@ -124,12 +125,11 @@ class UwbEkf:
         if imu is None:
             return self.SIGMA_A_MOVING
         accel_norm = math.sqrt(imu.ax**2 + imu.ay**2 + imu.az**2)
-        gyro_norm = math.sqrt(imu.gx**2 + imu.gy**2 + imu.gz**2)
         accel_dev = abs(accel_norm - self.GRAVITY)
         # Squared ratio so small biases (e.g. 0.15 m/s² accel offset)
         # contribute negligibly while real motion saturates quickly.
         a_factor = (accel_dev / self.ACCEL_MOTION_THRESH) ** 2
-        g_factor = (gyro_norm / self.GYRO_MOTION_THRESH) ** 2
+        g_factor = (abs(imu.gz) / self.GYRO_YAW_MOTION_THRESH) ** 2
         motion = min(max(a_factor, g_factor), 1.0)
         return self.SIGMA_A_STATIONARY + motion * (self.SIGMA_A_MOVING - self.SIGMA_A_STATIONARY)
 
