@@ -18,12 +18,10 @@
 /// If any raw speed exceeds 1.0, all four are scaled down proportionally to
 /// preserve the commanded direction.
 pub fn mecanum_ik(vx: f32, vy: f32, omega: f32) -> [f32; 4] {
-    // Left wheels are mounted mirrored from the right, so their rollers
-    // contribute to vy with the opposite sign.
     let fl = vx - vy - omega;
-    let fr = vx - vy + omega;
+    let fr = vx + vy + omega;
     let rl = vx + vy - omega;
-    let rr = vx + vy + omega;
+    let rr = vx - vy + omega;
 
     let mut speeds = [fl, fr, rl, rr];
 
