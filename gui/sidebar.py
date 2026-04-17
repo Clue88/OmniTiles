@@ -55,9 +55,7 @@ class _TileRow:
 
             @self.height_slider.on_update
             def _(_event) -> None:
-                self.app_state.tiles[self.name].cmd_height_cm = float(
-                    self.height_slider.value
-                )
+                self.app_state.tiles[self.name].cmd_height_cm = float(self.height_slider.value)
 
             self.tilt_slider = server.gui.add_slider(
                 "Tilt (°)",
@@ -69,9 +67,7 @@ class _TileRow:
 
             @self.tilt_slider.on_update
             def _(_event) -> None:
-                self.app_state.tiles[self.name].cmd_tilt_deg = float(
-                    self.tilt_slider.value
-                )
+                self.app_state.tiles[self.name].cmd_tilt_deg = float(self.tilt_slider.value)
 
             set_bg = server.gui.add_button_group("", options=("Set Height", "Set Tilt"))
 
@@ -194,9 +190,9 @@ class _TileRow:
             def handle_mid(_e) -> None:
                 v = row_mid.value
                 if v == "←":
-                    send(0, 100, 0)
-                elif v == "→":
                     send(0, -100, 0)
+                elif v == "→":
+                    send(0, 100, 0)
                 elif v == "■":
                     brake()
 
